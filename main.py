@@ -9,7 +9,7 @@ from aiohttp import web # Render uchun qo'shildi
 # DANGEROUS ASSUMPTION: Token va ID larni ochiq kodda saqlash xavfsizlikka zid. 
 # Hozircha test uchun ishlatamiz, keyin .env faylga o'tkazishing shart.
 load_dotenv()
-TOKEN = "8593850986:AAEoe23weaHuhxX5urYxgqytfT4f2jPaoek"
+TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = -1003535019162 # O'z kanalingning aniq ID sini yoz
 CHANNEL_URL = "https://t.me/garripotter_cinema" # Ochiq yoki yopiq havola
 WEBAPP_URL = "https://abdoollox.notion.site/2e45b1c59e7c80a1987ed80a45d1c129?v=2e45b1c59e7c8092bd37000ca5cfb393&source=copy_link" # WebApp joylashgan manzil (hozircha bo'sh tursin yoki biror saytni yoz)
@@ -83,5 +83,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
