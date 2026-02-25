@@ -23,7 +23,7 @@ dp = Dispatcher()
 MOVIES_DB = {
     "hp1": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAEhOU1pnnr2t3--9o8WX_5B2OCoQ6l-wwACbJ4AArJBCEheI-oZJ-ZM7ToE",
+            "video_id": "BAACAgIAAxkBAAM4aZ6a7sHm5GczPeY-FGBGBQNTnhgAAmyeAAKyQQhIzAgwWVas_WI6BA",
             "thumb_id": "AAMCAgADGQEAASE5TWmeeva3f772jxZf_kHY4KhDqX7DAAJsngACskEISF4j6hkn5kztAQAHbQADOgQ",
             "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
         },
@@ -147,6 +147,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
