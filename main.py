@@ -69,23 +69,40 @@ async def start_cmd(message: types.Message, command: CommandObject):
         return
 
     if payload:
-        try:
-            movie_key, lang = payload.strip().split('_')
-            movie_data = MOVIES_DB[movie_key][lang]
+        # 1. Kiritilgan ma'lumotni tozalash va klaviatura xatolarini tuzatish
+        payload = payload.strip().lower()
+        payload = payload.replace('е', 'e').replace('р', 'p') # Kirill harflarini avtomat lotinchaga o'giradi
+        
+        parts = payload.split('_')
+        
+        # 2. Aniq diagnostika: Nima xato ketganini yuziga aytish
+        if len(parts) != 2:
+            await message.answer(f"⚠️ Format xatosi. Siz kiritdingiz: '{payload}'.\nTo'g'ri format: hp1_en")
+            return
             
-            if movie_data["video_id"] == "kiritilmagan":
-                await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
-                return
+        movie_key, lang = parts
+        
+        if movie_key not in MOVIES_DB:
+            await message.answer(f"⚠️ Baza xatosi: '{movie_key}' kodli kino topilmadi.")
+            return
+            
+        if lang not in MOVIES_DB[movie_key]:
+            await message.answer(f"⚠️ Baza xatosi: '{movie_key}' kinoda '{lang}' tili yo'q.")
+            return
+            
+        movie_data = MOVIES_DB[movie_key][lang]
+        
+        if movie_data["video_id"] == "kiritilmagan":
+            await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
+            return
 
+        try:
+            # 3. API chekloviga ko'ra thumbnail olib tashlandi
             await message.answer_video(
                 video=movie_data["video_id"], 
-                thumbnail=movie_data["thumb_id"],
                 caption=movie_data["caption"],
                 parse_mode="HTML"
             )
-        
-        except (ValueError, KeyError):
-            await message.answer("⚠️ Xato: Kino yoki til tizimda topilmadi.")
         except Exception as e:
             logging.error(f"Video yuborishda xato: {e}")
             await message.answer(f"⚠️ Telegram API xatosi: {str(e)}")
@@ -123,4 +140,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
