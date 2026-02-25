@@ -177,6 +177,13 @@ def webapp_keyboard():
         [InlineKeyboardButton(text="🎬 Katalogni ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
     ])
 
+# --- MANA SHU YERGA YANGI FUNKSIYANI QO'SHASAN ---
+def back_to_catalog_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎬 Katalogni ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
+    ])
+# ------------------------------------------------
+
 async def is_subscribed(user_id):
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
@@ -226,9 +233,10 @@ async def start_cmd(message: types.Message, command: CommandObject):
             # Asosiy yuborish qismi
             await message.answer_video(
                 video=movie_data["video_id"], 
-                #thumbnail=movie_data["thumb_id"],
+                thumbnail=movie_data["thumb_id"],
                 caption=movie_data["caption"],
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=back_to_catalog_keyboard()
             )
         
         except Exception as e:
@@ -284,6 +292,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
