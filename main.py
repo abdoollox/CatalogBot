@@ -59,6 +59,13 @@ async def is_subscribed(user_id):
         logging.error(f"Kanalga a'zolikni tekshirishda xato: {e}")
         return False
 
+# --- ADMIN ASBOBI: Video ID sini ushlab olish ---
+@dp.message(F.video)
+async def get_video_id(message: types.Message):
+    # Bu funksiya botga har qanday video tashlanganda uning shaxsiy ID sini qaytaradi
+    await message.reply(f"Sening boting uchun maxsus ID:\n\n<code>{message.video.file_id}</code>", parse_mode="HTML")
+
+
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, command: CommandObject):
     payload = command.args
@@ -140,5 +147,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
