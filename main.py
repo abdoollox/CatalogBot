@@ -16,64 +16,62 @@ WEBAPP_URL = "https://abdoollox.notion.site/2e45b1c59e7c80a1987ed80a45d1c129?v=2
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- QAT'IY MA'LUMOTLAR BAZASI ---
+# --- YANGILANGAN QAT'IY MA'LUMOTLAR BAZASI (OBJECT MODEL) ---
 MOVIES_DB = {
     "hp1": {
-        "uz": "UZBEK_TILIDAGI_FILE_ID_SHU_YERGA_YOZILADI",
-        "ru": "RUS_TILIDAGI_FILE_ID_SHU_YERGA_YOZILADI",
-        "en": "BAACAgIAAxkBAAEhOU1pnnr2t3--9o8WX_5B2OCoQ6l-wwACbJ4AArJBCEheI-oZJ-ZM7ToE" # Senda shu bor edi
+        "en": {
+            "video_id": "BAACAgIAAxkBAAEhOU1pnnr2t3--9o8WX_5B2OCoQ6l-wwACbJ4AArJBCEheI-oZJ-ZM7ToE",
+            "thumb_id": "AAMCAgADGQEAASE5TWmeeva3f772jxZf_kHY4KhDqX7DAAJsngACskEISF4j6hkn5kztAQAHbQADOgQ",
+            "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+        },
+        "uz": {
+            "video_id": "kiritilmagan",
+            "thumb_id": "kiritilmagan",
+            "caption": "Tez orada..."
+        },
+        "ru": {
+            "video_id": "kiritilmagan",
+            "thumb_id": "kiritilmagan",
+            "caption": "Tez orada..."
+        }
     }
 }
 # ---------------------------------
 
-def check_sub_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1️⃣ Kanalga obuna bo'lish", url=CHANNEL_URL)],
-        [InlineKeyboardButton(text="2️⃣ Tasdiqlash", callback_data="check_sub")]
-    ])
-
-def webapp_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎬 Katalogni ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
-    ])
-
-async def is_subscribed(user_id):
-    try:
-        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
-        return member.status in ["member", "administrator", "creator"]
-    except Exception as e:
-        print(f"Xato yuz berdi: {e}")
-        return False
-
-# --- YANGILANGAN VA AQLI KIRITILGAN START FUNKSIYASI ---
+# --- YANGILANGAN START FUNKSIYASI ---
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, command: CommandObject):
-    payload = command.args # Dum qismini (hp1_en) ushlab olish
+    payload = command.args
     user_id = message.from_user.id
     
     if not await is_subscribed(user_id):
         await message.answer("Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!", reply_markup=check_sub_keyboard())
         return
 
-    # Agar botga deep link orqali kirilgan bo'lsa
     if payload:
         try:
             movie_key, lang = payload.split('_') 
-            file_id = MOVIES_DB[movie_key][lang]
+            movie_data = MOVIES_DB[movie_key][lang] # Endi bu yalang'och ID emas, butun bir obyekt
             
-            if file_id == "UZBEK_TILIDAGI_FILE_ID_SHU_YERGA_YOZILADI" or file_id.endswith("_kiritilmagan"):
-                await message.answer("Bu tildagi film tez orada yuklanadi.")
+            if movie_data["video_id"] == "kiritilmagan":
+                await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
                 return
 
-            await message.answer_video(video=file_id, caption="🎬 Yoqimli tomosha!")
+            # Videoni rasm, matn va HTML formatlash bilan birga yuborish
+            await message.answer_video(
+                video=movie_data["video_id"], 
+                thumbnail=movie_data["thumb_id"], # Rasm qo'shildi
+                caption=movie_data["caption"],    # Maxsus matn qo'shildi
+                parse_mode="HTML"                 # Matnni chiroyli qilish uchun
+            )
         
         except (ValueError, KeyError):
             await message.answer("⚠️ Xato: Kino yoki til tizimda topilmadi.")
         except Exception as e:
-            await message.answer(f"⚠️ Telegram API xatosi (Video ID eskirgan yoki noto'g'ri): {str(e)}")
+            await message.answer(f"⚠️ Telegram API xatosi: {str(e)}")
     else:
-        # Oddiy start bosilganda
         await message.answer("Xush kelibsiz! Kinolarni ko'rish uchun katalogni oching.", reply_markup=webapp_keyboard())
+        
 # --------------------------------------------------------
 
 @dp.callback_query(F.data == "check_sub")
@@ -104,4 +102,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
