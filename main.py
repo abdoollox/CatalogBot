@@ -100,7 +100,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
             # Asosiy yuborish qismi
             await message.answer_video(
                 video=movie_data["video_id"], 
-                thumbnail=movie_data["thumb_id"],
+                #thumbnail=movie_data["thumb_id"],
                 caption=movie_data["caption"],
                 parse_mode="HTML"
             )
@@ -158,6 +158,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
