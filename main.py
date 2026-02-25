@@ -1,22 +1,25 @@
 import os
 import asyncio
+import logging
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from aiohttp import web # Render uchun qo'shildi
 from aiogram.filters import CommandStart, CommandObject
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiohttp import web
+
+# --- TIZIM KO'ZLARINI OCHISH (LOGGING) ---
+logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003535019162")) # O'z kanalingning aniq ID sini yoz
-CHANNEL_URL = "https://t.me/garripotter_cinema" # Ochiq yoki yopiq havola
-WEBAPP_URL = "https://abdoollox.notion.site/2e45b1c59e7c80a1987ed80a45d1c129?v=2e45b1c59e7c8092bd37000ca5cfb393&source=copy_link" # WebApp joylashgan manzil (hozircha bo'sh tursin yoki biror saytni yoz)
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
+CHANNEL_URL = "https://t.me/garripotter_cinema" # Agar haqiqiy kanal havolasini yozmagan bo'lsang, API xato beradi
+WEBAPP_URL = "https://sening-domen.uz"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- YANGILANGAN QAT'IY MA'LUMOTLAR BAZASI (OBJECT MODEL) ---
+# --- QAT'IY MA'LUMOTLAR BAZASI ---
 MOVIES_DB = {
     "hp1": {
         "en": {
@@ -36,9 +39,26 @@ MOVIES_DB = {
         }
     }
 }
-# ---------------------------------
 
-# --- YANGILANGAN START FUNKSIYASI ---
+def check_sub_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="1️⃣ Kanalga obuna bo'lish", url=CHANNEL_URL)],
+        [InlineKeyboardButton(text="2️⃣ Tasdiqlash", callback_data="check_sub")]
+    ])
+
+def webapp_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎬 Katalogni ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
+    ])
+
+async def is_subscribed(user_id):
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        logging.error(f"Kanalga a'zolikni tekshirishda xato: {e}")
+        return False
+
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, command: CommandObject):
     payload = command.args
@@ -51,28 +71,26 @@ async def start_cmd(message: types.Message, command: CommandObject):
     if payload:
         try:
             movie_key, lang = payload.split('_') 
-            movie_data = MOVIES_DB[movie_key][lang] # Endi bu yalang'och ID emas, butun bir obyekt
+            movie_data = MOVIES_DB[movie_key][lang]
             
             if movie_data["video_id"] == "kiritilmagan":
                 await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
                 return
 
-            # Videoni rasm, matn va HTML formatlash bilan birga yuborish
             await message.answer_video(
                 video=movie_data["video_id"], 
-                thumbnail=movie_data["thumb_id"], # Rasm qo'shildi
-                caption=movie_data["caption"],    # Maxsus matn qo'shildi
-                parse_mode="HTML"                 # Matnni chiroyli qilish uchun
+                thumbnail=movie_data["thumb_id"],
+                caption=movie_data["caption"],
+                parse_mode="HTML"
             )
         
         except (ValueError, KeyError):
             await message.answer("⚠️ Xato: Kino yoki til tizimda topilmadi.")
         except Exception as e:
+            logging.error(f"Video yuborishda xato: {e}")
             await message.answer(f"⚠️ Telegram API xatosi: {str(e)}")
     else:
         await message.answer("Xush kelibsiz! Kinolarni ko'rish uchun katalogni oching.", reply_markup=webapp_keyboard())
-        
-# --------------------------------------------------------
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
@@ -81,14 +99,11 @@ async def check_sub_handler(callback: types.CallbackQuery):
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
 
-# Render uchun server
 async def handle(request):
     return web.Response(text="Hogwarts Bot is Alive!")
 
 async def main():
-    print("Bot va Server ishga tushmoqda...")
-    
-    # 1. Veb-serverni tayyorlash (U orqa fonda xalaqit bermay ishlayveradi)
+    logging.info("Bot va Server ishga tushmoqda...")
     app = web.Application()
     app.router.add_get('/', handle)
     runner = web.AppRunner(app)
@@ -97,19 +112,14 @@ async def main():
     port = int(os.getenv("PORT", 8080))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print("Veb-server ishga tushdi.")
+    logging.info("Veb-server ishga tushdi.")
     
-    # 2. Zombi jarayonning oldini olish: Pollingni bloklovchi asosiy jarayonga aylantiramiz
     try:
-        # Ikkita bot to'qnashib qolmasligi uchun eskirgan so'rovlarni tozalaymiz
         await bot.delete_webhook(drop_pending_updates=True) 
-        await dp.start_polling(bot) # Agar bu qulasa, dastur ham qulaydi!
+        await dp.start_polling(bot)
     except Exception as e:
-        print(f"BOT KRITIK XATOGA UCHRADI: {e}")
-        raise e # Renderga dastur o'lganini xabar qilish
+        logging.error(f"BOT KRITIK XATOGA UCHRADI: {e}")
+        raise e
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
