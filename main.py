@@ -70,7 +70,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
 
     if payload:
         try:
-            movie_key, lang = payload.split('_') 
+            movie_key, lang = payload.strip().split('_')
             movie_data = MOVIES_DB[movie_key][lang]
             
             if movie_data["video_id"] == "kiritilmagan":
@@ -123,3 +123,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
