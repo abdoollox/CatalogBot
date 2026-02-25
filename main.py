@@ -14,7 +14,7 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003826689337"))
 CHANNEL_URL = "https://t.me/garripotter_cinema"
-WEBAPP_URL = "https://sening-domen.uz"
+WEBAPP_URL = "https://abdoollox.github.io/WebApp/"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
