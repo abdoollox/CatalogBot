@@ -70,27 +70,44 @@ async def start_cmd(message: types.Message, command: CommandObject):
 
     if payload:
         try:
-            # Probellarni tozalash va ajratish
-            movie_key, lang = payload.strip().split('_')
+            # 1. Tozalash bosqichi
+            payload_clean = payload.strip()
+            parts = payload_clean.split('_')
+            
+            # 2. Diagnostika: Bo'linishdagi xatoni ushlash
+            if len(parts) != 2:
+                await message.answer(f"⚠️ DIAGNOSTIKA (ValueError): Signal ikkiga bo'linmadi.\nSiz yuborgan aniq signal: '{payload}'\nUzunligi: {len(payload)} ta belgi.")
+                return
+                
+            movie_key, lang = parts
+            
+            # 3. Diagnostika: Kino kalitini tekshirish
+            if movie_key not in MOVIES_DB:
+                await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Kino): '{movie_key}' bazada topilmadi.\nBazadagi mavjud kinolar: {list(MOVIES_DB.keys())}")
+                return
+                
+            # 4. Diagnostika: Tilni tekshirish
+            if lang not in MOVIES_DB[movie_key]:
+                await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(MOVIES_DB[movie_key].keys())}")
+                return
+                
             movie_data = MOVIES_DB[movie_key][lang]
             
             if movie_data["video_id"] == "kiritilmagan":
                 await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
                 return
 
-            # --- MANA SEN SO'RAGAN QISMI (THUMBNAIL BILAN) ---
+            # Asosiy yuborish qismi
             await message.answer_video(
                 video=movie_data["video_id"], 
-                thumbnail=movie_data["thumb_id"], # Rasm qo'shib yuborish
+                thumbnail=movie_data["thumb_id"],
                 caption=movie_data["caption"],
                 parse_mode="HTML"
             )
         
-        except (ValueError, KeyError):
-            await message.answer("⚠️ Xato: Kino yoki til tizimda topilmadi.")
         except Exception as e:
-            logging.error(f"Video yuborishda xato: {e}")
-            await message.answer(f"⚠️ Telegram API xatosi: {str(e)}")
+            logging.error(f"Kritik API xatosi: {e}")
+            await message.answer(f"⚠️ Telegram API xatosi (Fayl yuborish quladi): {str(e)}")
     else:
         await message.answer("Xush kelibsiz! Kinolarni ko'rish uchun katalogni oching.", reply_markup=webapp_keyboard())
 
@@ -141,6 +158,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
