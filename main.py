@@ -24,7 +24,7 @@ MOVIES_DB = {
     "hp1": {
         "en": {
             "video_id": "BAACAgIAAxkBAAM4aZ6a7sHm5GczPeY-FGBGBQNTnhgAAmyeAAKyQQhIzAgwWVas_WI6BA", # Shu yerni yangilash esingdan chiqmasin
-            "thumb_id": "AAMCAgADGQEAASE5TWmeeva3f772jxZf_kHY4KhDqX7DAAJsngACskEISF4j6hkn5kztAQAHbQADOgQ",
+            "thumb_id": "AAMCAgADGQEAAzhpnpruwebkZzM95j4UYEYFA1OeGAACbJ4AArJBCEjMCDBZVqz9YgEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
         },
         "uz": {
@@ -141,5 +141,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
