@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiohttp import web # Render uchun qo'shildi
+from aiogram.filters import CommandStart, CommandObject
 
 # DANGEROUS ASSUMPTION: Token va ID larni ochiq kodda saqlash xavfsizlikka zid. 
 # Hozircha test uchun ishlatamiz, keyin .env faylga o'tkazishing shart.
@@ -41,14 +42,47 @@ async def is_subscribed(user_id):
         print(f"Xato yuz berdi: {e}")
         return False
 
-# 4. /start bosilganda ishlovchi mantiq
-@dp.message(CommandStart())
-async def start_cmd(message: types.Message):
-    if await is_subscribed(message.from_user.id):
-        await message.answer("Xush kelibsiz! Kinolarni ko'rish uchun katalogni oching.", reply_markup=webapp_keyboard())
-    else:
-        await message.answer("Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!", reply_markup=check_sub_keyboard())
+MOVIES_DB = {
+    "hp1": {
+        "uz": "SHU_YERGA_OLGAN_FILE_ID_KODINGNI_QO'Y", # O'zgaruvchini almashtir
+        "ru": "rus_uchun_id_kiritilmagan",
+        "en": "AgACAgIAAxkBAAEhOU1pnnr2rmDA0Uc1c35VGSrdKCKt9AACZAxrGwpg-Us1GE7r935_oQEAAwIAA3MAAzoE"
+    }
+    # Kelajakda hp2, hp3 larni xuddi shu tizimda qo'shib ketasan
+}
 
+# 4. Yangilangan qorovul va tarqatuvchi mantiq
+@dp.message(CommandStart())
+async def start_cmd(message: types.Message, command: CommandObject):
+    payload = command.args # Deep link signalini ushlash (masalan: "hp1_uz")
+    user_id = message.from_user.id
+    
+    # Qorovul har doim birinchi ishlaydi
+    if not await is_subscribed(user_id):
+        await message.answer("Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!", reply_markup=check_sub_keyboard())
+        return
+
+    # Agar foydalanuvchi WebApp orqali kino so'ragan bo'lsa
+    if payload:
+        try:
+            # Signalni ikkiga bo'lamiz: kino kodi va til
+            movie_key, lang = payload.split('_') 
+            file_id = MOVIES_DB[movie_key][lang]
+            
+            # Agar ID hali kiritilmagan bo'lsa
+            if file_id.endswith("_kiritilmagan"):
+                await message.answer("Bu tildagi film tez orada yuklanadi.")
+                return
+
+            # Faylni yuborish
+            await message.answer_video(video=file_id, caption="🎬 Yoqimli tomosha!")
+        
+        except (ValueError, KeyError):
+            # Failure mode: noto'g'ri signal kelsa
+            await message.answer("⚠️ Xato: Kino yoki til topilmadi.")
+    else:
+        # Oddiy /start bosilganda vitrinani ko'rsatish
+        await message.answer("Xush kelibsiz! Kinolarni ko'rish uchun katalogni oching.", reply_markup=webapp_keyboard())
 # 5. "Tasdiqlash" tugmasi bosilganda ishlovchi mantiq
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
@@ -83,6 +117,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
