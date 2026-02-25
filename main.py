@@ -21,7 +21,7 @@ MOVIES_DB = {
     "hp1": {
         "uz": "UZBEK_TILIDAGI_FILE_ID_SHU_YERGA_YOZILADI",
         "ru": "RUS_TILIDAGI_FILE_ID_SHU_YERGA_YOZILADI",
-        "en": "AgACAgIAAxkBAAEhOU1pnnr2rmDA0Uc1c35VGSrdKCKt9AACZAxrGwpg-Us1GE7r935_oQEAAwIAA3MAAzoE" # Senda shu bor edi
+        "en": "BAACAgIAAxkBAAEhOU1pnnr2t3--9o8WX_5B2OCoQ6l-wwACbJ4AArJBCEheI-oZJ-ZM7ToE" # Senda shu bor edi
     }
 }
 # ---------------------------------
@@ -104,3 +104,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
