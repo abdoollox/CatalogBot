@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
-CHANNEL_URL = "https://t.me/garripotter_cinema" # Agar haqiqiy kanal havolasini yozmagan bo'lsang, API xato beradi
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003826689337"))
+CHANNEL_URL = "https://t.me/garripotter_cinema"
 WEBAPP_URL = "https://sening-domen.uz"
 
 bot = Bot(token=TOKEN)
@@ -23,7 +23,7 @@ dp = Dispatcher()
 MOVIES_DB = {
     "hp1": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAM4aZ6a7sHm5GczPeY-FGBGBQNTnhgAAmyeAAKyQQhIzAgwWVas_WI6BA",
+            "video_id": "BAACAgIAAxkBAAEhOU1pnnr2t3--9o8WX_5B2OCoQ6l-wwACbJ4AArJBCEheI-oZJ-ZM7ToE", # Shu yerni yangilash esingdan chiqmasin
             "thumb_id": "AAMCAgADGQEAASE5TWmeeva3f772jxZf_kHY4KhDqX7DAAJsngACskEISF4j6hkn5kztAQAHbQADOgQ",
             "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
         },
@@ -59,13 +59,6 @@ async def is_subscribed(user_id):
         logging.error(f"Kanalga a'zolikni tekshirishda xato: {e}")
         return False
 
-# --- ADMIN ASBOBI: Video ID sini ushlab olish ---
-@dp.message(F.video)
-async def get_video_id(message: types.Message):
-    # Bu funksiya botga har qanday video tashlanganda uning shaxsiy ID sini qaytaradi
-    await message.reply(f"Sening boting uchun maxsus ID:\n\n<code>{message.video.file_id}</code>", parse_mode="HTML")
-
-
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, command: CommandObject):
     payload = command.args
@@ -76,40 +69,25 @@ async def start_cmd(message: types.Message, command: CommandObject):
         return
 
     if payload:
-        # 1. Kiritilgan ma'lumotni tozalash va klaviatura xatolarini tuzatish
-        payload = payload.strip().lower()
-        payload = payload.replace('е', 'e').replace('р', 'p') # Kirill harflarini avtomat lotinchaga o'giradi
-        
-        parts = payload.split('_')
-        
-        # 2. Aniq diagnostika: Nima xato ketganini yuziga aytish
-        if len(parts) != 2:
-            await message.answer(f"⚠️ Format xatosi. Siz kiritdingiz: '{payload}'.\nTo'g'ri format: hp1_en")
-            return
-            
-        movie_key, lang = parts
-        
-        if movie_key not in MOVIES_DB:
-            await message.answer(f"⚠️ Baza xatosi: '{movie_key}' kodli kino topilmadi.")
-            return
-            
-        if lang not in MOVIES_DB[movie_key]:
-            await message.answer(f"⚠️ Baza xatosi: '{movie_key}' kinoda '{lang}' tili yo'q.")
-            return
-            
-        movie_data = MOVIES_DB[movie_key][lang]
-        
-        if movie_data["video_id"] == "kiritilmagan":
-            await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
-            return
-
         try:
-            # 3. API chekloviga ko'ra thumbnail olib tashlandi
+            # Probellarni tozalash va ajratish
+            movie_key, lang = payload.strip().split('_')
+            movie_data = MOVIES_DB[movie_key][lang]
+            
+            if movie_data["video_id"] == "kiritilmagan":
+                await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
+                return
+
+            # --- MANA SEN SO'RAGAN QISMI (THUMBNAIL BILAN) ---
             await message.answer_video(
                 video=movie_data["video_id"], 
+                thumbnail=movie_data["thumb_id"], # Rasm qo'shib yuborish
                 caption=movie_data["caption"],
                 parse_mode="HTML"
             )
+        
+        except (ValueError, KeyError):
+            await message.answer("⚠️ Xato: Kino yoki til tizimda topilmadi.")
         except Exception as e:
             logging.error(f"Video yuborishda xato: {e}")
             await message.answer(f"⚠️ Telegram API xatosi: {str(e)}")
@@ -147,7 +125,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
