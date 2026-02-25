@@ -101,6 +101,22 @@ async def check_sub_handler(callback: types.CallbackQuery):
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
 
+# --- ADMIN ASBOBI: Video va Thumbnail ID larini ushlab olish ---
+@dp.message(F.video)
+async def get_video_info(message: types.Message):
+    video_id = message.video.file_id
+    # Agar videoda rasm (cover) bo'lsa uni oladi, yo'q bo'lsa xabar beradi
+    thumb_id = message.video.thumbnail.file_id if message.video.thumbnail else "Rasm (cover) topilmadi"
+    
+    text = (
+        f"Sening boting uchun maxsus ID'lar:\n\n"
+        f"🎬 <b>Video ID:</b>\n<code>{video_id}</code>\n\n"
+        f"🖼 <b>Thumbnail ID:</b>\n<code>{thumb_id}</code>"
+    )
+    
+    await message.reply(text, parse_mode="HTML")
+
+
 async def handle(request):
     return web.Response(text="Hogwarts Bot is Alive!")
 
@@ -125,4 +141,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
