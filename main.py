@@ -87,8 +87,8 @@ async def handle(request):
 
 async def main():
     print("Bot va Server ishga tushmoqda...")
-    asyncio.create_task(dp.start_polling(bot))
     
+    # 1. Veb-serverni tayyorlash (U orqa fonda xalaqit bermay ishlayveradi)
     app = web.Application()
     app.router.add_get('/', handle)
     runner = web.AppRunner(app)
@@ -97,10 +97,19 @@ async def main():
     port = int(os.getenv("PORT", 8080))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
+    print("Veb-server ishga tushdi.")
     
-    await asyncio.Event().wait()
+    # 2. Zombi jarayonning oldini olish: Pollingni bloklovchi asosiy jarayonga aylantiramiz
+    try:
+        # Ikkita bot to'qnashib qolmasligi uchun eskirgan so'rovlarni tozalaymiz
+        await bot.delete_webhook(drop_pending_updates=True) 
+        await dp.start_polling(bot) # Agar bu qulasa, dastur ham qulaydi!
+    except Exception as e:
+        print(f"BOT KRITIK XATOGA UCHRADI: {e}")
+        raise e # Renderga dastur o'lganini xabar qilish
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
