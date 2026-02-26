@@ -33,9 +33,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "BAACAgIAAxkBAAO8aaAnjXFUC4llqb3irXal6a4GgccAAkKSAAIrpxFID96FSI3gmEE6BA",
+            "thumb_id": "AAMCAgADGQEAA7xpoCeNcVQLiWWpveKtdqXprgaBxwACQpIAAiunEUgP3oVIjeCYQQEAB20AAzoE",
+            "caption": "🎬 <b>Гарри Поттер и Философский Камень</b>"
         }
     },
     
@@ -51,9 +51,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "BAACAgIAAxkBAAO-aaAoJAmK-jqKpZRDvJd8FVGyNpkAAhiQAAJXEJFIpZsNgkUDkY06BA",
+            "thumb_id": "AAMCAgADGQEAA75poCgkCYr6OoqllEO8l3wVUbI2mQACGJAAAlcQkUilmw2CRQORjQEAB20AAzoE",
+            "caption": "🎬 <b>Гарри Поттер и Тайная Kомнатa</b>"
         }
     },
     
@@ -69,9 +69,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "BAACAgIAAxkBAAPAaaAoOBcP3NyEPUoqprdvHuWq_2gAApGQAAJXEJFIeiQNsOVpQSk6BA",
+            "thumb_id": "AAMCAgADGQEAA8BpoCg4Fw_c3IQ9Siqmt28e5ar_aAACkZAAAlcQkUh6JA2w5WlBKQEAB20AAzoE",
+            "caption": "🎬 <b>Гарри Поттер и Узник Азкабана</b>"
         }
     },
     
@@ -87,9 +87,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "BAACAgIAAxkBAAPCaaAoRoC2hNDfoJZl87bzfgsdd6EAApaQAAJXEJFINf9dMuxL4AM6BA",
+            "thumb_id": "AAMCAgADGQEAA8JpoChGgLaE0N-glmXztvN-Cx13oQAClpAAAlcQkUg1_10y7EvgAwEAB20AAzoE",
+            "caption": "🎬 <b>Гарри Поттер и Кубок Огня</b>"
         }
     },
     
@@ -105,9 +105,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "BAACAgIAAxkBAAPEaaAoV-QD2qqp_-k1T8Bm5hloOckAAreQAAJXEJFIQs0p2PZFwmo6BA",
+            "thumb_id": "AAMCAgADGQEAA8RpoChX5APaqqn_6TVPwGbmGWg5yQACt5AAAlcQkUhCzSnY9kXCagEAB20AAzoE",
+            "caption": "🎬 <b>Гарри Поттер и Орден Феникса</b>"
         }
     },
     
@@ -123,9 +123,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "BAACAgIAAxkBAAPGaaAobIpxq6DkIhMqaTa8S9KQXwoAAsqQAAJXEJFIt9lcOgABawgcOgQ",
+            "thumb_id": "AAMCAgADGQEAA8ZpoChsinGroOQiEyppNrxL0pBfCgACypAAAlcQkUi32Vw6AAFrCBwBAAdtAAM6BA",
+            "caption": "🎬 <b>Гарри Поттер и Принц Полукровка</b>"
         }
     },
 
@@ -141,9 +141,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "AAMCAgADGQEAA8hpoCh_W6E_xd5Nqa0AAYqkKnHMkYsAAgORAAJXEJFImfE1w7WPxfEBAAdtAAM6BA",
+            "thumb_id": "AAMCAgADGQEAA8hpoCh_W6E_xd5Nqa0AAYqkKnHMkYsAAgORAAJXEJFImfE1w7WPxfEBAAdtAAM6BA",
+            "caption": "🎬 <b>Гарри Поттер и Дары Смерти Часть I</b>"
         }
     },
     
@@ -159,9 +159,9 @@ MOVIES_DB = {
             "caption": "Tez orada..."
         },
         "ru": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "video_id": "BAACAgIAAxkBAAPKaaAonCSpQjFSqjrlfS8JpBdWGlEAAkSRAAJXEJFILoE7ARD9BII6BA",
+            "thumb_id": "AAMCAgADGQEAA8ppoCicJKlCMVKqOuV9LwmkF1YaUQACRJEAAlcQkUgugTsBEP0EggEAB20AAzoE",
+            "caption": "🎬 <b>Гарри Поттер и Дары Смерти Часть II</b>"
         }
     }
 }
@@ -306,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
