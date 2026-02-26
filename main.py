@@ -23,8 +23,8 @@ dp = Dispatcher()
 MOVIES_DB = {
     "hp1": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAM4aZ6a7sHm5GczPeY-FGBGBQNTnhgAAmyeAAKyQQhIzAgwWVas_WI6BA", 
-            "thumb_id": "AAMCAgADGQEAAzhpnpruwebkZzM95j4UYEYFA1OeGAACbJ4AArJBCEjMCDBZVqz9YgEAB20AAzoE",
+            "video_id": "BAACAgIAAxkBAAPSaaA7ofAZV6pYxALmqMddzHQrtbYAAkiLAALCvAFJutfBDia_7Yw6BA", 
+            "thumb_id": "AAMCAgADGQEAA9JpoDuh8BlXqljEAuaox13MdCu1tgACSIsAAsK8AUm618EOJr_tjAEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>"
         },
         "uz": {
@@ -306,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
