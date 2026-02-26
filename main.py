@@ -192,8 +192,13 @@ async def is_subscribed(user_id):
         logging.error(f"Kanalga a'zolikni tekshirishda xato: {e}")
         return False
 
-@dp.message(CommandStart())
+@dp.message(CommandStart())    
 async def start_cmd(message: types.Message, command: CommandObject):
+    try:
+        await message.delete()
+    except Exception:
+        pass # Agar Telegram xabarni o'chirishga ruxsat bermasa, bot qulamasligi uchun himoya
+        
     payload = command.args
     user_id = message.from_user.id
     
@@ -301,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
