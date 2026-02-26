@@ -59,8 +59,8 @@ MOVIES_DB = {
     
     "hp3": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAN0aZ7R5nrjW46Zl1A9IQUbjRYZGKMAArCeAAKyQQhICfYETxQd5Oo6BA", 
-            "thumb_id": "AAMCAgADGQEAA3RpntHmeuNbjpmXUD0hBRuNFhkYowACsJ4AArJBCEgJ9gRPFB3k6gEAB20AAzoE",
+            "video_id": "BAACAgIAAxkBAAPYaaBF-BZJbrI69f4Sz0EAAX7ralWyAALxiwACwrwBSenv_1uNrf_POgQ", 
+            "thumb_id": "AAMCAgADGQEAA9hpoEX4Fklusjr1_hLPQQABfutqVbIAAvGLAALCvAFJ6e__W42t_88BAAdtAAM6BA",
             "caption": "🎬 <b>Harry Potter and the Prisioner of Azkaban</b>"
         },
         "uz": {
@@ -306,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
