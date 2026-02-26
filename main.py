@@ -25,7 +25,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAAM4aZ6a7sHm5GczPeY-FGBGBQNTnhgAAmyeAAKyQQhIzAgwWVas_WI6BA", 
             "thumb_id": "AAMCAgADGQEAAzhpnpruwebkZzM95j4UYEYFA1OeGAACbJ4AArJBCEjMCDBZVqz9YgEAB20AAzoE",
-            "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -43,7 +43,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAANyaZ7Rzb1jZCK-_EVwSEMm9rYCXlEAAimXAAKyQQABSPiWK88LHUK9OgQ", 
             "thumb_id": "AAMCAgADGQEAA3JpntHNvWNkIr78RXBIQyb2tgJeUQACKZcAArJBAAFI-JYrzwsdQr0BAAdtAAM6BA",
-            "caption": "🎬 <b>Harry Potter and the Chamber of Secrets</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Chamber of Secrets</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -61,7 +61,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAAN0aZ7R5nrjW46Zl1A9IQUbjRYZGKMAArCeAAKyQQhICfYETxQd5Oo6BA", 
             "thumb_id": "AAMCAgADGQEAA3RpntHmeuNbjpmXUD0hBRuNFhkYowACsJ4AArJBCEgJ9gRPFB3k6gEAB20AAzoE",
-            "caption": "🎬 <b>Harry Potter and the Prisioner of Azkaban</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Prisioner of Azkaban</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -79,7 +79,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAAN2aZ7SAAECh5YB77xJEca_p4v-5oitAAJHnwACskEISGF2e8Wzlji7OgQ", 
             "thumb_id": "AAMCAgADGQEAA3ZpntIAAQKHlgHvvEkRxr-ni_7miK0AAkefAAKyQQhIYXZ7xbOWOLsBAAdtAAM6BA",
-            "caption": "🎬 <b>Harry Potter and the Goblet of Fire</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Goblet of Fire</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -97,7 +97,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAAN4aZ7SHKFPGk6fAAFm0HqU9tV-xisVAAKfnwACskEISIWB-ivvfjs0OgQ", 
             "thumb_id": "AAMCAgADGQEAA3hpntIcoU8aTp8AAWbQepT21X7GKxUAAp-fAAKyQQhIhYH6K-9-OzQBAAdtAAM6BA",
-            "caption": "🎬 <b>Harry Potter and the Order of the Phoenix</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Order of the Phoenix</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -115,7 +115,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAAN6aZ7SZHc-jgr7dimKXWSkJAHoMBwAAk6gAAKyQQhI7MA5EWhLc1U6BA", 
             "thumb_id": "AAMCAgADGQEAA3ppntJkdz6OCvt2KYpdZKQkAegwHAACTqAAArJBCEjswDkRaEtzVQEAB20AAzoE",
-            "caption": "🎬 <b>Harry Potter and the Half-Blood Prince</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Half-Blood Prince</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -133,7 +133,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAAN8aZ7SeM7Wh9QHOUcLrw00oSwQOmkAAqygAAKyQQhIPPUkSA9QKgABOgQ", 
             "thumb_id": "AAMCAgADGQEAA3xpntJ4ztaH1Ac5RwuvDTShLBA6aQACrKAAArJBCEg89SRID1AqAAEBAAdtAAM6BA",
-            "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 1</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 1</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -151,7 +151,7 @@ MOVIES_DB = {
         "en": {
             "video_id": "BAACAgIAAxkBAAN-aZ7SiyuWaGqRsHLs-KcgsbE-UHsAAvugAAKyQQhIGGoTOdEsyh46BA", 
             "thumb_id": "AAMCAgADGQEAA35pntKLK5ZoapGwcuz4pyCxsT5QewAC-6AAArJBCEgYahM50SzKHgEAB20AAzoE",
-            "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 2</b>\n\n🧙‍♂️ <i>Sizni sehrgarlar olamiga eltuvchi afsonaviy asarning birinchi qismi. Hogwartsga xush kelibsiz!</i>\n\n🖥 Sifat: 1080p (FullHD)\n🇬🇧 Til: Ingliz tili"
+            "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 2</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
@@ -306,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
