@@ -236,7 +236,8 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 #thumbnail=movie_data["thumb_id"],
                 caption=movie_data["caption"],
                 parse_mode="HTML",
-                reply_markup=back_to_catalog_keyboard()
+                reply_markup=back_to_catalog_keyboard(),
+                protect_content=True  # <--- MANA SHU QAT'IY QULFLASH BUYRUG'I
             )
         
         except Exception as e:
@@ -300,6 +301,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
