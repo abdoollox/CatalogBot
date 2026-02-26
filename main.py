@@ -30,7 +30,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Hikmatlar Toshi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAO8aaAnjXFUC4llqb3irXal6a4GgccAAkKSAAIrpxFID96FSI3gmEE6BA",
@@ -48,7 +48,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Maxfiy Hujra</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAO-aaAoJAmK-jqKpZRDvJd8FVGyNpkAAhiQAAJXEJFIpZsNgkUDkY06BA",
@@ -66,7 +66,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Azkaban Maxbusi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPAaaAoOBcP3NyEPUoqprdvHuWq_2gAApGQAAJXEJFIeiQNsOVpQSk6BA",
@@ -84,7 +84,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Alanga Kubogi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPCaaAoRoC2hNDfoJZl87bzfgsdd6EAApaQAAJXEJFINf9dMuxL4AM6BA",
@@ -102,7 +102,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Feniks Jamiyati</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPEaaAoV-QD2qqp_-k1T8Bm5hloOckAAreQAAJXEJFIQs0p2PZFwmo6BA",
@@ -120,7 +120,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Tilsim Shaxzodasi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPGaaAobIpxq6DkIhMqaTa8S9KQXwoAAsqQAAJXEJFIt9lcOgABawgcOgQ",
@@ -138,7 +138,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Ajal Tuhfasi 1</b>"
         },
         "ru": {
             "video_id": "AAMCAgADGQEAA8hpoCh_W6E_xd5Nqa0AAYqkKnHMkYsAAgORAAJXEJFImfE1w7WPxfEBAAdtAAM6BA",
@@ -156,7 +156,7 @@ MOVIES_DB = {
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "Tez orada..."
+            "caption": "🎬 <b>Garri Potter va Ajal Tuhfasi 2</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPKaaAonCSpQjFSqjrlfS8JpBdWGlEAAkSRAAJXEJFILoE7ARD9BII6BA",
@@ -306,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
