@@ -77,8 +77,8 @@ MOVIES_DB = {
     
     "hp4": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAN2aZ7SAAECh5YB77xJEca_p4v-5oitAAJHnwACskEISGF2e8Wzlji7OgQ", 
-            "thumb_id": "AAMCAgADGQEAA3ZpntIAAQKHlgHvvEkRxr-ni_7miK0AAkefAAKyQQhIYXZ7xbOWOLsBAAdtAAM6BA",
+            "video_id": "BAACAgIAAxkBAAPeaaBUqEHincpWqsZrQnoKXKxBuBkAAiWMAALCvAFJ4erNDpoIaZo6BA", 
+            "thumb_id": "AAMCAgADGQEAA95poFSoQeKdylaqxmtCegpcrEG4GQACJYwAAsK8AUnh6s0OmghpmgEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Goblet of Fire</b>"
         },
         "uz": {
@@ -95,8 +95,8 @@ MOVIES_DB = {
     
     "hp5": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAN4aZ7SHKFPGk6fAAFm0HqU9tV-xisVAAKfnwACskEISIWB-ivvfjs0OgQ", 
-            "thumb_id": "AAMCAgADGQEAA3hpntIcoU8aTp8AAWbQepT21X7GKxUAAp-fAAKyQQhIhYH6K-9-OzQBAAdtAAM6BA",
+            "video_id": "BAACAgIAAxkBAAPgaaBUwxNC8tbgOIIqpAo0jsYUS3cAAiaMAALCvAFJPhaaDn5YoZs6BA", 
+            "thumb_id": "AAMCAgADGQEAA-BpoFTDE0Ly1uA4giqkCjSOxhRLdwACJowAAsK8AUk-FpoOflihmwEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Order of the Phoenix</b>"
         },
         "uz": {
@@ -113,8 +113,8 @@ MOVIES_DB = {
     
     "hp6": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAN6aZ7SZHc-jgr7dimKXWSkJAHoMBwAAk6gAAKyQQhI7MA5EWhLc1U6BA", 
-            "thumb_id": "AAMCAgADGQEAA3ppntJkdz6OCvt2KYpdZKQkAegwHAACTqAAArJBCEjswDkRaEtzVQEAB20AAzoE",
+            "video_id": "BAACAgIAAxkBAAPiaaBU0rBOc749XfmyFvTN4pmag3kAAieMAALCvAFJ8WU6E-Dlbf86BA", 
+            "thumb_id": "AAMCAgADGQEAA-JpoFTSsE5zvj1d-bIW9M3imZqDeQACJ4wAAsK8AUnxZToT4OVt_wEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Half-Blood Prince</b>"
         },
         "uz": {
@@ -131,8 +131,8 @@ MOVIES_DB = {
 
     "hp7": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAN8aZ7SeM7Wh9QHOUcLrw00oSwQOmkAAqygAAKyQQhIPPUkSA9QKgABOgQ", 
-            "thumb_id": "AAMCAgADGQEAA3xpntJ4ztaH1Ac5RwuvDTShLBA6aQACrKAAArJBCEg89SRID1AqAAEBAAdtAAM6BA",
+            "video_id": "BAACAgIAAxkBAAPkaaBU42d4-nqwFimoujzeAfgMkUsAAiiMAALCvAFJFbRcT_-2Q8Q6BA", 
+            "thumb_id": "AAMCAgADGQEAA-RpoFTjZ3j6erAWKai6PN4B-AyRSwACKIwAAsK8AUkVtFxP_7ZDxAEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 1</b>"
         },
         "uz": {
@@ -149,8 +149,8 @@ MOVIES_DB = {
     
     "hp8": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAN-aZ7SiyuWaGqRsHLs-KcgsbE-UHsAAvugAAKyQQhIGGoTOdEsyh46BA", 
-            "thumb_id": "AAMCAgADGQEAA35pntKLK5ZoapGwcuz4pyCxsT5QewAC-6AAArJBCEgYahM50SzKHgEAB20AAzoE",
+            "video_id": "BAACAgIAAxkBAAPmaaBU8r6U3W-teCPoUQjy7WGH_9kAAimMAALCvAFJrtvdK3s_gQs6BA", 
+            "thumb_id": "AAMCAgADGQEAA-ZpoFTyvpTdb614I-hRCPLtYYf_2QACKYwAAsK8AUmu290rez-BCwEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 2</b>"
         },
         "uz": {
@@ -306,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
