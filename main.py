@@ -41,8 +41,8 @@ MOVIES_DB = {
     
     "hp2": {
         "en": {
-            "video_id": "BAACAgIAAxkBAANyaZ7Rzb1jZCK-_EVwSEMm9rYCXlEAAimXAAKyQQABSPiWK88LHUK9OgQ", 
-            "thumb_id": "AAMCAgADGQEAA3JpntHNvWNkIr78RXBIQyb2tgJeUQACKZcAArJBAAFI-JYrzwsdQr0BAAdtAAM6BA",
+            "video_id": "BAACAgIAAxkBAAPWaaBBC9FtkpBMLagnMZ2w0oLtr8MAArCLAALCvAFJlLX9zX0Oa446BA", 
+            "thumb_id": "AAMCAgADGQEAA9ZpoEEL0W2SkEwtqCcxnbDSgu2vwwACsIsAAsK8AUmUtf3NfQ5rjgEAB20AAzoE",
             "caption": "🎬 <b>Harry Potter and the Chamber of Secrets</b>"
         },
         "uz": {
@@ -306,6 +306,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
