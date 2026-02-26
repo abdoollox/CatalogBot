@@ -243,7 +243,15 @@ async def start_cmd(message: types.Message, command: CommandObject):
             logging.error(f"Kritik API xatosi: {e}")
             await message.answer(f"⚠️ Telegram API xatosi (Fayl yuborish quladi): {str(e)}")
     else:
-        await message.answer("Xush kelibsiz! Kinolarni ko'rish uchun katalogni oching.", reply_markup=webapp_keyboard())
+        # UX optimizatsiya qilingan kutib olish xabari
+        welcome_text = (
+            "🪄 <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
+            
+            "Garri Potter olamidagi barcha filmlarni yuqori sifatda, reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
+            
+            "👇 <b>Kino tanlash uchun pastdagi tugma orqali katalogni oching:</b>"
+        )
+        await message.answer(welcome_text, parse_mode="HTML", reply_markup=webapp_keyboard())
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
@@ -292,6 +300,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
