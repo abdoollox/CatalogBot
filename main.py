@@ -24,7 +24,7 @@ dp = Dispatcher()
 MOVIES_DB = {
     "hp1": {
         "en": {
-            "message_id": 2,
+            "message_id": 10,
             "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>"
         },
         "uz": {
@@ -307,6 +307,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
