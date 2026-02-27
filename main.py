@@ -15,6 +15,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003826689337"))
 CHANNEL_URL = "https://t.me/garripotter_cinema"
 WEBAPP_URL = "https://abdoollox.github.io/WebApp/"
+DB_CHANNEL_ID = -1003641399832
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -23,8 +24,7 @@ dp = Dispatcher()
 MOVIES_DB = {
     "hp1": {
         "en": {
-            "video_id": "BAACAgIAAxkBAAPSaaA7ofAZV6pYxALmqMddzHQrtbYAAkiLAALCvAFJutfBDia_7Yw6BA", 
-            "thumb_id": "AAMCAgADGQEAA9JpoDuh8BlXqljEAuaox13MdCu1tgACSIsAAsK8AUm618EOJr_tjAEAB20AAzoE",
+            "message_id": 2,
             "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>"
         },
         "uz": {
@@ -236,13 +236,14 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 return
 
             # Asosiy yuborish qismi
-            await message.answer_video(
-                video=movie_data["video_id"], 
-                #thumbnail=movie_data["thumb_id"],
-                caption=movie_data["caption"],
+            await bot.copy_message(
+                chat_id=message.from_user.id,
+                from_chat_id=DB_CHANNEL_ID,
+                message_id=movie_data["message_id"],
+                caption=movie_data["caption"], # Kanaldagi yozuvni o'zimiznikiga almashtiramiz
                 parse_mode="HTML",
                 reply_markup=back_to_catalog_keyboard(),
-                protect_content=True  # <--- MANA SHU QAT'IY QULFLASH BUYRUG'I
+                protect_content=True
             )
         
         except Exception as e:
@@ -306,6 +307,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
