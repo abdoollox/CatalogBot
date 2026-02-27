@@ -231,7 +231,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 
             movie_data = MOVIES_DB[movie_key][lang]
             
-            if movie_data["video_id"] == "kiritilmagan":
+            if movie_data.get("message_id", 0) == 0:
                 await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
                 return
 
@@ -307,6 +307,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
