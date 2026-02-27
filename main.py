@@ -25,136 +25,136 @@ MOVIES_DB = {
     "hp1": {
         "en": {
             "message_id": 10,
-            "caption": "🎬 <b>Harry Potter and the Philosopher's Stone</b>"
+            "caption": "<b>1. Harry Potter and the Philosopher's Stone</b>"
         },
         "uz": {
             "video_id": "BAACAgIAAxkBAAIBAmmhPtrufpNuPlwMwSt6BgUSljNNAAKgkgACUhcBSFBrcYcb2zo2OgQ",
             "thumb_id": "AAMCAgADGQEAAgECaaE-2u5-k24-XAzBK3oGBRKWM00AAqCSAAJSFwFIUGtxhxvbOjYBAAdtAAM6BA",
-            "caption": "🎬 <b>Garri Potter va Hikmatlar Toshi</b>"
+            "caption": "<b>1. Garri Potter va Hikmatlar Toshi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAO8aaAnjXFUC4llqb3irXal6a4GgccAAkKSAAIrpxFID96FSI3gmEE6BA",
             "thumb_id": "AAMCAgADGQEAA7xpoCeNcVQLiWWpveKtdqXprgaBxwACQpIAAiunEUgP3oVIjeCYQQEAB20AAzoE",
-            "caption": "🎬 <b>Гарри Поттер и Философский Камень</b>"
+            "caption": "<b>1. Гарри Поттер и Философский Камень</b>"
         }
     },
     
     "hp2": {
         "en": {
             "message_id": 11,
-            "caption": "🎬 <b>Harry Potter and the Chamber of Secrets</b>"
+            "caption": "<b>2. Harry Potter and the Chamber of Secrets</b>"
         },
         "uz": {
             "video_id": "BAACAgIAAxkBAAIBA2mhPtrZoI5jJ6SYo9bY1ghRboQTAAIBlQACUhcBSG1npCkk5acPOgQ",
             "thumb_id": "AAMCAgADGQEAAgEDaaE-2tmgjmMnpJij1tjWCFFuhBMAAgGVAAJSFwFIbWekKSTlpw8BAAdtAAM6BA",
-            "caption": "🎬 <b>Garri Potter va Maxfiy Hujra</b>"
+            "caption": "<b>2. Garri Potter va Maxfiy Hujra</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAO-aaAoJAmK-jqKpZRDvJd8FVGyNpkAAhiQAAJXEJFIpZsNgkUDkY06BA",
             "thumb_id": "AAMCAgADGQEAA75poCgkCYr6OoqllEO8l3wVUbI2mQACGJAAAlcQkUilmw2CRQORjQEAB20AAzoE",
-            "caption": "🎬 <b>Гарри Поттер и Тайная Kомнатa</b>"
+            "caption": "<b>2. Гарри Поттер и Тайная Kомнатa</b>"
         }
     },
     
     "hp3": {
         "en": {
             "message_id": 12,
-            "caption": "🎬 <b>Harry Potter and the Prisioner of Azkaban</b>"
+            "caption": "<b>3. Harry Potter and the Prisioner of Azkaban</b>"
         },
         "uz": {
             "video_id": "BAACAgIAAxkBAAIBBGmhPtoiGmmWTCXcL0pH57t14vbYAAI2lQACUhcBSN16ks9jjzmhOgQ",
             "thumb_id": "AAMCAgADGQEAAgEEaaE-2iIaaZZMJdwvSkfnu3Xi9tgAAjaVAAJSFwFI3XqSz2OPOaEBAAdtAAM6BA",
-            "caption": "🎬 <b>Garri Potter va Azkaban Maxbusi</b>"
+            "caption": "<b>3. Garri Potter va Azkaban Maxbusi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPAaaAoOBcP3NyEPUoqprdvHuWq_2gAApGQAAJXEJFIeiQNsOVpQSk6BA",
             "thumb_id": "AAMCAgADGQEAA8BpoCg4Fw_c3IQ9Siqmt28e5ar_aAACkZAAAlcQkUh6JA2w5WlBKQEAB20AAzoE",
-            "caption": "🎬 <b>Гарри Поттер и Узник Азкабана</b>"
+            "caption": "<b>3. Гарри Поттер и Узник Азкабана</b>"
         }
     },
     
     "hp4": {
         "en": {
             "message_id": 13,
-            "caption": "🎬 <b>Harry Potter and the Goblet of Fire</b>"
+            "caption": "<b>4. Harry Potter and the Goblet of Fire</b>"
         },
         "uz": {
             "video_id": "BAACAgIAAxkBAAIBBWmhPtqhPbfXcYqLZEnpWAEFVy9VAAJ9lQACUhcBSOzxxEr39DbPOgQ",
             "thumb_id": "AAMCAgADGQEAAgEFaaE-2qE9t9dxiotkSelYAQVXL1UAAn2VAAJSFwFI7PHESvf0Ns8BAAdtAAM6BA",
-            "caption": "🎬 <b>Garri Potter va Alanga Kubogi</b>"
+            "caption": "<b>4. Garri Potter va Alanga Kubogi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPCaaAoRoC2hNDfoJZl87bzfgsdd6EAApaQAAJXEJFINf9dMuxL4AM6BA",
             "thumb_id": "AAMCAgADGQEAA8JpoChGgLaE0N-glmXztvN-Cx13oQAClpAAAlcQkUg1_10y7EvgAwEAB20AAzoE",
-            "caption": "🎬 <b>Гарри Поттер и Кубок Огня</b>"
+            "caption": "<b>4. Гарри Поттер и Кубок Огня</b>"
         }
     },
     
     "hp5": {
         "en": {
             "message_id": 14,
-            "caption": "🎬 <b>Harry Potter and the Order of the Phoenix</b>"
+            "caption": "<b>5. Harry Potter and the Order of the Phoenix</b>"
         },
         "uz": {
             "video_id": "BAACAgIAAxkBAAIBBmmhPtocgOCPDJR9LDUWkb411ARbAAKVlQACUhcBSCHT70Qi-d6ROgQ",
             "thumb_id": "AAMCAgADGQEAAgEGaaE-2hyA4I8MlH0sNRaRvjXUBFsAApWVAAJSFwFIIdPvRCL53pEBAAdtAAM6BA",
-            "caption": "🎬 <b>Garri Potter va Feniks Jamiyati</b>"
+            "caption": "<b>5. Garri Potter va Feniks Jamiyati</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPEaaAoV-QD2qqp_-k1T8Bm5hloOckAAreQAAJXEJFIQs0p2PZFwmo6BA",
             "thumb_id": "AAMCAgADGQEAA8RpoChX5APaqqn_6TVPwGbmGWg5yQACt5AAAlcQkUhCzSnY9kXCagEAB20AAzoE",
-            "caption": "🎬 <b>Гарри Поттер и Орден Феникса</b>"
+            "caption": "<b>5. Гарри Поттер и Орден Феникса</b>"
         }
     },
     
     "hp6": {
         "en": {
             "message_id": 15,
-            "caption": "🎬 <b>Harry Potter and the Half-Blood Prince</b>"
+            "caption": "<b>6. Harry Potter and the Half-Blood Prince</b>"
         },
         "uz": {
             "video_id": "BAACAgIAAxkBAAIBB2mhPtohNqS3LnS-B9gko8TUTUnVAALMlQACUhcBSKJ0Ojbn5eQbOgQ",
             "thumb_id": "AAMCAgADGQEAAgEHaaE-2iE2pLcudL4H2CSjxNRNSdUAAsyVAAJSFwFIonQ6Nufl5BsBAAdtAAM6BA",
-            "caption": "🎬 <b>Garri Potter va Tilsim Shaxzodasi</b>"
+            "caption": "<b>6. Garri Potter va Tilsim Shaxzodasi</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPGaaAobIpxq6DkIhMqaTa8S9KQXwoAAsqQAAJXEJFIt9lcOgABawgcOgQ",
             "thumb_id": "AAMCAgADGQEAA8ZpoChsinGroOQiEyppNrxL0pBfCgACypAAAlcQkUi32Vw6AAFrCBwBAAdtAAM6BA",
-            "caption": "🎬 <b>Гарри Поттер и Принц Полукровка</b>"
+            "caption": "<b>6. Гарри Поттер и Принц Полукровка</b>"
         }
     },
 
     "hp7": {
         "en": {
             "message_id": 16,
-            "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 1</b>"
+            "caption": "<b>7. Harry Potter and the Deathly Hallows Part 1</b>"
         },
         "uz": {
             "video_id": "BAACAgIAAxkBAAIBCGmhPtp8p9_yg-VSzk5r073h0-SzAAIdlgACUhcBSKaXEz2GI-fvOgQ",
             "thumb_id": "AAMCAgADGQEAAgEIaaE-2nyn3_KD5VLOTmvTveHT5LMAAh2WAAJSFwFIppcTPYYj5-8BAAdtAAM6BA",
-            "caption": "🎬 <b>Garri Potter va Ajal Tuhfasi 1</b>"
+            "caption": "<b>7. Garri Potter va Ajal Tuhfasi 1</b>"
         },
         "ru": {
             "video_id": "AAMCAgADGQEAA8hpoCh_W6E_xd5Nqa0AAYqkKnHMkYsAAgORAAJXEJFImfE1w7WPxfEBAAdtAAM6BA",
             "thumb_id": "AAMCAgADGQEAA8hpoCh_W6E_xd5Nqa0AAYqkKnHMkYsAAgORAAJXEJFImfE1w7WPxfEBAAdtAAM6BA",
-            "caption": "🎬 <b>Гарри Поттер и Дары Смерти Часть I</b>"
+            "caption": "<b>7. Гарри Поттер и Дары Смерти Часть I</b>"
         }
     },
     
     "hp8": {
         "en": {
             "message_id": 17,
-            "caption": "🎬 <b>Harry Potter and the Deathly Hallows Part 2</b>"
+            "caption": "<b>8. Harry Potter and the Deathly Hallows Part 2</b>"
         },
         "uz": {
             "video_id": "kiritilmagan",
             "thumb_id": "kiritilmagan",
-            "caption": "🎬 <b>Garri Potter va Ajal Tuhfasi 2</b>"
+            "caption": "<b>8. Garri Potter va Ajal Tuhfasi 2</b>"
         },
         "ru": {
             "video_id": "BAACAgIAAxkBAAPKaaAonCSpQjFSqjrlfS8JpBdWGlEAAkSRAAJXEJFILoE7ARD9BII6BA",
             "thumb_id": "AAMCAgADGQEAA8ppoCicJKlCMVKqOuV9LwmkF1YaUQACRJEAAlcQkUgugTsBEP0EggEAB20AAzoE",
-            "caption": "🎬 <b>Гарри Поттер и Дары Смерти Часть II</b>"
+            "caption": "<b>8. Гарри Поттер и Дары Смерти Часть II</b>"
         }
     }
 }
@@ -300,6 +300,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
