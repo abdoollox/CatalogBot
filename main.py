@@ -133,8 +133,7 @@ MOVIES_DB = {
             "caption": "<b>8. Harry Potter and the Deathly Hallows Part 2</b>"
         },
         "uz": {
-            "video_id": "kiritilmagan",
-            "thumb_id": "kiritilmagan",
+            "message_id": 0,
             "caption": "<b>8. Garri Potter va Ajal Tuhfasi 2</b>"
         },
         "ru": {
@@ -156,10 +155,30 @@ def webapp_keyboard():
     ])
 
 # --- MANA SHU YERGA YANGI FUNKSIYANI QO'SHASAN ---
-def back_to_catalog_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎬 Katalogni ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
-    ])
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+def movie_delivery_keyboard():
+    builder = InlineKeyboardBuilder()
+    
+    # 1-qavat: Katalogga qaytish (Mijozni tizimda olib qolish)
+    builder.row(
+        InlineKeyboardButton(
+            text="🎬 Katalogni ochish", 
+            web_app=WebAppInfo(url=WEBAPP_URL)
+        )
+    )
+    
+    # 2-qavat: SOTUV VORONKASIGA KO'PRIK
+    # DIQQAT: "sotuv_bot_username" degan joyni o'zingning haqiqiy kolleksiya boting nomiga almashtir!
+    builder.row(
+        InlineKeyboardButton(
+            text="🗝 Maxfiy Sandiqni Ochish", 
+            url="https://t.me/sotuv_bot_username?start=alohomora" 
+        )
+    )
+    
+    return builder.as_markup()
+    
 # ------------------------------------------------
 
 async def is_subscribed(user_id):
@@ -220,7 +239,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 message_id=movie_data["message_id"],
                 caption=movie_data["caption"], # Kanaldagi yozuvni o'zimiznikiga almashtiramiz
                 parse_mode="HTML",
-                reply_markup=back_to_catalog_keyboard(),
+                reply_markup=movie_delivery_keyboard(),
                 protect_content=True
             )
         
@@ -285,6 +304,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
