@@ -172,7 +172,7 @@ def movie_delivery_keyboard():
     # DIQQAT: "sotuv_bot_username" degan joyni o'zingning haqiqiy kolleksiya boting nomiga almashtir!
     builder.row(
         InlineKeyboardButton(
-            text="🗝 Maxfiy Sandiqni Ochish", 
+            text="🗝 Maxfiy sandiqni ochish", 
             url="https://t.me/sotuv_bot_username?start=alohomora" 
         )
     )
@@ -304,6 +304,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
