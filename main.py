@@ -173,7 +173,7 @@ def movie_delivery_keyboard():
     builder.row(
         InlineKeyboardButton(
             text="🗝 Maxfiy sandiqni ochish", 
-            url="https://t.me/sotuv_bot_username?start=alohomora" 
+            url="https://t.me/garripotter_cinemabot?start"
         )
     )
     
@@ -304,6 +304,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
