@@ -28,8 +28,7 @@ MOVIES_DB = {
             "caption": "<b>1. Harry Potter and the Philosopher's Stone</b>"
         },
         "uz": {
-            "video_id": "BAACAgIAAxkBAAIBAmmhPtrufpNuPlwMwSt6BgUSljNNAAKgkgACUhcBSFBrcYcb2zo2OgQ",
-            "thumb_id": "AAMCAgADGQEAAgECaaE-2u5-k24-XAzBK3oGBRKWM00AAqCSAAJSFwFIUGtxhxvbOjYBAAdtAAM6BA",
+            "message_id": 26,
             "caption": "<b>1. Garri Potter va Hikmatlar Toshi</b>"
         },
         "ru": {
@@ -44,8 +43,7 @@ MOVIES_DB = {
             "caption": "<b>2. Harry Potter and the Chamber of Secrets</b>"
         },
         "uz": {
-            "video_id": "BAACAgIAAxkBAAIBA2mhPtrZoI5jJ6SYo9bY1ghRboQTAAIBlQACUhcBSG1npCkk5acPOgQ",
-            "thumb_id": "AAMCAgADGQEAAgEDaaE-2tmgjmMnpJij1tjWCFFuhBMAAgGVAAJSFwFIbWekKSTlpw8BAAdtAAM6BA",
+            "message_id": 27,
             "caption": "<b>2. Garri Potter va Maxfiy Hujra</b>"
         },
         "ru": {
@@ -60,8 +58,7 @@ MOVIES_DB = {
             "caption": "<b>3. Harry Potter and the Prisioner of Azkaban</b>"
         },
         "uz": {
-            "video_id": "BAACAgIAAxkBAAIBBGmhPtoiGmmWTCXcL0pH57t14vbYAAI2lQACUhcBSN16ks9jjzmhOgQ",
-            "thumb_id": "AAMCAgADGQEAAgEEaaE-2iIaaZZMJdwvSkfnu3Xi9tgAAjaVAAJSFwFI3XqSz2OPOaEBAAdtAAM6BA",
+            "message_id": 28,
             "caption": "<b>3. Garri Potter va Azkaban Maxbusi</b>"
         },
         "ru": {
@@ -76,8 +73,7 @@ MOVIES_DB = {
             "caption": "<b>4. Harry Potter and the Goblet of Fire</b>"
         },
         "uz": {
-            "video_id": "BAACAgIAAxkBAAIBBWmhPtqhPbfXcYqLZEnpWAEFVy9VAAJ9lQACUhcBSOzxxEr39DbPOgQ",
-            "thumb_id": "AAMCAgADGQEAAgEFaaE-2qE9t9dxiotkSelYAQVXL1UAAn2VAAJSFwFI7PHESvf0Ns8BAAdtAAM6BA",
+            "message_id": 29,
             "caption": "<b>4. Garri Potter va Alanga Kubogi</b>"
         },
         "ru": {
@@ -92,8 +88,7 @@ MOVIES_DB = {
             "caption": "<b>5. Harry Potter and the Order of the Phoenix</b>"
         },
         "uz": {
-            "video_id": "BAACAgIAAxkBAAIBBmmhPtocgOCPDJR9LDUWkb411ARbAAKVlQACUhcBSCHT70Qi-d6ROgQ",
-            "thumb_id": "AAMCAgADGQEAAgEGaaE-2hyA4I8MlH0sNRaRvjXUBFsAApWVAAJSFwFIIdPvRCL53pEBAAdtAAM6BA",
+            "message_id": 30,
             "caption": "<b>5. Garri Potter va Feniks Jamiyati</b>"
         },
         "ru": {
@@ -108,8 +103,7 @@ MOVIES_DB = {
             "caption": "<b>6. Harry Potter and the Half-Blood Prince</b>"
         },
         "uz": {
-            "video_id": "BAACAgIAAxkBAAIBB2mhPtohNqS3LnS-B9gko8TUTUnVAALMlQACUhcBSKJ0Ojbn5eQbOgQ",
-            "thumb_id": "AAMCAgADGQEAAgEHaaE-2iE2pLcudL4H2CSjxNRNSdUAAsyVAAJSFwFIonQ6Nufl5BsBAAdtAAM6BA",
+            "message_id": 31,
             "caption": "<b>6. Garri Potter va Tilsim Shaxzodasi</b>"
         },
         "ru": {
@@ -124,8 +118,7 @@ MOVIES_DB = {
             "caption": "<b>7. Harry Potter and the Deathly Hallows Part 1</b>"
         },
         "uz": {
-            "video_id": "BAACAgIAAxkBAAIBCGmhPtp8p9_yg-VSzk5r073h0-SzAAIdlgACUhcBSKaXEz2GI-fvOgQ",
-            "thumb_id": "AAMCAgADGQEAAgEIaaE-2nyn3_KD5VLOTmvTveHT5LMAAh2WAAJSFwFIppcTPYYj5-8BAAdtAAM6BA",
+            "message_id": 32,
             "caption": "<b>7. Garri Potter va Ajal Tuhfasi 1</b>"
         },
         "ru": {
@@ -292,6 +285,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
