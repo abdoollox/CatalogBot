@@ -33,7 +33,7 @@ MOVIES_DB = {
             "caption": "<b>1. Garri Potter va Hikmatlar Toshi</b>"
         },
         "ru": {
-            "message_id": 18,,
+            "message_id": 18,
             "caption": "<b>1. Гарри Поттер и Философский Камень</b>"
         }
     },
@@ -292,6 +292,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
