@@ -1,11 +1,15 @@
 import os
 import asyncio
 import logging
+import json
+import aiofiles
+from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiohttp import web
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- TIZIM KO'ZLARINI OCHISH (LOGGING) ---
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +23,10 @@ DB_CHANNEL_ID = -1003641399832
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+# --- BAZA QULFI VA FAYL MANZILI ---
+db_lock = asyncio.Lock()
+USERS_FILE = "users_db.json"
 
 # --- QAT'IY MA'LUMOTLAR BAZASI ---
 MOVIES_DB = {
@@ -143,6 +151,38 @@ MOVIES_DB = {
     }
 }
 
+# --- MIJOZ HARAKATLARINI BAZAGA YOZISH ---
+async def log_user_action(user: types.User, payload: str):
+    async with db_lock:
+        try:
+            async with aiofiles.open(USERS_FILE, "r", encoding="utf-8") as f:
+                content = await f.read()
+                db = json.loads(content) if content else {}
+        except (FileNotFoundError, json.JSONDecodeError):
+            db = {}
+
+        user_id = str(user.id)
+        
+        if user_id not in db:
+            db[user_id] = {
+                "nickname": user.full_name,
+                "username": f"@{user.username}" if user.username else "Yo'q",
+                "clicks": {}
+            }
+        else:
+            db[user_id]["nickname"] = user.full_name
+            db[user_id]["username"] = f"@{user.username}" if user.username else "Yo'q"
+
+        if payload not in db[user_id]["clicks"]:
+            db[user_id]["clicks"][payload] = []
+            
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        db[user_id]["clicks"][payload].append(now)
+
+        async with aiofiles.open(USERS_FILE, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(db, indent=4, ensure_ascii=False))
+
+
 def check_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="1️⃣ Kanalga obuna bo'lish", url=CHANNEL_URL)],
@@ -154,13 +194,9 @@ def webapp_keyboard():
         [InlineKeyboardButton(text="🎬 Kutubxonani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
     ])
 
-# --- MANA SHU YERGA YANGI FUNKSIYANI QO'SHASAN ---
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-
 def movie_delivery_keyboard():
     builder = InlineKeyboardBuilder()
     
-    # 1-qavat: Katalogga qaytish (Mijozni tizimda olib qolish)
     builder.row(
         InlineKeyboardButton(
             text="🎬 Kutubxonani ochish", 
@@ -168,8 +204,6 @@ def movie_delivery_keyboard():
         )
     )
     
-    # 2-qavat: SOTUV VORONKASIGA KO'PRIK
-    # DIQQAT: "sotuv_bot_username" degan joyni o'zingning haqiqiy kolleksiya boting nomiga almashtir!
     builder.row(
         InlineKeyboardButton(
             text="🗝 Maxfiy sandiqni ochish", 
@@ -179,7 +213,6 @@ def movie_delivery_keyboard():
     
     return builder.as_markup()
     
-# ------------------------------------------------
 
 async def is_subscribed(user_id):
     try:
@@ -194,7 +227,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
     try:
         await message.delete()
     except Exception:
-        pass # Agar Telegram xabarni o'chirishga ruxsat bermasa, bot qulamasligi uchun himoya
+        pass 
         
     payload = command.args
     user_id = message.from_user.id
@@ -205,23 +238,19 @@ async def start_cmd(message: types.Message, command: CommandObject):
 
     if payload:
         try:
-            # 1. Tozalash bosqichi
             payload_clean = payload.strip()
             parts = payload_clean.split('_')
             
-            # 2. Diagnostika: Bo'linishdagi xatoni ushlash
             if len(parts) != 2:
                 await message.answer(f"⚠️ DIAGNOSTIKA (ValueError): Signal ikkiga bo'linmadi.\nSiz yuborgan aniq signal: '{payload}'\nUzunligi: {len(payload)} ta belgi.")
                 return
                 
             movie_key, lang = parts
             
-            # 3. Diagnostika: Kino kalitini tekshirish
             if movie_key not in MOVIES_DB:
                 await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Kino): '{movie_key}' bazada topilmadi.\nBazadagi mavjud kinolar: {list(MOVIES_DB.keys())}")
                 return
                 
-            # 4. Diagnostika: Tilni tekshirish
             if lang not in MOVIES_DB[movie_key]:
                 await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(MOVIES_DB[movie_key].keys())}")
                 return
@@ -232,12 +261,15 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
                 return
 
+            # Xavfsiz tizim: Mijoz harakatini qayd etish
+            await log_user_action(message.from_user, payload_clean)
+
             # Asosiy yuborish qismi
             await bot.copy_message(
                 chat_id=message.from_user.id,
                 from_chat_id=DB_CHANNEL_ID,
                 message_id=movie_data["message_id"],
-                caption=movie_data["caption"], # Kanaldagi yozuvni o'zimiznikiga almashtiramiz
+                caption=movie_data["caption"], 
                 parse_mode="HTML",
                 reply_markup=movie_delivery_keyboard(),
                 protect_content=True
@@ -247,7 +279,6 @@ async def start_cmd(message: types.Message, command: CommandObject):
             logging.error(f"Kritik API xatosi: {e}")
             await message.answer(f"⚠️ Telegram API xatosi (Fayl yuborish quladi): {str(e)}")
     else:
-        # UX optimizatsiya qilingan kutib olish xabari
         welcome_text = (
             "🪄 <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
             
@@ -264,11 +295,9 @@ async def check_sub_handler(callback: types.CallbackQuery):
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
 
-# --- ADMIN ASBOBI: Video va Thumbnail ID larini ushlab olish ---
 @dp.message(F.video)
 async def get_video_info(message: types.Message):
     video_id = message.video.file_id
-    # Agar videoda rasm (cover) bo'lsa uni oladi, yo'q bo'lsa xabar beradi
     thumb_id = message.video.thumbnail.file_id if message.video.thumbnail else "Rasm (cover) topilmadi"
     
     text = (
@@ -278,7 +307,6 @@ async def get_video_info(message: types.Message):
     )
     
     await message.reply(text, parse_mode="HTML")
-
 
 async def handle(request):
     return web.Response(text="Hogwarts Bot is Alive!")
@@ -304,39 +332,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
