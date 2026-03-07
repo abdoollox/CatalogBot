@@ -195,38 +195,31 @@ def webapp_keyboard():
         [InlineKeyboardButton(text="🎬 Kutubxonani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
     ])
 
-def movie_delivery_keyboard(movie_title="Garri Potter"):
+def movie_delivery_keyboard():
     builder = InlineKeyboardBuilder()
     
-    # 1. Matnni tozalash (HTML teglarni yulib tashlaymiz)
-    clean_title = movie_title.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
+    # 1. Matn va Ssilkani qat'iy belgilash (Hardcoded)
+    share_text = "🎬 Menga bu filmlar kolleksiyasi yoqdi. Siz ham foydalanib ko'ring!\n🔗 Garri Potter Kolleksiyasi"
+    bot_link = "https://t.me/garripotterkinobot?start=start"
     
-    # 2. Ulashish uchun toza matn va bot manzili
-    share_text = f"Menga shu film yoqdi: {clean_title}\nSiz ham ko'ring!"
-    bot_link = "https://t.me/garripotterkinobot" # O'zingning katalog boting manzili
-    
-    # 3. URL-ENCODING (Probel va belgilarni API tushunadigan xavfsiz formatga o'tkazish)
+    # 2. URL-ENCODING (Xavfsiz ssilka shakllantirish)
     safe_text = urllib.parse.quote(share_text)
     safe_url = urllib.parse.quote(bot_link)
-    
-    # 4. Telegram'ning rasmiy Share arxitekturasi (?url=...&text=...)
     share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
     
-    # Qavatlarni qurish
+    # --- 1-QAVAT: Ikkita tugma yonma-yon (Kompakt dizayn) ---
     builder.row(
         InlineKeyboardButton(
-            text="📤 Do'stlarga ulashish", 
+            text="🎬 Kutubxona", 
+            web_app=WebAppInfo(url=WEBAPP_URL)
+        ),
+        InlineKeyboardButton(
+            text="📤 Ulashish", 
             url=share_link
         )
     )
     
-    builder.row(
-        InlineKeyboardButton(
-            text="🎬 Kutubxonani ochish", 
-            web_app=WebAppInfo(url=WEBAPP_URL)
-        )
-    )
-    
+    # --- 2-QAVAT: Asosiy Sotuv Voronkasi (Eng katta va alohida ajralib turadi) ---
     builder.row(
         InlineKeyboardButton(
             text="🗝 Maxfiy sandiqni ochish", 
@@ -294,7 +287,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 message_id=movie_data["message_id"],
                 caption=movie_data["caption"], 
                 parse_mode="HTML",
-                reply_markup=movie_delivery_keyboard(movie_data["caption"]),
+                reply_markup=movie_delivery_keyboard(),
                 protect_content=True
             )
         
@@ -355,5 +348,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
