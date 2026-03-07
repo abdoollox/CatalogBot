@@ -3,6 +3,7 @@ import asyncio
 import logging
 import json
 import aiofiles
+import urllib.parse
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -197,16 +198,28 @@ def webapp_keyboard():
 def movie_delivery_keyboard(movie_title="Garri Potter"):
     builder = InlineKeyboardBuilder()
     
-    # 1. Ulashish tugmasi (Telegram'ning o'ziga xos mexanizmi, botga hech qanday nagruzka bermaydi)
-    share_text = f"Menga shu film yoqdi: {movie_title}. Uni shu yerdan ko'rishing mumkin: https://t.me/garripotterkinobot"
+    # 1. Matnni tozalash (HTML teglarni yulib tashlaymiz)
+    clean_title = movie_title.replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
+    
+    # 2. Ulashish uchun toza matn va bot manzili
+    share_text = f"Menga shu film yoqdi: {clean_title}\nSiz ham ko'ring!"
+    bot_link = "https://t.me/garripotterkinobot" # O'zingning katalog boting manzili
+    
+    # 3. URL-ENCODING (Probel va belgilarni API tushunadigan xavfsiz formatga o'tkazish)
+    safe_text = urllib.parse.quote(share_text)
+    safe_url = urllib.parse.quote(bot_link)
+    
+    # 4. Telegram'ning rasmiy Share arxitekturasi (?url=...&text=...)
+    share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
+    
+    # Qavatlarni qurish
     builder.row(
         InlineKeyboardButton(
             text="📤 Do'stlarga ulashish", 
-            url=f"https://t.me/share/url?url={share_text}"
+            url=share_link
         )
     )
     
-    # 2. Katalogga qaytish
     builder.row(
         InlineKeyboardButton(
             text="🎬 Kutubxonani ochish", 
@@ -214,7 +227,6 @@ def movie_delivery_keyboard(movie_title="Garri Potter"):
         )
     )
     
-    # 3. Sotuv voronkasi (Diqqat markazida)
     builder.row(
         InlineKeyboardButton(
             text="🗝 Maxfiy sandiqni ochish", 
@@ -343,4 +355,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
