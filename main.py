@@ -198,16 +198,18 @@ def webapp_keyboard():
 def movie_delivery_keyboard():
     builder = InlineKeyboardBuilder()
     
-    # 1. Matn va Ssilkani qat'iy belgilash (Hardcoded)
-    share_text = "🎬 Menga bu filmlar kolleksiyasi yoqdi. Siz ham foydalanib ko'ring!\n🔗 Garri Potter Kolleksiyasi"
-    bot_link = "https://t.me/garripotterkinobot?start=start"
+    # 1. Skrinshotdagi aniq matn va Direct WebApp havolasi
+    share_text = "🎬 Menga bu filmlar kolleksiyasi yoqdi. Siz ham foydalanib ko'ring!"
+    share_url = "https://t.me/garripotterkinobot/catalog"
     
-    # 2. URL-ENCODING (Xavfsiz ssilka shakllantirish)
+    # 2. Mashina tiliga o'girish (URL Encoding)
     safe_text = urllib.parse.quote(share_text)
-    safe_url = urllib.parse.quote(bot_link)
-    share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
+    safe_url = urllib.parse.quote(share_url)
     
-    # --- 1-QAVAT: Ikkita tugma yonma-yon (Kompakt dizayn) ---
+    # 3. Telegram API qoidasi bo'yicha yig'ish
+    final_share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
+    
+    # --- 1-QAVAT: Yonma-yon tugmalar ---
     builder.row(
         InlineKeyboardButton(
             text="🎬 Kutubxona", 
@@ -215,11 +217,11 @@ def movie_delivery_keyboard():
         ),
         InlineKeyboardButton(
             text="📤 Ulashish", 
-            url=share_link
+            url=final_share_link
         )
     )
     
-    # --- 2-QAVAT: Asosiy Sotuv Voronkasi (Eng katta va alohida ajralib turadi) ---
+    # --- 2-QAVAT: Sotuv voronkasi ---
     builder.row(
         InlineKeyboardButton(
             text="🗝 Maxfiy sandiqni ochish", 
@@ -348,6 +350,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
