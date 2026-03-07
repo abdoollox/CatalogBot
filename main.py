@@ -194,9 +194,19 @@ def webapp_keyboard():
         [InlineKeyboardButton(text="🎬 Kutubxonani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
     ])
 
-def movie_delivery_keyboard():
+def movie_delivery_keyboard(movie_title="Garri Potter"):
     builder = InlineKeyboardBuilder()
     
+    # 1. Ulashish tugmasi (Telegram'ning o'ziga xos mexanizmi, botga hech qanday nagruzka bermaydi)
+    share_text = f"Menga shu film yoqdi: {movie_title}. Uni shu yerdan ko'rishing mumkin: https://t.me/garripotterkinobot"
+    builder.row(
+        InlineKeyboardButton(
+            text="📤 Do'stlarga ulashish", 
+            url=f"https://t.me/share/url?url={share_text}"
+        )
+    )
+    
+    # 2. Katalogga qaytish
     builder.row(
         InlineKeyboardButton(
             text="🎬 Kutubxonani ochish", 
@@ -204,6 +214,7 @@ def movie_delivery_keyboard():
         )
     )
     
+    # 3. Sotuv voronkasi (Diqqat markazida)
     builder.row(
         InlineKeyboardButton(
             text="🗝 Maxfiy sandiqni ochish", 
@@ -271,7 +282,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 message_id=movie_data["message_id"],
                 caption=movie_data["caption"], 
                 parse_mode="HTML",
-                reply_markup=movie_delivery_keyboard(),
+                reply_markup=movie_delivery_keyboard(movie_data["caption"]),
                 protect_content=True
             )
         
@@ -332,3 +343,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
