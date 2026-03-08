@@ -192,7 +192,7 @@ def check_sub_keyboard():
 
 def webapp_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎬 Kutubxonani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
+        [InlineKeyboardButton(text="🎬 Kolleksiyani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
     ])
 
 def movie_delivery_keyboard():
@@ -212,7 +212,7 @@ def movie_delivery_keyboard():
     # --- 1-QAVAT: Yonma-yon tugmalar ---
     builder.row(
         InlineKeyboardButton(
-            text="🎬 Kutubxona", 
+            text="🎬 Kolleksiya", 
             web_app=WebAppInfo(url=WEBAPP_URL)
         ),
         InlineKeyboardButton(
@@ -302,14 +302,14 @@ async def start_cmd(message: types.Message, command: CommandObject):
             
             "Garri Potter olamidagi barcha filmlarni yuqori sifatda, reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
             
-            "👇 <b>Kino tanlash uchun pastdagi tugma orqali kutubxonani oching:</b>"
+            "👇 <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
         )
         await message.answer(welcome_text, parse_mode="HTML", reply_markup=webapp_keyboard())
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
     if await is_subscribed(callback.from_user.id):
-        await callback.message.edit_text("✅ Obuna tasdiqlandi! Kutubxonani oching:", reply_markup=webapp_keyboard())
+        await callback.message.edit_text("✅ Obuna tasdiqlandi! Kolleksiyani oching:", reply_markup=webapp_keyboard())
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
 
@@ -350,6 +350,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
