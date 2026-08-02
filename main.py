@@ -142,7 +142,7 @@ MOVIES_DB = {
             "caption": "<b>8. Harry Potter and the Deathly Hallows Part 2</b>"
         },
         "uz": {
-            "message_id": 0,
+            "message_id": 33,
             "caption": "<b>8. Garri Potter va Ajal Tuhfasi 2</b>"
         },
         "ru": {
