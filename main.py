@@ -4,6 +4,7 @@ import logging
 import json
 import aiofiles
 import urllib.parse
+import sheets
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -183,6 +184,8 @@ async def log_user_action(user: types.User, payload: str):
         async with aiofiles.open(USERS_FILE, "w", encoding="utf-8") as f:
             await f.write(json.dumps(db, indent=4, ensure_ascii=False))
 
+    await sheets.append_click(user.id, db[user_id]["nickname"], db[user_id]["username"], payload, now)
+
 
 def check_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -249,6 +252,8 @@ async def start_cmd(message: types.Message, command: CommandObject):
         
     payload = command.args
     user_id = message.from_user.id
+
+    await log_user_action(message.from_user, "start")
     
     if not await is_subscribed(user_id):
         await message.answer("Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!", reply_markup=check_sub_keyboard())
@@ -309,6 +314,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
     if await is_subscribed(callback.from_user.id):
+        await log_user_action(callback.from_user, "subscribed")
         await callback.message.edit_text("✅ Obuna tasdiqlandi! Kolleksiyani oching:", reply_markup=webapp_keyboard())
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)

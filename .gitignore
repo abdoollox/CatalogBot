@@ -1,0 +1,6 @@
+.env
+google_key.json
+data/
+__pycache__/
+*.pyc
+main.py.bak
