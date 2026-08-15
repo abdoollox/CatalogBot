@@ -253,7 +253,16 @@ async def start_cmd(message: types.Message, command: CommandObject):
     payload = command.args
     user_id = message.from_user.id
 
-    await log_user_action(message.from_user, "start")
+    is_new = True
+    try:
+        async with aiofiles.open(USERS_FILE, "r", encoding="utf-8") as f:
+            content = await f.read()
+            is_new = str(user_id) not in (json.loads(content) if content else {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+
+    if not payload or is_new:
+        await log_user_action(message.from_user, "start")
     
     if not await is_subscribed(user_id):
         await message.answer("Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!", reply_markup=check_sub_keyboard())
@@ -314,7 +323,6 @@ async def start_cmd(message: types.Message, command: CommandObject):
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
     if await is_subscribed(callback.from_user.id):
-        await log_user_action(callback.from_user, "subscribed")
         await callback.message.edit_text("✅ Obuna tasdiqlandi! Kolleksiyani oching:", reply_markup=webapp_keyboard())
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
@@ -331,6 +339,29 @@ async def get_video_info(message: types.Message):
     )
     
     await message.reply(text, parse_mode="HTML")
+
+@dp.my_chat_member()
+async def bot_status_changed(event: types.ChatMemberUpdated):
+    if event.chat.type != "private":
+        return
+    status = event.new_chat_member.status
+    if status == "kicked":
+        await log_user_action(event.from_user, "blocked")
+
+
+@dp.chat_member()
+async def channel_status_changed(event: types.ChatMemberUpdated):
+    if str(event.chat.id) != str(CHANNEL_ID):
+        return
+    old = event.old_chat_member.status
+    new = event.new_chat_member.status
+    was_in = old in ("member", "administrator", "creator")
+    is_in = new in ("member", "administrator", "creator")
+    if was_in and not is_in:
+        await log_user_action(event.from_user, "left")
+    elif is_in and not was_in:
+        await log_user_action(event.from_user, "subscribed")
+
 
 async def handle(request):
     return web.Response(text="Hogwarts Bot is Alive!")
@@ -349,7 +380,7 @@ async def main():
     
     try:
         await bot.delete_webhook(drop_pending_updates=True) 
-        await dp.start_polling(bot)
+        await dp.start_polling(bot, allowed_updates=["message", "callback_query", "my_chat_member", "chat_member"])
     except Exception as e:
         logging.error(f"BOT KRITIK XATOGA UCHRADI: {e}")
         raise e
