@@ -4,3 +4,5 @@ data/
 __pycache__/
 *.pyc
 main.py.bak
+*.bak
+*.bak[0-9]
