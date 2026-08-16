@@ -12,7 +12,7 @@ try:
                   "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_file(KEY_PATH, scopes=scopes)
         gc = gspread.authorize(creds)
-        _ws = gc.open_by_key(SHEET_ID).get_worksheet(0)
+        _ws = gc.open_by_key(SHEET_ID).worksheet("Logs")
         logging.info("Google Sheets ulandi!")
     else:
         logging.warning("Sheets sozlanmagan (kalit yoki SHEET_ID yo'q).")

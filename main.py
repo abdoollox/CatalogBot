@@ -4,6 +4,8 @@ import logging
 import json
 import aiofiles
 import urllib.parse
+import hmac
+import hashlib
 import sheets
 from datetime import datetime
 from dotenv import load_dotenv
@@ -363,6 +365,88 @@ async def channel_status_changed(event: types.ChatMemberUpdated):
         await log_user_action(event.from_user, "subscribed")
 
 
+ALLOWED_ORIGIN = "https://abdoollox.github.io"
+VALID_HOUSES = {"gryffindor", "slytherin", "ravenclaw", "hufflepuff"}
+
+
+class _WebUser:
+    """log_user_action uchun minimal foydalanuvchi obyekti."""
+    def __init__(self, data):
+        self.id = data["id"]
+        name = (data.get("first_name") or "") + " " + (data.get("last_name") or "")
+        self.full_name = name.strip() or "Nomsiz"
+        self.username = data.get("username")
+
+
+def _cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+    resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Access-Control-Max-Age"] = "86400"
+    return resp
+
+
+def verify_init_data(init_data):
+    """Telegram imzosini tekshiradi. To'g'ri bo'lsa user dict qaytaradi."""
+    if not init_data or not TOKEN:
+        return None
+    try:
+        pairs = dict(urllib.parse.parse_qsl(init_data, strict_parsing=True))
+    except Exception:
+        return None
+
+    got = pairs.pop("hash", None)
+    if not got:
+        return None
+
+    check = "\n".join("%s=%s" % (k, pairs[k]) for k in sorted(pairs))
+    secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
+    calc = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calc, got):
+        return None
+
+    # Eskirgan sessiyalarni rad etamiz (24 soat)
+    try:
+        age = datetime.now().timestamp() - int(pairs.get("auth_date", 0))
+        if age < -300 or age > 86400:
+            return None
+    except Exception:
+        return None
+
+    try:
+        user = json.loads(pairs.get("user", "{}"))
+    except Exception:
+        return None
+
+    return user if user.get("id") else None
+
+
+async def handle_house(request):
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+
+    try:
+        body = await request.json()
+    except Exception:
+        return _cors(web.json_response({"ok": False, "error": "bad_json"}, status=400))
+
+    house = str(body.get("house", ""))
+    if house not in VALID_HOUSES:
+        return _cors(web.json_response({"ok": False, "error": "bad_house"}, status=400))
+
+    user = verify_init_data(str(body.get("initData", "")))
+    if not user:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    try:
+        await log_user_action(_WebUser(user), "house_" + house)
+    except Exception as e:
+        logging.error("Fakultet yozishda xato: %s", e)
+        return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
+
+    return _cors(web.json_response({"ok": True}))
+
+
 async def handle(request):
     return web.Response(text="Hogwarts Bot is Alive!")
 
@@ -370,6 +454,7 @@ async def main():
     logging.info("Bot va Server ishga tushmoqda...")
     app = web.Application()
     app.router.add_get('/', handle)
+    app.router.add_route('*', '/api/house', handle_house)
     runner = web.AppRunner(app)
     await runner.setup()
     
