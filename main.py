@@ -1,6 +1,20 @@
 import os
 import asyncio
 import logging
+
+# --- TIZIM KO'ZLARINI OCHISH (LOGGING) ---
+# MUHIM: bu blok 'import sheets' dan OLDIN turishi SHART. sheets.py import
+# paytida logging.info() chaqiradi, Python esa shunda root logger'ga WARNING
+# darajali handler'ni o'zi o'rnatib qo'yadi - natijada keyin chaqirilgan
+# basicConfig() jim qoladi va barcha INFO loglar yo'qoladi.
+# force=True - kutubxona allaqachon handler qo'ygan bo'lsa ham ustidan yozadi.
+logging.basicConfig(level=logging.INFO, force=True)
+
+# aiogram HAR BIR update uchun INFO yozadi (dispatcher.py: 'Update id=... is
+# handled'). Docker'da log rotatsiyasi yo'q, shuning uchun bu diskni to'ldiradi
+# va haqiqiy xabarlarni ko'mib tashlaydi. Faqat ogohlantirish/xatolar qolsin.
+logging.getLogger("aiogram.event").setLevel(logging.WARNING)
+
 import json
 import aiofiles
 import urllib.parse
@@ -14,9 +28,7 @@ from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
-# --- TIZIM KO'ZLARINI OCHISH (LOGGING) ---
-logging.basicConfig(level=logging.INFO)
+from aiogram.exceptions import TelegramBadRequest
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
@@ -325,7 +337,13 @@ async def start_cmd(message: types.Message, command: CommandObject):
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
     if await is_subscribed(callback.from_user.id):
-        await callback.message.edit_text("✅ Obuna tasdiqlandi! Kolleksiyani oching:", reply_markup=webapp_keyboard())
+        try:
+            await callback.message.edit_text("✅ Obuna tasdiqlandi! Kolleksiyani oching:", reply_markup=webapp_keyboard())
+        except TelegramBadRequest as e:
+            # Tugma ikki marta bosilsa xabar o'zgarmaydi - bu xato emas
+            if "message is not modified" not in str(e):
+                raise
+        await callback.answer()
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
 
@@ -367,6 +385,29 @@ async def channel_status_changed(event: types.ChatMemberUpdated):
 
 ALLOWED_ORIGIN = "https://abdoollox.github.io"
 VALID_HOUSES = {"gryffindor", "slytherin", "ravenclaw", "hufflepuff"}
+VALID_WOODS = {"oak", "yew", "cherry", "holly", "aspen", "walnut"}
+VALID_CORES = {"phoenix", "dragon", "unicorn"}
+VALID_FLEX = {"rigid", "springy", "supple", "yielding"}
+
+
+def check_value(kind, value):
+    """Qiymatni tekshiradi. To'g'ri bo'lsa Sheets uchun matn qaytaradi."""
+    parts = value.split("_")
+
+    if kind == "house":
+        if value in VALID_HOUSES:
+            return "house_" + value
+        return None
+
+    if kind == "wand":
+        if len(parts) != 3:
+            return None
+        wood, core, flex = parts
+        if wood in VALID_WOODS and core in VALID_CORES and flex in VALID_FLEX:
+            return "wand_" + value
+        return None
+
+    return None
 
 
 class _WebUser:
@@ -430,18 +471,27 @@ async def handle_house(request):
     except Exception:
         return _cors(web.json_response({"ok": False, "error": "bad_json"}, status=400))
 
-    house = str(body.get("house", ""))
-    if house not in VALID_HOUSES:
-        return _cors(web.json_response({"ok": False, "error": "bad_house"}, status=400))
+    # Eski format: {"house": "..."} — hali ishlaydi
+    if body.get("house"):
+        kind, value = "house", str(body.get("house", ""))
+    else:
+        kind, value = str(body.get("kind", "")), str(body.get("value", ""))
+
+    if len(value) > 64:
+        return _cors(web.json_response({"ok": False, "error": "too_long"}, status=400))
+
+    payload = check_value(kind, value)
+    if not payload:
+        return _cors(web.json_response({"ok": False, "error": "bad_value"}, status=400))
 
     user = verify_init_data(str(body.get("initData", "")))
     if not user:
         return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
 
     try:
-        await log_user_action(_WebUser(user), "house_" + house)
+        await log_user_action(_WebUser(user), payload)
     except Exception as e:
-        logging.error("Fakultet yozishda xato: %s", e)
+        logging.error("Profil yozishda xato: %s", e)
         return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
 
     return _cors(web.json_response({"ok": True}))
@@ -455,6 +505,7 @@ async def main():
     app = web.Application()
     app.router.add_get('/', handle)
     app.router.add_route('*', '/api/house', handle_house)
+    app.router.add_route('*', '/api/profile', handle_house)
     runner = web.AppRunner(app)
     await runner.setup()
     
