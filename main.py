@@ -21,6 +21,8 @@ import urllib.parse
 import hmac
 import hashlib
 import sheets
+import hpcup
+import hpbot
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -320,25 +322,99 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 reply_markup=movie_delivery_keyboard(),
                 protect_content=True
             )
-        
+
+            # Xogvarts kubogi: kino ochilgani uchun ball va imtihon taklifi.
+            # Kinoning o'zi allaqachon yuborilgan - bu yerdagi xato
+            # foydalanuvchiga ta'sir qilmasligi kerak.
+            try:
+                film_part = int(movie_key[2:])
+                await hpbot.award_film_open(message.from_user, film_part)
+                await hpbot.offer_quiz(bot, message.from_user, film_part)
+            except Exception as cup_error:
+                logging.error("Kubok qismida xato: %s", cup_error)
+
         except Exception as e:
             logging.error(f"Kritik API xatosi: {e}")
             await message.answer(f"⚠️ Telegram API xatosi (Fayl yuborish quladi): {str(e)}")
     else:
-        welcome_text = (
-            "🪄 <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
-            
-            "Garri Potter olamidagi barcha filmlarni yuqori sifatda, reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
-            
-            "👇 <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
-        )
-        await message.answer(welcome_text, parse_mode="HTML", reply_markup=webapp_keyboard())
+        await send_welcome(message)
+
+
+CATALOG_TEXT = (
+    "🪄 <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
+
+    "Garri Potter olamidagi barcha filmlarni yuqori sifatda, reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
+
+    "👇 <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
+)
+
+SORTING_TEXT = (
+    "🎩 <b>Saralovchi shlyapa sizni kutmoqda</b>\n\n"
+
+    "Bir necha savol — va siz o'z fakultetingizni bilib olasiz. "
+    "Shundan keyin har ko'rgan kinongiz fakultetingizga ball olib keladi, "
+    "haftalik <b>Xogvarts kubogi</b>da esa fakultetlar bellashadi.\n\n"
+
+    "Bu majburiy emas — kinolarni shusiz ham ko'raverasiz."
+)
+
+
+def sorting_keyboard():
+    """Saralanish taklifi. O'tkazib yuborish tugmasi SHART —
+    foydalanuvchilarning 40% i aniq bir kinoni qidirib keladi, yo'lni
+    to'sib qo'ysak asosiy qiymat buziladi."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎩 Saralanish",
+                              web_app=WebAppInfo(url=WEBAPP_URL + "?screen=sort"))],
+        [InlineKeyboardButton(text="Hozir emas, kinolarni ko'rsat",
+                              callback_data="skip_sort")],
+    ])
+
+
+async def send_welcome(message):
+    """Fakulteti yo'qlarga avval shlyapa, keyin katalog."""
+    try:
+        has_house = await hpbot.user_house(message.from_user.id)
+    except Exception as e:
+        logging.error("Fakultetni aniqlashda xato: %s", e)
+        has_house = True          # shubha bo'lsa - eski oqim, yo'lni to'smaymiz
+
+    if not has_house:
+        await message.answer(SORTING_TEXT, parse_mode="HTML",
+                             reply_markup=sorting_keyboard())
+        return
+
+    await message.answer(CATALOG_TEXT, parse_mode="HTML",
+                         reply_markup=webapp_keyboard())
+
+
+@dp.callback_query(F.data == "skip_sort")
+async def skip_sort_handler(callback: types.CallbackQuery):
+    try:
+        await callback.message.edit_text(CATALOG_TEXT, parse_mode="HTML",
+                                         reply_markup=webapp_keyboard())
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
+    await callback.answer()
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
     if await is_subscribed(callback.from_user.id):
+        # Oqim: start -> obuna -> saralash shlyapasi -> kinolar
         try:
-            await callback.message.edit_text("✅ Obuna tasdiqlandi! Kolleksiyani oching:", reply_markup=webapp_keyboard())
+            has_house = await hpbot.user_house(callback.from_user.id)
+        except Exception as e:
+            logging.error("Fakultetni aniqlashda xato: %s", e)
+            has_house = True
+
+        if has_house:
+            text, markup = "✅ Obuna tasdiqlandi! Kolleksiyani oching:", webapp_keyboard()
+        else:
+            text, markup = "✅ Obuna tasdiqlandi!\n\n" + SORTING_TEXT, sorting_keyboard()
+
+        try:
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
         except TelegramBadRequest as e:
             # Tugma ikki marta bosilsa xabar o'zgarmaydi - bu xato emas
             if "message is not modified" not in str(e):
@@ -421,8 +497,11 @@ class _WebUser:
 
 def _cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
-    resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    # GET - /api/leaderboard uchun. initData esa URL'ga emas, maxsus
+    # sarlavhaga qo'yiladi: query string nginx access log'iga tushadi va
+    # foydalanuvchi ma'lumoti bilan imzo o'sha yerda qolib ketardi.
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Telegram-Init-Data"
     resp.headers["Access-Control-Max-Age"] = "86400"
     return resp
 
@@ -462,9 +541,26 @@ def verify_init_data(init_data):
     return user if user.get("id") else None
 
 
+async def _cup_block(user_id):
+    """Kubok ma'lumotlari. Kubok ishlamasa ham profil javob bersin."""
+    try:
+        return await hpbot.profile_extra(user_id)
+    except Exception as e:
+        logging.error("Kubok ma'lumotini olishda xato: %s", e)
+        return None
+
+
 async def handle_house(request):
     if request.method == "OPTIONS":
         return _cors(web.Response(status=204))
+
+    # Faqat o'qish rejimi: GET so'rov yoki qiymatsiz POST.
+    # initData sarlavhada keladi - URL'ga qo'yilmaydi (access log'ga tushmasin).
+    if request.method == "GET":
+        user = verify_init_data(request.headers.get("X-Telegram-Init-Data", ""))
+        if not user:
+            return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+        return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
     try:
         body = await request.json()
@@ -476,6 +572,13 @@ async def handle_house(request):
         kind, value = "house", str(body.get("house", ""))
     else:
         kind, value = str(body.get("kind", "")), str(body.get("value", ""))
+
+    # Qiymat yuborilmagan bo'lsa - bu ham o'qish so'rovi
+    if not kind and not value:
+        user = verify_init_data(str(body.get("initData", "")))
+        if not user:
+            return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+        return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
     if len(value) > 64:
         return _cors(web.json_response({"ok": False, "error": "too_long"}, status=400))
@@ -494,7 +597,7 @@ async def handle_house(request):
         logging.error("Profil yozishda xato: %s", e)
         return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
 
-    return _cors(web.json_response({"ok": True}))
+    return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
 
 async def handle(request):
@@ -506,6 +609,22 @@ async def main():
     app.router.add_get('/', handle)
     app.router.add_route('*', '/api/house', handle_house)
     app.router.add_route('*', '/api/profile', handle_house)
+
+    # --- Xogvarts kubogi ---
+    # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -
+    # kino tarqatish asosiy vazifa, musobaqa ustiga qo'shimcha.
+    try:
+        await hpcup.init()
+        hpbot.register(dp, bot, app, {
+            "users_file": USERS_FILE,
+            "channel_id": CHANNEL_ID,
+            "verify_init_data": verify_init_data,
+            "cors": _cors,
+        })
+        asyncio.create_task(hpbot.season_watcher(bot))
+    except Exception as cup_error:
+        logging.error("Xogvarts kubogi ishga tushmadi: %s", cup_error)
+
     runner = web.AppRunner(app)
     await runner.setup()
     

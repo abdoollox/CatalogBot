@@ -6,3 +6,5 @@ __pycache__/
 main.py.bak
 *.bak
 *.bak[0-9]
+backups/
+*.bak_kubok
