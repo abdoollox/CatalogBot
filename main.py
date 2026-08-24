@@ -483,6 +483,11 @@ def check_value(kind, value):
             return "wand_" + value
         return None
 
+    # Saralashni boshlaganlar soni. Tugatganlar bilan nisbati kuzatiladi:
+    # umrbod ogohlantirishi kiritilgandan keyin bu nisbat tushmasligi kerak.
+    if kind == "sort_start":
+        return "sort_start"
+
     return None
 
 
@@ -591,6 +596,19 @@ async def handle_house(request):
     if not user:
         return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
 
+    # Fakultet UMRBOD. Faqat ilova tomonda tugmani yashirish yetarli emas —
+    # server ham rad etishi kerak (spetsifikatsiya 2.0, 3-bo'lim).
+    if kind == "house":
+        try:
+            accepted = await hpcup.set_house(user["id"], value)
+        except Exception as e:
+            logging.error("Fakultet yozishda xato: %s", e)
+            accepted = False
+        if not accepted:
+            return _cors(web.json_response(
+                {"ok": False, "error": "house_locked",
+                 "cup": await _cup_block(user["id"])}, status=409))
+
     try:
         await log_user_action(_WebUser(user), payload)
     except Exception as e:
@@ -614,9 +632,9 @@ async def main():
     # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -
     # kino tarqatish asosiy vazifa, musobaqa ustiga qo'shimcha.
     try:
-        await hpcup.init()
+        # users_db.json - 1.0 dagi fakultetlarni ko'chirish uchun manba
+        await hpcup.init(USERS_FILE)
         hpbot.register(dp, bot, app, {
-            "users_file": USERS_FILE,
             "channel_id": CHANNEL_ID,
             "verify_init_data": verify_init_data,
             "cors": _cors,
