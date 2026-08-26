@@ -1,0 +1,314 @@
+[
+  {
+    "kind": "film",
+    "film_part": 1,
+    "lang": "uz",
+    "body": "Garri Xogvartsga ketadigan poyezd qaysi platformadan jo'naydi?",
+    "options": [
+      "Yetti va yarim",
+      "To'qqiz va uchdan to'rt",
+      "O'n va chorak",
+      "Sakkiz va uchdan bir"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 1,
+    "lang": "uz",
+    "body": "Saralovchi shlyapa Garrini dastlab qaysi fakultetga yubormoqchi bo'ladi?",
+    "options": [
+      "Xaffelpaff",
+      "Reyvenklo",
+      "Sliterin",
+      "Grifindor"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 1,
+    "lang": "uz",
+    "body": "Garri sirli oynada nimani ko'radi?",
+    "options": [
+      "Voldemortni",
+      "Hikmatlar Toshini",
+      "O'z ota-onasini",
+      "Kelajakdagi o'zini"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 1,
+    "lang": "uz",
+    "body": "Kviddich o'yinida Garri qaysi o'rinda o'ynaydi?",
+    "options": [
+      "Himoyachi",
+      "Darvozabon",
+      "Hujumchi",
+      "Lovchi"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 1,
+    "lang": "uz",
+    "body": "Uch boshli itni uxlatish uchun nima kerak bo'ladi?",
+    "options": [
+      "Go'sht",
+      "Uyqu afsuni",
+      "Musiqa",
+      "Zulmat"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 1,
+    "lang": "uz",
+    "body": "Hikmatlar Toshini o'g'irlamoqchi bo'lgan o'qituvchi kim edi?",
+    "options": [
+      "Professor Makgonagall",
+      "Professor Kvirrel",
+      "Professor Dambldor",
+      "Professor Sneyp"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 2,
+    "lang": "uz",
+    "body": "Garrini Xogvartsga qaytmaslikka ogohlantirgan Dobbi kim?",
+    "options": [
+      "Gnom",
+      "Goblin",
+      "Uy elfi",
+      "Sehrgar bola"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 2,
+    "lang": "uz",
+    "body": "Maxfiy Hujrada yashiringan maxluq nima edi?",
+    "options": [
+      "Ulkan ilon — Bazilisk",
+      "Ajdaho",
+      "Troll",
+      "Ulkan o'rgimchak"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 2,
+    "lang": "uz",
+    "body": "Garrining boshqalarda kam uchraydigan qanday qobiliyati borligi ma'lum bo'ladi?",
+    "options": [
+      "Kelajakni ko'rish",
+      "Ilonlar tilida gapirish",
+      "Fikrlarni o'qish",
+      "Ko'rinmas bo'lish"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 2,
+    "lang": "uz",
+    "body": "Garri topib olgan kundalik kimga tegishli edi?",
+    "options": [
+      "Tom Ridlga",
+      "Sirius Blekka",
+      "Sneypga",
+      "Lyusius Malfoyga"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 2,
+    "lang": "uz",
+    "body": "Ronning singan tayoqchasi tufayli professor Lokxart bilan nima sodir bo'ladi?",
+    "options": [
+      "Kichrayib qoladi",
+      "Toshga aylanadi",
+      "Ovozini yo'qotadi",
+      "Xotirasini yo'qotadi"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 2,
+    "lang": "uz",
+    "body": "Garri kundalikni nima bilan yo'q qiladi?",
+    "options": [
+      "Qilich bilan",
+      "Bazilisk tishi bilan",
+      "Afsun bilan",
+      "Olov bilan"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 3,
+    "lang": "uz",
+    "body": "Sirius Blek Garriga kim bo'lib chiqadi?",
+    "options": [
+      "Akasi",
+      "Amakisi",
+      "Otasining dushmani",
+      "Cho'qintirgan otasi"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 3,
+    "lang": "uz",
+    "body": "Dementorlardan himoyalanish uchun qaysi afsun ishlatiladi?",
+    "options": [
+      "Ekspelliarmus",
+      "Lyumos",
+      "Alohomora",
+      "Patronus"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 3,
+    "lang": "uz",
+    "body": "Garrining patronusi qanday shaklda paydo bo'ladi?",
+    "options": [
+      "Burgut",
+      "Bo'ri",
+      "Bug'u",
+      "It"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 3,
+    "lang": "uz",
+    "body": "Germiona bir vaqtning o'zida ko'p darsga ulgurish uchun nimadan foydalanadi?",
+    "options": [
+      "Vaqt burovchidan",
+      "Sehrli xaritadan",
+      "Ikkilanish afsunidan",
+      "Ko'rinmas plashdan"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 3,
+    "lang": "uz",
+    "body": "Professor Lyupin haqidagi sir nima edi?",
+    "options": [
+      "U vampir",
+      "U bo'ri odam",
+      "U Voldemortga xizmat qilgan",
+      "U Sirius Blekning ukasi"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 3,
+    "lang": "uz",
+    "body": "Piter Petigryu ko'p yillar davomida kim bo'lib yashirinib yurgan edi?",
+    "options": [
+      "Ronning kalamushi bo'lib",
+      "Hagridning iti bo'lib",
+      "Xogvarts mushugi bo'lib",
+      "Buqalamun bo'lib"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 4,
+    "lang": "uz",
+    "body": "Uch sehrgar turnirida nechta maktab qatnashadi?",
+    "options": [
+      "To'rtta",
+      "Beshta",
+      "Uchta",
+      "Ikkita"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 4,
+    "lang": "uz",
+    "body": "Turnirning birinchi sinovida qatnashchilar kim bilan to'qnashadi?",
+    "options": [
+      "Dementorlar bilan",
+      "Ajdaho bilan",
+      "Ulkan o'rgimchaklar bilan",
+      "Trollar bilan"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 4,
+    "lang": "uz",
+    "body": "Yangi yil balida Germiona kim bilan qatnashgan?",
+    "options": [
+      "Viktor Krum",
+      "Ron Uizli",
+      "Nevill Longbottom",
+      "Garri Potter"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 4,
+    "lang": "uz",
+    "body": "Turnirning ikkinchi sinovi qayerda bo'lib o'tadi?",
+    "options": [
+      "O'rmonda",
+      "Ko'l tubida",
+      "Labirintda",
+      "Osmonda"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 4,
+    "lang": "uz",
+    "body": "Turnir oxirida kim halok bo'ladi?",
+    "options": [
+      "Viktor Krum",
+      "Barti Krauch",
+      "Sedrik Diggori",
+      "Flyor Delakur"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 4,
+    "lang": "uz",
+    "body": "Yil davomida Alastor Mudi qiyofasida yurgan odam aslida kim edi?",
+    "options": [
+      "Igor Karkarov",
+      "Barti Krauch kichik",
+      "Lyusius Malfoy",
+      "Piter Petigryu"
+    ],
+    "correct_index": 1
+  }
+]

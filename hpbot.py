@@ -7,6 +7,7 @@ main.py dan faqat `register(dp, bot, app, cfg)` chaqiriladi.
 """
 
 import os
+import random
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -70,11 +71,15 @@ async def award_film_open(user, film_part):
 # ---------------------------------------------------------- savol chizish
 
 def _question_kb(prefix, q):
+    opts = q["options"][:4]
+    order = list(range(len(opts)))
+    random.shuffle(order)
     kb = []
-    for i, opt in enumerate(q["options"][:4]):
+    for i, orig_idx in enumerate(order):
+        opt = opts[orig_idx]
         kb.append([InlineKeyboardButton(
             text="%s) %s" % (LETTERS[i], opt),
-            callback_data="%s:%d:%d" % (prefix, q["id"], i))])
+            callback_data="%s:%d:%d" % (prefix, q["id"], orig_idx))])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 
@@ -328,11 +333,21 @@ async def api_leaderboard(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
 
+    first_name = user.get("first_name")
+    if first_name:
+        try:
+            await hpcup.touch_user(user["id"], first_name)
+        except Exception:
+            pass
+
     season = await hpcup.current_season()
     table = await hpcup.leaderboard(season["id"])
     stats = await hpcup.user_stats(user["id"], season["id"])
     gap = hpcup.compute_gap(table, stats)
     allowed, until = await hpcup.can_resort(user["id"])
+    exam_pending = await hpcup.exam_pending(user["id"], season["id"])
+    hall = await hpcup.hall(stats.get("house"), user["id"], season["id"])
+    feed = await hpcup.feed(limit=5)
 
     me = {
         "house": stats["house"],
@@ -347,15 +362,22 @@ async def api_leaderboard(request):
         # ikkinchi so'rov yubormasin.
         "can_resort": allowed,
         "resort_until": until,
+        "exam_pending": exam_pending,
     }
     if gap:
         me["gap"] = gap
 
-    return cors(web.json_response({
+    resp = {
         "season": {"id": season["id"], "ends_at": season["ends_at"]},
         "houses": table,
         "me": me,
-    }))
+    }
+    if hall:
+        resp["hall"] = hall
+    if feed:
+        resp["feed"] = feed
+
+    return cors(web.json_response(resp))
 
 
 async def profile_extra(user_id):
@@ -363,6 +385,7 @@ async def profile_extra(user_id):
     season = await hpcup.current_season()
     stats = await hpcup.user_stats(user_id, season["id"])
     allowed, until = await hpcup.can_resort(user_id)
+    exam_pending = await hpcup.exam_pending(user_id, season["id"])
     return {
         "season": {"id": season["id"], "ends_at": season["ends_at"]},
         "house": stats["house"],
@@ -374,6 +397,7 @@ async def profile_extra(user_id):
         "badges": stats["badges"],
         "can_resort": allowed,
         "resort_until": until,
+        "exam_pending": exam_pending,
     }
 
 
@@ -385,6 +409,8 @@ def register(dp, bot, app, cfg):
 
     @dp.callback_query(F.data.startswith("hpq:go:"))
     async def _quiz_start(callback: types.CallbackQuery):
+        if callback.from_user and callback.from_user.first_name:
+            await hpcup.touch_user(callback.from_user.id, callback.from_user.first_name)
         try:
             part = int(callback.data.split(":")[2])
         except (IndexError, ValueError):
@@ -396,6 +422,8 @@ def register(dp, bot, app, cfg):
 
     @dp.callback_query(F.data.startswith("hpa:"))
     async def _quiz_answer(callback: types.CallbackQuery):
+        if callback.from_user and callback.from_user.first_name:
+            await hpcup.touch_user(callback.from_user.id, callback.from_user.first_name)
         parts = callback.data.split(":")
         try:
             film_part, qid, choice = int(parts[1]), int(parts[2]), int(parts[3])
@@ -428,6 +456,8 @@ def register(dp, bot, app, cfg):
 
     @dp.callback_query(F.data.startswith("hpd:"))
     async def _daily_answer(callback: types.CallbackQuery):
+        if callback.from_user and callback.from_user.first_name:
+            await hpcup.touch_user(callback.from_user.id, callback.from_user.first_name)
         parts = callback.data.split(":")
         try:
             qid, choice = int(parts[1]), int(parts[2])
@@ -466,14 +496,18 @@ def register(dp, bot, app, cfg):
 
     @dp.message(F.text == "/kunlik")
     async def _daily_cmd(message: types.Message):
+        if message.from_user and message.from_user.first_name:
+            await hpcup.touch_user(message.from_user.id, message.from_user.first_name)
         await send_daily(bot, message.from_user.id)
 
     @dp.message(F.text == "/reyting")
     async def _table_cmd(message: types.Message):
+        if message.from_user and message.from_user.first_name:
+            await hpcup.touch_user(message.from_user.id, message.from_user.first_name)
         season = await hpcup.current_season()
         table = await hpcup.leaderboard(season["id"])
         await message.answer(format_table(table), parse_mode="HTML")
 
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
-    logging.info("Xogvarts kubogi 2.0 ulandi (e'lon: %s)",
+    logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",
                  "yoqilgan" if ANNOUNCE else "o'chirilgan")

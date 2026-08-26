@@ -1,0 +1,314 @@
+[
+  {
+    "kind": "film",
+    "film_part": 5,
+    "lang": "uz",
+    "body": "Vazirlik tomonidan Xogvartsga yuborilgan yangi o'qituvchi kim edi?",
+    "options": [
+      "Rita Skiter",
+      "Dolores Ambrij",
+      "Goracio Slaggorn",
+      "Alastor Mudi"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 5,
+    "lang": "uz",
+    "body": "Garri o'quvchilarga yashirin mashg'ulotlarni qayerda o'tkazgan?",
+    "options": [
+      "Taqiqlangan o'rmonda",
+      "Kutubxonaning yopiq bo'limida",
+      "Maxfiy hujrada",
+      "Ehtiyoj xonasida"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 5,
+    "lang": "uz",
+    "body": "Ambrij jazo sifatida Garriga nima qildirgan?",
+    "options": [
+      "Taqiqlangan o'rmonga yuborgan",
+      "Qozonlarni tozalatgan",
+      "Kutubxonada tunatgan",
+      "O'z qoni bilan yozdirgan"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 5,
+    "lang": "uz",
+    "body": "Aravalarni tortadigan qanotli otlarni kimlar ko'ra oladi?",
+    "options": [
+      "Faqat sof qonli sehrgarlar",
+      "Faqat o'qituvchilar",
+      "O'lim guvohi bo'lganlar",
+      "Faqat beshinchi kurs o'quvchilari"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 5,
+    "lang": "uz",
+    "body": "Vazirlikdagi jangda Garri va do'stlari nimani qo'lga kiritishga harakat qilgan?",
+    "options": [
+      "Kubokni",
+      "Hikmatlar toshini",
+      "Vaqt burovchini",
+      "Bashoratni"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 5,
+    "lang": "uz",
+    "body": "Vazirlikdagi jangda kim halok bo'lgan?",
+    "options": [
+      "Nimfadora Tonks",
+      "Remus Lyupin",
+      "Alastor Mudi",
+      "Sirius Blek"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 6,
+    "lang": "uz",
+    "body": "Garri qo'liga tushgan eski iksirlar kitobi kimga tegishli edi?",
+    "options": [
+      "Tom Ridlga",
+      "Dambldorga",
+      "Garrining otasiga",
+      "Sneypga"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 6,
+    "lang": "uz",
+    "body": "Slaggorn darsda mukofot sifatida qanday iksir taklif qilgan?",
+    "options": [
+      "Omad iksirini",
+      "Sevgi iksirini",
+      "Xotira iksirini",
+      "Ikkilanish iksirini"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 6,
+    "lang": "uz",
+    "body": "Draco Malfoy Ehtiyoj xonasida nimani ta'mirlagan?",
+    "options": [
+      "Singan tayoqchani",
+      "Yo'qoluvchi shkafni",
+      "Sirli kundalikni",
+      "Eski oynani"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 6,
+    "lang": "uz",
+    "body": "Dambldor va Garri g'orda nimani izlab borishgan?",
+    "options": [
+      "Medalonni",
+      "Kubokni",
+      "Qilichni",
+      "Tojni"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 6,
+    "lang": "uz",
+    "body": "Voldemort jonining bo'laklarini yashirgan buyumlar qanday ataladi?",
+    "options": [
+      "Xorkrukslar",
+      "Tilsimlar",
+      "Ajal tuhfalari",
+      "Portkalitlar"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 6,
+    "lang": "uz",
+    "body": "Film oxirida minorada Dambldorni kim o'ldirgan?",
+    "options": [
+      "Bellatrisa Lestreyndj",
+      "Severus Sneyp",
+      "Fenrir Greybek",
+      "Draco Malfoy"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "film",
+    "film_part": 7,
+    "lang": "uz",
+    "body": "Garrini Dursllar uyidan olib chiqishda do'stlari nima qilishgan?",
+    "options": [
+      "Uni ko'rinmas plash bilan yashirishgan",
+      "Uni portkalit bilan yuborishgan",
+      "Bir nechtasi Garri qiyofasiga kirgan",
+      "Uni yashirin yo'l bilan olib chiqishgan"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 7,
+    "lang": "uz",
+    "body": "Uchalasi bo'ynida navbat bilan taqib yurgan buyum ularga qanday ta'sir qilgan?",
+    "options": [
+      "Ularni uxlatib qo'ygan",
+      "Ularni ko'rinmas qilgan",
+      "Ularning kayfiyatini buzib, janjallashtirgan",
+      "Ularni charchatgan"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 7,
+    "lang": "uz",
+    "body": "Ron ketib qolgandan keyin qaytib kelib, medalonni nima bilan yo'q qilgan?",
+    "options": [
+      "Sehrli olov bilan",
+      "Tayoqchasi bilan",
+      "Grifindor qilichi bilan",
+      "Bazilisk tishi bilan"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 7,
+    "lang": "uz",
+    "body": "Filmda alohida uslubda tasvirlangan ertak nima haqida edi?",
+    "options": [
+      "To'rt asoschi haqida",
+      "Yetti xorkruks haqida",
+      "Ikki sehrgar haqida",
+      "Uch aka-uka haqida"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 7,
+    "lang": "uz",
+    "body": "Malfoylar qasrida Garri va do'stlarini qutqarish uchun kim halok bo'lgan?",
+    "options": [
+      "Xedviga",
+      "Bukbik",
+      "Dobbi",
+      "Kreacher"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 7,
+    "lang": "uz",
+    "body": "Film oxirida Voldemort qabrni ochib nimani olgan?",
+    "options": [
+      "Oqsoqol tayoqchani",
+      "Tiklanish toshini",
+      "Ko'rinmas plashni",
+      "Grifindor qilichini"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 8,
+    "lang": "uz",
+    "body": "Garri, Ron va Germiona bankdan qanday qochib chiqishgan?",
+    "options": [
+      "Supurgilarda",
+      "Yashirin yo'lak orqali",
+      "Ajdaho ustida",
+      "Portkalit orqali"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "film",
+    "film_part": 8,
+    "lang": "uz",
+    "body": "Ehtiyoj xonasidagi xorkruksni nima yo'q qilgan?",
+    "options": [
+      "Nazoratdan chiqqan sehrli olov",
+      "Grifindor qilichi",
+      "Garrining tayoqchasi",
+      "Bazilisk tishi"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 8,
+    "lang": "uz",
+    "body": "Sneypning xotiralaridan nima ma'lum bo'lgan?",
+    "options": [
+      "U Garrining onasini sevgani",
+      "U aslida Garrining otasi ekani",
+      "U Voldemortning qarindoshi ekani",
+      "U xorkruks yaratgani"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "film",
+    "film_part": 8,
+    "lang": "uz",
+    "body": "Garri o'rmonga nima uchun yolg'iz borgan?",
+    "options": [
+      "Yordam chaqirish uchun",
+      "Oqsoqol tayoqchani izlash uchun",
+      "Do'stlarini yashirish uchun",
+      "O'zida ham Voldemort jonining bo'lagi borligini bilgani uchun"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 8,
+    "lang": "uz",
+    "body": "Voldemortning ilonini kim o'ldirgan?",
+    "options": [
+      "Ron Uizli",
+      "Garri Potter",
+      "Molli Uizli",
+      "Nevill Longbottom"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "film",
+    "film_part": 8,
+    "lang": "uz",
+    "body": "Bellatrisa Lestreyndjni kim mag'lub qilgan?",
+    "options": [
+      "Minerva Makgonagall",
+      "Molli Uizli",
+      "Ginni Uizli",
+      "Germiona Greynjer"
+    ],
+    "correct_index": 1
+  }
+]

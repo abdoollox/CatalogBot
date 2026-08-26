@@ -279,6 +279,12 @@ async def start_cmd(message: types.Message, command: CommandObject):
 
     if not payload or is_new:
         await log_user_action(message.from_user, "start")
+
+    if message.from_user and message.from_user.first_name:
+        try:
+            await hpcup.touch_user(message.from_user.id, message.from_user.first_name)
+        except Exception:
+            pass
     
     if not await is_subscribed(user_id):
         await message.answer("Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!", reply_markup=check_sub_keyboard())
@@ -565,6 +571,11 @@ async def handle_house(request):
         user = verify_init_data(request.headers.get("X-Telegram-Init-Data", ""))
         if not user:
             return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+        if user.get("first_name"):
+            try:
+                await hpcup.touch_user(user["id"], user["first_name"])
+            except Exception:
+                pass
         return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
     try:
@@ -583,6 +594,11 @@ async def handle_house(request):
         user = verify_init_data(str(body.get("initData", "")))
         if not user:
             return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+        if user.get("first_name"):
+            try:
+                await hpcup.touch_user(user["id"], user["first_name"])
+            except Exception:
+                pass
         return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
     if len(value) > 64:
@@ -597,10 +613,10 @@ async def handle_house(request):
         return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
 
     # Fakultet UMRBOD. Faqat ilova tomonda tugmani yashirish yetarli emas —
-    # server ham rad etishi kerak (spetsifikatsiya 2.0, 3-bo'lim).
+    # server ham rad etishi kerak (spetsifikatsiya 3.0, 2-bo'lim).
     if kind == "house":
         try:
-            accepted = await hpcup.set_house(user["id"], value)
+            accepted = await hpcup.set_house(user["id"], value, user.get("first_name"))
         except Exception as e:
             logging.error("Fakultet yozishda xato: %s", e)
             accepted = False
@@ -608,6 +624,12 @@ async def handle_house(request):
             return _cors(web.json_response(
                 {"ok": False, "error": "house_locked",
                  "cup": await _cup_block(user["id"])}, status=409))
+    else:
+        if user.get("first_name"):
+            try:
+                await hpcup.touch_user(user["id"], user["first_name"])
+            except Exception:
+                pass
 
     try:
         await log_user_action(_WebUser(user), payload)

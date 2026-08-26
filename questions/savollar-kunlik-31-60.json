@@ -1,0 +1,392 @@
+[
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvarts ekspressida shirinliklar aravachasida eng mashhur shirinlik qaysi?",
+    "options": [
+      "Muglar saqichasi",
+      "Shokolad qurbaqasi",
+      "Draje tatib ko'ring",
+      "Sehrli pishloq"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Nimbus 2000 nima?",
+    "options": [
+      "Iksir nomi",
+      "Sehrli tayoqcha turi",
+      "Supurgi markasi",
+      "Afsun nomi"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Dobbi qaysi oilaga xizmat qilgan?",
+    "options": [
+      "Potter oilasiga",
+      "Blek oilasiga",
+      "Uizli oilasiga",
+      "Malfoy oilasiga"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Uy elfini ozod qilish uchun unga nima berish kerak?",
+    "options": [
+      "Tayoqcha",
+      "Oziq-ovqat",
+      "Pul",
+      "Kiyim"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining tayoqchasining o'zagi nimadan yasalgan?",
+    "options": [
+      "Yolg'iz shoxli ot tuki",
+      "Bazilisk tishi",
+      "Ajdaho yuragi tolasi",
+      "Feniks pati"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Patronus afsunini chaqirish uchun nima haqida o'ylash kerak?",
+    "options": [
+      "O'z ismi",
+      "Hech narsa",
+      "Eng qo'rqinchli xotira",
+      "Eng baxtli xotira"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Dementorlar odamdan nimani so'rib oladi?",
+    "options": [
+      "Qonini",
+      "Kuchini",
+      "Sehrini",
+      "Baxtli xotiralarini"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogsmin qishlog'i Xogvartsga nisbatan qayerda joylashgan?",
+    "options": [
+      "Maktab yaqinida",
+      "Dengiznning narigi tomonida",
+      "London shahrida",
+      "Maktab ichida"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Norberta kim?",
+    "options": [
+      "Xagridning mushuki",
+      "Xagridning boqqan ajdahosi",
+      "Xagridning iti",
+      "Xagridning boyqushi"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Fred va Jorj Uizli Xogvartsni tashlab ketib nima ochishgan?",
+    "options": [
+      "Qurilish do'koni",
+      "Supurgilar do'koni",
+      "Restoran",
+      "Hazillar do'koni"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsda darslar orasida o'quvchilar qayerda dam oladi?",
+    "options": [
+      "Fakultet umumiy xonasida",
+      "Direktorning kabinetida",
+      "Kutubxonada",
+      "Katta zalda"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sehrgarlar orasida eng kuchli deb hisoblanadigan uchta buyum qanday ataladi?",
+    "options": [
+      "Uch sehrgar kubogi",
+      "Ajal tuhfalari",
+      "Xorkrukslar",
+      "Qudrat toshlari"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining amakisi va xolasining familiyasi nima?",
+    "options": [
+      "Greynjler",
+      "Uilyamslar",
+      "Dursllar",
+      "Prinslar"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Germiona Greynjer qanday oiladan?",
+    "options": [
+      "Yarim qonli oiladan",
+      "Sof qonli sehrgarlar oilasidan",
+      "Muglar oilasidan",
+      "Elf oilasidan"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsda qaysi bayram eng katta tantana bilan nishonlanadi?",
+    "options": [
+      "Xellouin",
+      "Quyosh bayramida",
+      "Yangi yil",
+      "Rojdestvo"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Lumos afsuni nima uchun ishlatiladi?",
+    "options": [
+      "O'zini himoya qilish uchun",
+      "Eshikni ochish uchun",
+      "Yorug'lik chiqarish uchun",
+      "Narsalarni uchirish uchun"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Ekspeliarmus afsuni nima qiladi?",
+    "options": [
+      "Qulfni ochadi",
+      "Himoya qalqoni hosil qiladi",
+      "Narsalarni uchiradi",
+      "Raqibning tayoqchasini uchirib tashlaydi"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Ron Uizlining eng sevimagan maxluqi nima?",
+    "options": [
+      "Troll",
+      "Dementor",
+      "O'rgimchak",
+      "Ilon"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsning katta zali shiftida nima ko'rinadi?",
+    "options": [
+      "Yulduzlar va osmon",
+      "Fakultet gerblari",
+      "Hech narsa — oddiy shift",
+      "Sehrli rasmlar"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sehrgarlar bir joydan boshqa joyga bir lahzada ko'chish uchun qaysi usuldan foydalanadi?",
+    "options": [
+      "Portkalit",
+      "Supurgi",
+      "Apparatsiya",
+      "Poyezd"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvarts qaysi mamlakatda joylashgan?",
+    "options": [
+      "Irlandiyada",
+      "Fransiyada",
+      "Shotlandiyada",
+      "Uelsda"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Voldemortning eng sodiq tarafdori bo'lgan ayol sehrgar kim?",
+    "options": [
+      "Bellatrisa Lestreyndj",
+      "Dolores Ambrij",
+      "Rita Skiter",
+      "Narsissa Malfoy"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Kviddichda bladjerni urib qaytaruvchi o'yinchilar qanday ataladi?",
+    "options": [
+      "Urib qaytaruvchilar",
+      "Lovchilar",
+      "Qo'riqchilar",
+      "Hujumchilar"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining Xogvartsdan oldingi eng yaqin do'sti kim edi?",
+    "options": [
+      "Hech kim yo'q edi",
+      "Draco",
+      "Nevill",
+      "Dudli"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sehrgarlar vazirligi qaysi shaharda joylashgan?",
+    "options": [
+      "Edinburg",
+      "London",
+      "Xogsmin",
+      "Manchester"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Makgonagall professori qaysi fanni o'qitgan?",
+    "options": [
+      "Afsunlar",
+      "Iksirlar",
+      "Sehrli hayvonlar",
+      "Ko'rinish o'zgartirish"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Dursllar oilasi qaysi ko'chada yashagan?",
+    "options": [
+      "Privet Drive",
+      "Spinner's End",
+      "Diagonal xiyoboni",
+      "Grimmauld maydoni"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining tayoqchasi necha dyuym uzunlikda?",
+    "options": [
+      "15 dyuym",
+      "11 dyuym",
+      "13 dyuym",
+      "9 dyuym"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvarts ta'sis etilgan yil taxminan qachon?",
+    "options": [
+      "990-yil atrofida",
+      "1500-yil atrofida",
+      "500-yil atrofida",
+      "1200-yil atrofida"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvarts qasr atrofidagi ko'lda nima yashaydi?",
+    "options": [
+      "Ajdaho",
+      "Bazilisk",
+      "Yolg'iz shoxli ot",
+      "Ulkan kalmar"
+    ],
+    "correct_index": 3
+  }
+]

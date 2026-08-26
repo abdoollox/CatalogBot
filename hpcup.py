@@ -50,6 +50,7 @@ BADGE_CODES = ("all_films", "flawless_exam", "perfect_week", "streak_7")
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     user_id     INTEGER PRIMARY KEY,
+    first_name  TEXT,
     house       TEXT,
     sorted_at   TEXT,
     created_at  TEXT NOT NULL
@@ -181,7 +182,7 @@ def _connect():
 # ---------------------------------------------------------------- migratsiya
 
 def _houses_from_json(path):
-    """users_db.json dan (user_id, house, sorted_at) ro'yxatini oladi.
+    """users_db.json dan (user_id, house, sorted_at, first_name) ro'yxatini oladi.
 
     Fakultet u yerda `clicks` ichida `house_<nom>` hodisasi sifatida yotadi.
     Bir necha marta saralanganlar bor — eng OXIRGISI olinadi.
@@ -204,45 +205,59 @@ def _houses_from_json(path):
             when = max(stamps)
             if best_time is None or when > best_time:
                 best_time, best_house = when, name
+        nick = (rec.get("nickname") or "").strip()
+        first_name = nick.split()[0] if nick else None
         if best_house:
             try:
-                out.append((int(uid), best_house, best_time))
+                out.append((int(uid), best_house, best_time, first_name))
+            except (TypeError, ValueError):
+                continue
+        elif first_name:
+            try:
+                out.append((int(uid), None, None, first_name))
             except (TypeError, ValueError):
                 continue
     return out
 
 
 def _migrate(conn, users_json):
-    """1.0 -> 2.0. Bir necha marta chaqirilsa ham xavfsiz."""
+    """1.0 -> 2.0/3.0. Bir necha marta chaqirilsa ham xavfsiz."""
     stamp = _utc_iso(now_tk())
+
+    # 0) first_name ustunini users jadvaliga qo'shamiz (agar yo'q bo'lsa)
+    user_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
+    if "first_name" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
 
     # 1) Eski `points.house` dan foydalanuvchilarni tiklaymiz. Ustun
     #    tushirilgandan keyin bu ma'lumot yo'qoladi, shuning uchun avval.
     cols = [r[1] for r in conn.execute("PRAGMA table_info(points)")]
     if "house" in cols:
         conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, house, sorted_at, created_at) "
-            "SELECT p.user_id, p.house, NULL, ? FROM points p "
+            "INSERT OR IGNORE INTO users (user_id, first_name, house, sorted_at, created_at) "
+            "SELECT p.user_id, NULL, p.house, NULL, ? FROM points p "
             "WHERE p.house IS NOT NULL AND p.house <> 'none' "
             "GROUP BY p.user_id", (stamp,))
 
-    # 2) users_db.json - fakultetning asosiy manbai (eng oxirgi saralanish).
+    # 2) users_db.json - fakultet va ismlarning manbai (eng oxirgi saralanish).
     #    Yuqoridagi qadam qo'ygan qiymatni ham to'g'rilaydi.
-    for uid, house, when in _houses_from_json(users_json):
+    for uid, house, when, first_name in _houses_from_json(users_json):
         conn.execute(
-            "INSERT INTO users (user_id, house, sorted_at, created_at) VALUES (?,?,?,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET house=excluded.house, "
-            "sorted_at=COALESCE(users.sorted_at, excluded.sorted_at)",
-            (uid, house, when, stamp))
+            "INSERT INTO users (user_id, first_name, house, sorted_at, created_at) VALUES (?,?,?,?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "house=COALESCE(excluded.house, users.house), "
+            "sorted_at=COALESCE(users.sorted_at, excluded.sorted_at), "
+            "first_name=COALESCE(excluded.first_name, users.first_name)",
+            (uid, first_name, house, when, stamp))
 
-    # 3) points jadvalini 2.0 ko'rinishiga keltiramiz: `house` ustuni olib
+    # 3) points jadvalini 2.0/3.0 ko'rinishiga keltiramiz: `house` ustuni olib
     #    tashlanadi va users ga tashqi kalit qo'shiladi. Jadval qayta
     #    quriladi - ALTER bilan tashqi kalit qo'shib bo'lmaydi.
     if "house" in cols:
         # Tashqi kalit buzilmasligi uchun har bir user_id users da bo'lsin
         conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, house, sorted_at, created_at) "
-            "SELECT DISTINCT user_id, NULL, NULL, ? FROM points", (stamp,))
+            "INSERT OR IGNORE INTO users (user_id, first_name, house, sorted_at, created_at) "
+            "SELECT DISTINCT user_id, NULL, NULL, NULL, ? FROM points", (stamp,))
 
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.execute("DROP INDEX IF EXISTS idx_points_season_house")
@@ -270,6 +285,48 @@ def _migrate(conn, users_json):
         logging.info("Kubok migratsiyasi: points.house olib tashlandi")
 
 
+def _seed_questions(questions_dir=None):
+    """Bazada faol savollar bo'lmasa, questions/ papkasidan yuklaydi."""
+    conn = _connect()
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM questions WHERE is_active=1").fetchone()[0]
+    finally:
+        conn.close()
+
+    if count > 0:
+        return 0
+
+    if questions_dir is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        candidates = [
+            os.getenv("HP_QUESTIONS_DIR", "/app/questions"),
+            os.path.join(base_dir, "questions"),
+            os.path.join(base_dir, "data", "questions"),
+        ]
+        for c in candidates:
+            if os.path.isdir(c):
+                questions_dir = c
+                break
+
+    if not questions_dir or not os.path.isdir(questions_dir):
+        return 0
+
+    total_added = 0
+    for filename in sorted(os.listdir(questions_dir)):
+        if filename.endswith(".json"):
+            filepath = os.path.join(questions_dir, filename)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    items = json.load(f)
+                    added = _load_questions(items, replace=False)
+                    total_added += added
+                    logging.info("Savollar yuklandi: %s (%d ta)", filename, added)
+            except Exception as e:
+                logging.error("Savollarni yuklashda xato (%s): %s", filename, e)
+
+    return total_added
+
+
 def _init(users_json):
     conn = _connect()
     try:
@@ -279,6 +336,10 @@ def _init(users_json):
         _ensure_season(conn)
     finally:
         conn.close()
+    try:
+        _seed_questions()
+    except Exception as e:
+        logging.error("Savollarni avtomatik yuklashda xato: %s", e)
 
 
 async def init(users_json="/app/users_db.json"):
@@ -289,10 +350,31 @@ async def init(users_json="/app/users_db.json"):
 
 # ---------------------------------------------------------------- foydalanuvchi
 
-def _touch_user(conn, user_id):
-    conn.execute(
-        "INSERT OR IGNORE INTO users (user_id, house, sorted_at, created_at) "
-        "VALUES (?,NULL,NULL,?)", (int(user_id), _utc_iso(now_tk())))
+def _touch_user(conn, user_id, first_name=None):
+    stamp = _utc_iso(now_tk())
+    clean_name = first_name.strip()[:32].split()[0] if first_name else None
+    if clean_name:
+        conn.execute(
+            "INSERT INTO users (user_id, first_name, house, sorted_at, created_at) "
+            "VALUES (?,?,NULL,NULL,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET first_name=excluded.first_name",
+            (int(user_id), clean_name, stamp))
+    else:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (user_id, first_name, house, sorted_at, created_at) "
+            "VALUES (?,NULL,NULL,NULL,?)", (int(user_id), stamp))
+
+
+async def touch_user(user_id, first_name=None):
+    """Foydalanuvchini ro'yxatga oladi yoki ismini yangilaydi."""
+    def _do():
+        conn = _connect()
+        try:
+            _touch_user(conn, user_id, first_name)
+            conn.commit()
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
 
 
 def _get_house(user_id):
@@ -339,12 +421,12 @@ async def can_resort(user_id):
     return await asyncio.to_thread(_can_resort, user_id)
 
 
-def _set_house(user_id, house):
+def _set_house(user_id, house, first_name=None):
     if house not in HOUSES:
         return False
     conn = _connect()
     try:
-        _touch_user(conn, user_id)
+        _touch_user(conn, user_id, first_name)
         row = conn.execute("SELECT house FROM users WHERE user_id=?",
                            (int(user_id),)).fetchone()
         if row and row["house"]:
@@ -353,17 +435,22 @@ def _set_house(user_id, house):
             end = _parse_iso(until) if until else None
             if not (end and datetime.now(timezone.utc) < end):
                 return False
-        conn.execute("UPDATE users SET house=?, sorted_at=? WHERE user_id=?",
-                     (house, _utc_iso(now_tk()), int(user_id)))
+        clean_name = first_name.strip()[:32].split()[0] if first_name else None
+        if clean_name:
+            conn.execute("UPDATE users SET house=?, sorted_at=?, first_name=? WHERE user_id=?",
+                         (house, _utc_iso(now_tk()), clean_name, int(user_id)))
+        else:
+            conn.execute("UPDATE users SET house=?, sorted_at=? WHERE user_id=?",
+                         (house, _utc_iso(now_tk()), int(user_id)))
         conn.commit()
         return True
     finally:
         conn.close()
 
 
-async def set_house(user_id, house):
+async def set_house(user_id, house, first_name=None):
     """Fakultetni yozadi. Umrbod: qayta yozish faqat muhlat ichida."""
-    return await asyncio.to_thread(_set_house, user_id, house)
+    return await asyncio.to_thread(_set_house, user_id, house, first_name)
 
 
 def _open_resort_window(days):
@@ -534,7 +621,7 @@ def _remaining_today(conn, user_id, season_id):
     """Foydalanuvchi bugun yana qancha ball ola olishi mumkin."""
     total = 0
 
-    # Kunlik savol
+    # 1. Kunlik savol
     today = today_tk()
     row = conn.execute(
         "SELECT q.id FROM daily_schedule d JOIN questions q ON q.id=d.question_id "
@@ -552,15 +639,138 @@ def _remaining_today(conn, user_id, season_id):
         if any_daily:
             total += PTS_DAILY
 
-    # Biriktirilgan, lekin javob berilmagan imtihon savollari
-    left = conn.execute(
-        "SELECT COUNT(*) FROM question_assignments a "
-        "WHERE a.user_id=? AND a.season_id=? AND a.question_id NOT IN "
-        "(SELECT question_id FROM answers WHERE user_id=? AND season_id=?)",
-        (int(user_id), season_id, int(user_id), season_id)).fetchone()[0]
-    total += left * PTS_FILM_QUIZ
+    # 2. Imtihon savollari (barcha 8 qism bo'yicha qolgan savollar)
+    for part in range(1, FILM_PARTS + 1):
+        has_qs = conn.execute(
+            "SELECT 1 FROM questions WHERE kind='film' AND film_part=? AND is_active=1 LIMIT 1",
+            (part,)).fetchone()
+        if has_qs:
+            ans_count = conn.execute(
+                "SELECT COUNT(DISTINCT a.question_id) FROM answers a "
+                "JOIN questions q ON q.id=a.question_id "
+                "WHERE a.user_id=? AND a.season_id=? AND q.kind='film' AND q.film_part=?",
+                (int(user_id), season_id, part)).fetchone()[0]
+            left_for_part = max(0, QUIZ_PER_FILM - ans_count)
+            total += left_for_part * PTS_FILM_QUIZ
 
     return total
+
+
+def _exam_pending(conn, user_id, season_id):
+    """Joriy mavsumda imtihoni topshirilmagan qism raqamlari (1..8)."""
+    pending = []
+    for part in range(1, FILM_PARTS + 1):
+        has_qs = conn.execute(
+            "SELECT 1 FROM questions WHERE kind='film' AND film_part=? AND is_active=1 LIMIT 1",
+            (part,)).fetchone()
+        if not has_qs:
+            continue
+
+        ans_count = conn.execute(
+            "SELECT COUNT(DISTINCT a.question_id) FROM answers a "
+            "JOIN questions q ON q.id=a.question_id "
+            "WHERE a.user_id=? AND a.season_id=? AND q.kind='film' AND q.film_part=?",
+            (int(user_id), season_id, part)).fetchone()[0]
+
+        if ans_count < QUIZ_PER_FILM:
+            pending.append(part)
+    return pending
+
+
+async def exam_pending(user_id, season_id):
+    """Joriy mavsumda imtihoni topshirilmagan qismlar ro'yxati."""
+    def _do():
+        conn = _connect()
+        try:
+            return _exam_pending(conn, user_id, season_id)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+def _hall(conn, house, user_id, season_id):
+    """Fakultet zali: total, active, va faol a'zolar ro'yxati (kamayish tartibida)."""
+    if not house or house not in HOUSES:
+        return None
+
+    total = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE house=?", (house,)).fetchone()[0]
+
+    rows = conn.execute(
+        "SELECT p.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, SUM(p.points) AS pts "
+        "FROM points p "
+        "JOIN users u ON u.user_id=p.user_id "
+        "WHERE p.season_id=? AND u.house=? "
+        "GROUP BY p.user_id "
+        "HAVING pts >= ? "
+        "ORDER BY pts DESC, p.user_id ASC",
+        (season_id, house, ACTIVE_MIN_POINTS)).fetchall()
+
+    active_count = len(rows)
+    members = []
+    for r in rows:
+        raw_name = (r["name"] or "Sehrgar").strip()
+        first_word = raw_name.split()[0] if raw_name else "Sehrgar"
+        members.append({
+            "name": first_word[:20],
+            "points": r["pts"],
+            "me": (r["user_id"] == int(user_id))
+        })
+
+    return {
+        "total": total,
+        "active": active_count,
+        "members": members
+    }
+
+
+async def hall(house, user_id, season_id):
+    """Fakultet zali ma'lumotlari."""
+    def _do():
+        conn = _connect()
+        try:
+            return _hall(conn, house, user_id, season_id)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+def _feed(conn, limit=5):
+    """So'nggi saralanishlar tasmasi (5 tagacha, yangisidan eskisiga)."""
+    rows = conn.execute(
+        "SELECT user_id, COALESCE(first_name, 'Sehrgar') AS name, house, sorted_at "
+        "FROM users "
+        "WHERE house IS NOT NULL AND sorted_at IS NOT NULL "
+        "ORDER BY sorted_at DESC "
+        "LIMIT ?", (limit,)).fetchall()
+
+    now = datetime.now(timezone.utc)
+    feed_list = []
+    for r in rows:
+        when = _parse_iso(r["sorted_at"])
+        if when:
+            ago_min = max(1, int((now - when).total_seconds() / 60))
+        else:
+            ago_min = 60
+        raw_name = (r["name"] or "Sehrgar").strip()
+        first_word = raw_name.split()[0] if raw_name else "Sehrgar"
+        feed_list.append({
+            "name": first_word[:20],
+            "house": r["house"],
+            "ago_minutes": ago_min
+        })
+    return feed_list
+
+
+async def feed(limit=5):
+    """Jonli tasma (so'nggi saralanishlar)."""
+    def _do():
+        conn = _connect()
+        try:
+            return _feed(conn, limit)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
 
 
 def _user_stats(user_id, season_id):
@@ -644,7 +854,7 @@ def compute_gap(table, stats):
     closable = round(stats.get("remaining_today", 0) / members, 1)
 
     return {"house": rival["house"], "diff": diff, "ahead": ahead,
-            "closable": min(closable, diff)}
+            "closable": closable}
 
 
 # ---------------------------------------------------------------- savollar
@@ -903,6 +1113,8 @@ def _counts():
             out[name] = conn.execute("SELECT COUNT(*) FROM " + name).fetchone()[0]
         out["sorted_users"] = conn.execute(
             "SELECT COUNT(*) FROM users WHERE house IS NOT NULL").fetchone()[0]
+        out["named_users"] = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE first_name IS NOT NULL").fetchone()[0]
         out["resort_until"] = _resort_until(conn)
         return out
     finally:

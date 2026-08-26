@@ -1,0 +1,392 @@
+[
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsda nechta fakultet bor?",
+    "options": [
+      "Oltita",
+      "Uchta",
+      "To'rtta",
+      "Beshta"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Kviddich o'yinida qaysi to'pchani ushlash o'yinni tugatadi?",
+    "options": [
+      "Kvafflni",
+      "Oltin snitchni",
+      "Bladjerni",
+      "Qizil to'pchani"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining eng yaqin ikkita do'sti kim?",
+    "options": [
+      "Fred va Jorj",
+      "Luna va Jinni",
+      "Ron va Germiona",
+      "Draco va Nevill"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvarts sehrgarlik maktabida o'qitish tili qaysi?",
+    "options": [
+      "Ingliz tili",
+      "Lotin",
+      "Qadimiy runa tili",
+      "Sehrgarlar tili"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Dambldorning feniks qushining ismi nima?",
+    "options": [
+      "Xedviga",
+      "Foks",
+      "Aragog",
+      "Bakbik"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Grifindor fakultetining ramziy ranglari qanday?",
+    "options": [
+      "Ko'k va kumush",
+      "Yashil va kumush",
+      "Qizil va oltin",
+      "Sariq va qora"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsda eng uzun muddatli direktor kim bo'lgan?",
+    "options": [
+      "Severus Sneyp",
+      "Minerva Makgonagall",
+      "Dolores Ambrij",
+      "Albus Dambldor"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sehrgarlar pochta uchun qanday hayvonlardan foydalanadi?",
+    "options": [
+      "Qarg'alar",
+      "Boyqushlar",
+      "Mushuklar",
+      "Ko'rshapalaklar"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining peshonasidagi chandiq qanday shaklda?",
+    "options": [
+      "Yulduz shaklida",
+      "Chaqmoq shaklida",
+      "Uchburchak shaklida",
+      "Oy shaklida"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garri Potterning tug'ilgan kuni qachon?",
+    "options": [
+      "14-fevral",
+      "1-sentyabr",
+      "24-dekabr",
+      "31-iyul"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Voldemortning haqiqiy ismi nima?",
+    "options": [
+      "Gelert Grindelvald",
+      "Severus Sneyp",
+      "Tom Ridl",
+      "Sirius Blek"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sehrgarlar bozoriga qanday nom berilgan?",
+    "options": [
+      "Diagonal xiyoboni",
+      "Nokturn xiyoboni",
+      "Xogsmin",
+      "Vazirlik maydoni"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining boyqushining ismi nima?",
+    "options": [
+      "Keksik",
+      "Pigvijon",
+      "Xedviga",
+      "Foks"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsda qaysi fan qora sehrdan himoyalanishni o'rgatadi?",
+    "options": [
+      "Iksirlar",
+      "Sehrli hayvonlar",
+      "Afsunlar",
+      "Qora sanʼatdan himoyalanish"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining otasining ismi nima edi?",
+    "options": [
+      "Sirius",
+      "Jeyms",
+      "Artur",
+      "Remus"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sehrgarlar dunyosida sehrgarlar bo'lmagan odamlar qanday ataladi?",
+    "options": [
+      "Elflar",
+      "Dementorlar",
+      "Skvibler",
+      "Muglar"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sliterin fakultetining ramziy hayvoni nima?",
+    "options": [
+      "Sher",
+      "Burgut",
+      "Ilon",
+      "Bo'rsiq"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsda qaysi o'qituvchi iksirlar darsini o'tkazgan?",
+    "options": [
+      "Professor Sneyp",
+      "Professor Binnz",
+      "Professor Makgonagall",
+      "Professor Flitvik"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xagridning kasbi nima?",
+    "options": [
+      "Iksirshunos",
+      "Kalitlar va joylar qo'riqchisi",
+      "Sehrli hayvonlar professori",
+      "Kviddich sudyasi"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garri Potterning ko'zining rangi qanday?",
+    "options": [
+      "Yashil",
+      "Jigarrang",
+      "Ko'k",
+      "Kulrang"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Ajal tuhfalaridan biri bo'lgan ko'rinmas plashni kim egallagan?",
+    "options": [
+      "Garri",
+      "Sneyp",
+      "Dambldor",
+      "Voldemort"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Uizli oilasida nechta farzand bor?",
+    "options": [
+      "Sakkizta",
+      "Beshta",
+      "Yettita",
+      "Oltita"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsning sehrli xaritasini ochish uchun qanday so'z aytiladi?",
+    "options": [
+      "Lumos!",
+      "Aloxomora!",
+      "Qasam ichamanki, men yomon niyatdaman!",
+      "Ekspeliarmus!"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Kviddich jamoasida nechta o'yinchi bo'ladi?",
+    "options": [
+      "Yettita",
+      "Oltita",
+      "Beshta",
+      "Sakkizta"
+    ],
+    "correct_index": 0
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Garrining onasining ismi nima edi?",
+    "options": [
+      "Nimfadora",
+      "Lili",
+      "Molli",
+      "Minerva"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xogvartsga birinchi kurs o'quvchilari ko'l orqali qanday yetib boradi?",
+    "options": [
+      "Suzib",
+      "Supurgilarda",
+      "Qayiqlarda",
+      "Aravada"
+    ],
+    "correct_index": 2
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Xaffelpaff fakultetining asosiy fazilati nima?",
+    "options": [
+      "Tadbirkorlik",
+      "Sadoqat va mehnatsevarlik",
+      "Jasurlik",
+      "Aqllilik"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Sehrgarlar dunyosining valyutasi qanday ataladi?",
+    "options": [
+      "Sterling",
+      "Knut",
+      "Sehrlon",
+      "Galleon"
+    ],
+    "correct_index": 3
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Reyvenklo fakultetining ramziy hayvoni nima?",
+    "options": [
+      "Sher",
+      "Burgut",
+      "Bo'rsiq",
+      "Ilon"
+    ],
+    "correct_index": 1
+  },
+  {
+    "kind": "daily",
+    "film_part": null,
+    "lang": "uz",
+    "body": "Tayoqcha do'konining egasi kim?",
+    "options": [
+      "Florean Fortesku",
+      "Ollivander",
+      "Grigorovich",
+      "Borgin"
+    ],
+    "correct_index": 1
+  }
+]
