@@ -175,7 +175,8 @@ MOVIES_DB = {
         },
         "uz": {
             "message_id": 34,
-            "caption": "<b>1. Fantastik Maxluqlar va ularni qayerdan topish mumkin</b>"
+            "caption": "<b>1. Fantastik Maxluqlar</b>",
+            "vk_url": "https://vkvideo.ru/video-229969354_456239029?list=pykesy7vje26j5qv"
         },
         "ru": {
             "message_id": 0,
@@ -190,7 +191,8 @@ MOVIES_DB = {
         },
         "uz": {
             "message_id": 35,
-            "caption": "<b>2. Fantastik Maxluqlar: Grindelvaldning jinoyatlari</b>"
+            "caption": "<b>2. Fantastik Maxluqlar: Grindelvaldning jinoyatlari</b>",
+            "vk_url": "https://vkvideo.ru/video-229969354_456239030?list=6lwnawgzdaa2jnwg"
         },
         "ru": {
             "message_id": 0,
@@ -205,7 +207,8 @@ MOVIES_DB = {
         },
         "uz": {
             "message_id": 36,
-            "caption": "<b>3. Fantastik Maxluqlar: Dambldor sirlari</b>"
+            "caption": "<b>3. Fantastik Maxluqlar: Dambldor sirlari</b>",
+            "vk_url": "https://vkvideo.ru/video-229969354_456239031?list=mrfufjbjfcc3gujn"
         },
         "ru": {
             "message_id": 0,
@@ -277,9 +280,18 @@ LOCALES = {
     }
 }
 
-def movie_delivery_keyboard(lang: str = "uz"):
+def movie_delivery_keyboard(lang: str = "uz", vk_url: str = None):
     loc = LOCALES.get(lang, LOCALES["uz"])
     builder = InlineKeyboardBuilder()
+    
+    # --- 1-QATOR: 4K Formatda ko'rish (faqat havola mavjud bo'lsa) ---
+    if vk_url:
+        builder.row(
+            InlineKeyboardButton(
+                text="⚡️ 4K formatda ko'rish", 
+                url=vk_url
+            )
+        )
     
     # 1. Ulashish matni va havolasi
     share_text = loc["share_text"]
@@ -290,7 +302,7 @@ def movie_delivery_keyboard(lang: str = "uz"):
     safe_url = urllib.parse.quote(share_url)
     final_share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
     
-    # --- 1-QATOR: Kolleksiya WebApp ---
+    # --- 2-QATOR: Kolleksiya WebApp ---
     builder.row(
         InlineKeyboardButton(
             text=loc["collection_btn"], 
@@ -298,7 +310,7 @@ def movie_delivery_keyboard(lang: str = "uz"):
         )
     )
     
-    # --- 2-QATOR: Do'stlarga ulashish ---
+    # --- 3-QATOR: Do'stlarga ulashish ---
     builder.row(
         InlineKeyboardButton(
             text=loc["share_btn"], 
@@ -376,6 +388,8 @@ async def start_cmd(message: types.Message, command: CommandObject):
             # Xavfsiz tizim: Mijoz harakatini qayd etish
             await log_user_action(message.from_user, payload_clean)
 
+            vk_url = movie_data.get("vk_url") if lang == "uz" else None
+
             # Asosiy yuborish qismi
             await bot.copy_message(
                 chat_id=message.from_user.id,
@@ -383,7 +397,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 message_id=movie_data["message_id"],
                 caption=movie_data["caption"], 
                 parse_mode="HTML",
-                reply_markup=movie_delivery_keyboard(lang),
+                reply_markup=movie_delivery_keyboard(lang, vk_url),
                 protect_content=True
             )
 
