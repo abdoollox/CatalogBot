@@ -166,6 +166,51 @@ MOVIES_DB = {
             "message_id": 25,
             "caption": "<b>8. Гарри Поттер и Дары Смерти Часть II</b>"
         }
+    },
+
+    "fb1": {
+        "en": {
+            "message_id": 37,
+            "caption": "<b>1. Fantastic Beasts and Where to Find Them</b>"
+        },
+        "uz": {
+            "message_id": 34,
+            "caption": "<b>1. Fantastik Maxluqlar va ularni qayerdan topish mumkin</b>"
+        },
+        "ru": {
+            "message_id": 0,
+            "caption": "<b>1. Фантастические твари и где они обитают</b>"
+        }
+    },
+
+    "fb2": {
+        "en": {
+            "message_id": 38,
+            "caption": "<b>2. Fantastic Beasts: The Crimes of Grindelwald</b>"
+        },
+        "uz": {
+            "message_id": 35,
+            "caption": "<b>2. Fantastik Maxluqlar: Grindelvaldning jinoyatlari</b>"
+        },
+        "ru": {
+            "message_id": 0,
+            "caption": "<b>2. Фантастические твари: Преступления Грин-де-Вальда</b>"
+        }
+    },
+
+    "fb3": {
+        "en": {
+            "message_id": 39,
+            "caption": "<b>3. Fantastic Beasts: The Secrets of Dumbledore</b>"
+        },
+        "uz": {
+            "message_id": 36,
+            "caption": "<b>3. Fantastik Maxluqlar: Dambldor sirlari</b>"
+        },
+        "ru": {
+            "message_id": 0,
+            "caption": "<b>3. Фантастические твари: Тайны Дамблдора</b>"
+        }
     }
 }
 
@@ -346,8 +391,9 @@ async def start_cmd(message: types.Message, command: CommandObject):
             # Kinoning o'zi allaqachon yuborilgan - bu yerdagi xato
             # foydalanuvchiga ta'sir qilmasligi kerak.
             try:
-                film_part = int(movie_key[2:])
-                await hpbot.award_film_open(message.from_user, film_part)
+                if movie_key.startswith("hp"):
+                    film_part = int(movie_key[2:])
+                    await hpbot.award_film_open(message.from_user, film_part)
             except Exception as cup_error:
                 logging.error("Kubok qismida xato: %s", cup_error)
 
