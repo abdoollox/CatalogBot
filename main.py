@@ -231,7 +231,7 @@ def movie_delivery_keyboard():
     # --- 1-QATOR: Kolleksiya WebApp ---
     builder.row(
         InlineKeyboardButton(
-            text="🎬 Kolleksiya", 
+            text="🎬 Filmlar kolleksiyasi", 
             web_app=WebAppInfo(url=WEBAPP_URL)
         )
     )
