@@ -228,23 +228,19 @@ def movie_delivery_keyboard():
     # 3. Telegram API qoidasi bo'yicha yig'ish
     final_share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
     
-    # --- 1-QAVAT: Yonma-yon tugmalar ---
+    # --- 1-QATOR: Kolleksiya WebApp ---
     builder.row(
         InlineKeyboardButton(
             text="🎬 Kolleksiya", 
             web_app=WebAppInfo(url=WEBAPP_URL)
-        ),
-        InlineKeyboardButton(
-            text="📤 Ulashish", 
-            url=final_share_link
         )
     )
     
-    # --- 2-QAVAT: Sotuv voronkasi ---
+    # --- 2-QATOR: Do'stlarga ulashish ---
     builder.row(
         InlineKeyboardButton(
-            text="🗝 Maxfiy sandiqni ochish", 
-            url="https://t.me/garripotter_cinemabot?start=start"
+            text="👥 Do'stlarga ulashish", 
+            url=final_share_link
         )
     )
     
