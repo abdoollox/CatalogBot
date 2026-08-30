@@ -214,24 +214,41 @@ def webapp_keyboard():
         [InlineKeyboardButton(text="🎬 Kolleksiyani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
     ])
 
-def movie_delivery_keyboard():
+LOCALES = {
+    "uz": {
+        "collection_btn": "🎬 Filmlar kolleksiyasi",
+        "share_btn": "👥 Do'stlarga ulashish",
+        "share_text": "🎬 Menga bu filmlar kolleksiyasi yoqdi. Siz ham foydalanib ko'ring!"
+    },
+    "ru": {
+        "collection_btn": "🎬 Коллекция фильмов",
+        "share_btn": "👥 Поделиться с друзьями",
+        "share_text": "🎬 Мне понравилась эта коллекция фильмов. Попробуйте и вы!"
+    },
+    "en": {
+        "collection_btn": "🎬 Movie Collection",
+        "share_btn": "👥 Share with friends",
+        "share_text": "🎬 I really liked this movie collection. Check it out!"
+    }
+}
+
+def movie_delivery_keyboard(lang: str = "uz"):
+    loc = LOCALES.get(lang, LOCALES["uz"])
     builder = InlineKeyboardBuilder()
     
-    # 1. Skrinshotdagi aniq matn va Direct WebApp havolasi
-    share_text = "🎬 Menga bu filmlar kolleksiyasi yoqdi. Siz ham foydalanib ko'ring!"
+    # 1. Ulashish matni va havolasi
+    share_text = loc["share_text"]
     share_url = "https://t.me/garripotterkinobot/catalog"
     
-    # 2. Mashina tiliga o'girish (URL Encoding)
+    # 2. URL Encoding
     safe_text = urllib.parse.quote(share_text)
     safe_url = urllib.parse.quote(share_url)
-    
-    # 3. Telegram API qoidasi bo'yicha yig'ish
     final_share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
     
     # --- 1-QATOR: Kolleksiya WebApp ---
     builder.row(
         InlineKeyboardButton(
-            text="🎬 Filmlar kolleksiyasi", 
+            text=loc["collection_btn"], 
             web_app=WebAppInfo(url=WEBAPP_URL)
         )
     )
@@ -239,7 +256,7 @@ def movie_delivery_keyboard():
     # --- 2-QATOR: Do'stlarga ulashish ---
     builder.row(
         InlineKeyboardButton(
-            text="👥 Do'stlarga ulashish", 
+            text=loc["share_btn"], 
             url=final_share_link
         )
     )
@@ -321,7 +338,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 message_id=movie_data["message_id"],
                 caption=movie_data["caption"], 
                 parse_mode="HTML",
-                reply_markup=movie_delivery_keyboard(),
+                reply_markup=movie_delivery_keyboard(lang),
                 protect_content=True
             )
 
