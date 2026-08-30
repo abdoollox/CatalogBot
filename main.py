@@ -329,13 +329,12 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 protect_content=True
             )
 
-            # Xogvarts kubogi: kino ochilgani uchun ball va imtihon taklifi.
+            # Xogvarts kubogi: kino ochilgani uchun ball (agar fakulteti bo'lsa).
             # Kinoning o'zi allaqachon yuborilgan - bu yerdagi xato
             # foydalanuvchiga ta'sir qilmasligi kerak.
             try:
                 film_part = int(movie_key[2:])
                 await hpbot.award_film_open(message.from_user, film_part)
-                await hpbot.offer_quiz(bot, message.from_user, film_part)
             except Exception as cup_error:
                 logging.error("Kubok qismida xato: %s", cup_error)
 

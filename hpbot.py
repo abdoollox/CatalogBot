@@ -87,30 +87,11 @@ def _question_text(q, header):
     return "%s\n\n<b>%s</b>" % (header, q["body"])
 
 
-# ---------------------------------------------------------- kino imtihoni
+# ---------------------------------------------------------- kino imtihoni (o'chirilgan - bot oddiy foydalanuvchilar uchun)
 
 async def offer_quiz(bot, user, film_part):
-    """Kino yuborilgandan keyin imtihon taklifi.
-
-    Majburiy emas — foydalanuvchi o'zi bosadi.
-    """
-    season = await hpcup.current_season()
-    qs = await hpcup.film_questions(user.id, season["id"], film_part)
-    if not qs:
-        return                      # savollar yuklanmagan yoki tugagan
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-        text="Imtihonni boshlash (%d ta savol)" % len(qs),
-        callback_data="hpq:go:%d" % film_part)]])
-    try:
-        await bot.send_message(
-            user.id,
-            "🎓 <b>%d-qism uchun imtihon</b>\n\n"
-            "Har bir to'g'ri javob — %d ball, fakultetingiz hisobiga.\n"
-            "Bir savolga bir marta javob beriladi." % (film_part, hpcup.PTS_FILM_QUIZ),
-            parse_mode="HTML", reply_markup=kb)
-    except Exception as e:
-        logging.error("Imtihon taklifida xato: %s", e)
+    """Kino yuborilgandan keyin imtihon taklifi o'chirilgan."""
+    return
 
 
 async def _send_next_film_question(bot, user_id, film_part, message=None):
