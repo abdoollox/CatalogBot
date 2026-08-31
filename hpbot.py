@@ -488,7 +488,7 @@ def register(dp, bot, app, cfg):
         except Exception:
             body = None
 
-        raw = _extract_init_data(request, body)
+        raw = _init_data_from(request, body)
         parsed = _cfg["parse_init_data"](raw)
         uid = _cfg["get_uid"](parsed)
         if not uid:
@@ -508,7 +508,7 @@ def register(dp, bot, app, cfg):
         except Exception:
             return cors(web.json_response({"error": "invalid json"}, status=400))
             
-        raw = _extract_init_data(request, body)
+        raw = _init_data_from(request, body)
         parsed = _cfg["parse_init_data"](raw)
         uid = _cfg["get_uid"](parsed)
         if not uid:
