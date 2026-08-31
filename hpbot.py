@@ -545,16 +545,23 @@ def register(dp, bot, app, cfg):
         uid = user["id"]
         stats = await hpcup.user_stats(uid, (await hpcup.current_season())["id"])
         house = stats.get("house")
-        if not house:
-            return cors(web.json_response({"error": "no_house"}, status=403))
-            
+        
         if request.method == "GET":
-            messages = await hpcup.get_chat_messages(house, 50)
+            room = request.query.get("room", "house")
+            target = "global" if room == "global" else house
+            if not target:
+                return cors(web.json_response({"error": "no_house"}, status=403))
+            messages = await hpcup.get_chat_messages(target, 50)
             return cors(web.json_response({"ok": True, "messages": messages}))
             
         elif request.method == "POST":
             if not body:
                 return cors(web.json_response({"error": "invalid json"}, status=400))
+                
+            room = body.get("room", "house")
+            target = "global" if room == "global" else house
+            if not target:
+                return cors(web.json_response({"error": "no_house"}, status=403))
                 
             text = (body.get("text") or "").strip()
             if not text or len(text) > 1000:
@@ -565,8 +572,8 @@ def register(dp, bot, app, cfg):
             except Exception:
                 pass
                 
-            await hpcup.post_chat_message(house, uid, text)
-            messages = await hpcup.get_chat_messages(house, 50)
+            await hpcup.post_chat_message(target, uid, text)
+            messages = await hpcup.get_chat_messages(target, 50)
             return cors(web.json_response({"ok": True, "messages": messages}))
 
     app.router.add_route("*", "/api/chat", api_chat)

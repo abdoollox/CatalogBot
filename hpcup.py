@@ -1246,7 +1246,7 @@ async def get_chat_messages(house, limit=50):
         conn = _connect()
         try:
             rows = conn.execute(
-                "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, c.message, c.created_at "
+                "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, c.message, c.created_at "
                 "FROM chat_messages c "
                 "LEFT JOIN users u ON u.user_id = c.user_id "
                 "WHERE c.house=? "
@@ -1257,6 +1257,7 @@ async def get_chat_messages(house, limit=50):
                     "id": r["id"],
                     "uid": r["user_id"],
                     "name": r["name"],
+                    "house": r["user_house"],
                     "text": r["message"],
                     "time": r["created_at"]
                 })
