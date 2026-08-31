@@ -109,6 +109,14 @@ CREATE TABLE IF NOT EXISTS daily_schedule (
     question_id INTEGER NOT NULL REFERENCES questions(id)
 );
 
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    house        TEXT NOT NULL,
+    user_id      INTEGER NOT NULL,
+    message      TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS badges (
     user_id   INTEGER NOT NULL,
     code      TEXT NOT NULL,
@@ -1232,3 +1240,41 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
             
     res["points"] = pts
     return res
+
+async def get_chat_messages(house, limit=50):
+    def _do():
+        conn = _connect()
+        try:
+            rows = conn.execute(
+                "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, c.message, c.created_at "
+                "FROM chat_messages c "
+                "LEFT JOIN users u ON u.user_id = c.user_id "
+                "WHERE c.house=? "
+                "ORDER BY c.id DESC LIMIT ?", (house, limit)).fetchall()
+            out = []
+            for r in rows:
+                out.append({
+                    "id": r["id"],
+                    "uid": r["user_id"],
+                    "name": r["name"],
+                    "text": r["message"],
+                    "time": r["created_at"]
+                })
+            return list(reversed(out))
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+async def post_chat_message(house, user_id, message):
+    def _do():
+        conn = _connect()
+        try:
+            stamp = _utc_iso(now_tk())
+            conn.execute(
+                "INSERT INTO chat_messages (house, user_id, message, created_at) "
+                "VALUES (?,?,?,?)", (house, int(user_id), message.strip(), stamp)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)

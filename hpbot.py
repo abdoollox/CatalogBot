@@ -526,5 +526,40 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/tasks", api_tasks)
     app.router.add_route("*", "/api/tasks/submit", api_submit_task)
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
+
+    async def api_chat(request):
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS":
+            return cors(web.Response(status=204))
+            
+        user = _cfg["verify_init_data"](_init_data_from(request, None))
+        if not user:
+            return cors(web.json_response({"error": "unauthorized"}, status=403))
+            
+        uid = user["id"]
+        stats = await hpcup.user_stats(uid, (await hpcup.current_season())["id"])
+        house = stats.get("house")
+        if not house:
+            return cors(web.json_response({"error": "no_house"}, status=403))
+            
+        if request.method == "GET":
+            messages = await hpcup.get_chat_messages(house, 50)
+            return cors(web.json_response({"ok": True, "messages": messages}))
+            
+        elif request.method == "POST":
+            try:
+                body = await request.json()
+            except Exception:
+                return cors(web.json_response({"error": "invalid json"}, status=400))
+                
+            text = (body.get("text") or "").strip()
+            if not text or len(text) > 1000:
+                return cors(web.json_response({"error": "invalid message"}, status=400))
+                
+            await hpcup.post_chat_message(house, uid, text)
+            messages = await hpcup.get_chat_messages(house, 50)
+            return cors(web.json_response({"ok": True, "messages": messages}))
+
+    app.router.add_route("*", "/api/chat", api_chat)
     logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",
                  "yoqilgan" if ANNOUNCE else "o'chirilgan")
