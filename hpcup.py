@@ -690,24 +690,25 @@ def _hall(conn, house, user_id, season_id):
         "SELECT COUNT(*) FROM users WHERE house=?", (house,)).fetchone()[0]
 
     rows = conn.execute(
-        "SELECT p.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, SUM(p.points) AS pts "
-        "FROM points p "
-        "JOIN users u ON u.user_id=p.user_id "
-        "WHERE p.season_id=? AND u.house=? "
-        "GROUP BY p.user_id "
-        "HAVING pts >= ? "
-        "ORDER BY pts DESC, p.user_id ASC",
-        (season_id, house, ACTIVE_MIN_POINTS)).fetchall()
+        "SELECT u.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, COALESCE(SUM(p.points), 0) AS pts "
+        "FROM users u "
+        "LEFT JOIN points p ON u.user_id=p.user_id AND p.season_id=? "
+        "WHERE u.house=? "
+        "GROUP BY u.user_id "
+        "ORDER BY pts DESC, u.user_id ASC",
+        (season_id, house)).fetchall()
 
-    active_count = len(rows)
+    active_count = sum(1 for r in rows if r["pts"] >= ACTIVE_MIN_POINTS)
     members = []
     for r in rows:
         raw_name = (r["name"] or "Sehrgar").strip()
         first_word = raw_name.split()[0] if raw_name else "Sehrgar"
         members.append({
+            "uid": r["user_id"],
             "name": first_word[:20],
             "points": r["pts"],
-            "me": (r["user_id"] == int(user_id))
+            "me": (r["user_id"] == int(user_id)),
+            "active": r["pts"] >= ACTIVE_MIN_POINTS
         })
 
     return {
