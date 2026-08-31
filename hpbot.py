@@ -560,6 +560,11 @@ def register(dp, bot, app, cfg):
             if not text or len(text) > 1000:
                 return cors(web.json_response({"error": "invalid message"}, status=400))
                 
+            try:
+                await hpcup.touch_user(uid, user.get("first_name"), user.get("username"))
+            except Exception:
+                pass
+                
             await hpcup.post_chat_message(house, uid, text)
             messages = await hpcup.get_chat_messages(house, 50)
             return cors(web.json_response({"ok": True, "messages": messages}))
