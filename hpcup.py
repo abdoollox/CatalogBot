@@ -1119,14 +1119,12 @@ async def counts():
     return await asyncio.to_thread(_counts)
 
 
-import datetime
-
 async def get_user_tasks(user_id):
     season = await current_season()
     if not season:
         return {"tasks": []}
         
-    today_str = datetime.date.today().isoformat()
+    today_str = today_tk()
     
     def _fetch():
         res = []
