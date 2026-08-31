@@ -303,9 +303,10 @@ async def api_leaderboard(request):
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
 
     first_name = user.get("first_name")
-    if first_name:
+    username = user.get("username")
+    if first_name or username:
         try:
-            await hpcup.touch_user(user["id"], first_name)
+            await hpcup.touch_user(user["id"], first_name, username)
         except Exception:
             pass
 

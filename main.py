@@ -352,7 +352,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
 
     if message.from_user and message.from_user.first_name:
         try:
-            await hpcup.touch_user(message.from_user.id, message.from_user.first_name)
+            await hpcup.touch_user(message.from_user.id, message.from_user.first_name, message.from_user.username)
         except Exception:
             pass
     
@@ -645,7 +645,7 @@ async def handle_house(request):
             return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
         if user.get("first_name"):
             try:
-                await hpcup.touch_user(user["id"], user["first_name"])
+                await hpcup.touch_user(user["id"], user.get("first_name"), user.get("username"))
             except Exception:
                 pass
         return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
@@ -668,7 +668,7 @@ async def handle_house(request):
             return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
         if user.get("first_name"):
             try:
-                await hpcup.touch_user(user["id"], user["first_name"])
+                await hpcup.touch_user(user["id"], user.get("first_name"), user.get("username"))
             except Exception:
                 pass
         return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
@@ -699,7 +699,7 @@ async def handle_house(request):
     else:
         if user.get("first_name"):
             try:
-                await hpcup.touch_user(user["id"], user["first_name"])
+                await hpcup.touch_user(user["id"], user.get("first_name"), user.get("username"))
             except Exception:
                 pass
 

@@ -206,14 +206,18 @@ def _houses_from_json(path):
                 best_time, best_house = when, name
         nick = (rec.get("nickname") or "").strip()
         first_name = nick.split()[0] if nick else None
+        uname = (rec.get("username") or "").replace("@", "").strip()
+        if uname.lower() in ("yo'q", "none", ""):
+            uname = None
+            
         if best_house:
             try:
-                out.append((int(uid), best_house, best_time, first_name))
+                out.append((int(uid), best_house, best_time, first_name, uname))
             except (TypeError, ValueError):
                 continue
-        elif first_name:
+        elif first_name or uname:
             try:
-                out.append((int(uid), None, None, first_name))
+                out.append((int(uid), None, None, first_name, uname))
             except (TypeError, ValueError):
                 continue
     return out
@@ -227,6 +231,8 @@ def _migrate(conn, users_json):
     user_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
     if "first_name" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+    if "username" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
 
     # 1) Eski `points.house` dan foydalanuvchilarni tiklaymiz. Ustun
     #    tushirilgandan keyin bu ma'lumot yo'qoladi, shuning uchun avval.
@@ -240,14 +246,15 @@ def _migrate(conn, users_json):
 
     # 2) users_db.json - fakultet va ismlarning manbai (eng oxirgi saralanish).
     #    Yuqoridagi qadam qo'ygan qiymatni ham to'g'rilaydi.
-    for uid, house, when, first_name in _houses_from_json(users_json):
+    for uid, house, when, first_name, uname in _houses_from_json(users_json):
         conn.execute(
-            "INSERT INTO users (user_id, first_name, house, sorted_at, created_at) VALUES (?,?,?,?,?) "
+            "INSERT INTO users (user_id, first_name, username, house, sorted_at, created_at) VALUES (?,?,?,?,?,?) "
             "ON CONFLICT(user_id) DO UPDATE SET "
             "house=COALESCE(excluded.house, users.house), "
             "sorted_at=COALESCE(users.sorted_at, excluded.sorted_at), "
-            "first_name=COALESCE(excluded.first_name, users.first_name)",
-            (uid, first_name, house, when, stamp))
+            "first_name=COALESCE(excluded.first_name, users.first_name), "
+            "username=COALESCE(excluded.username, users.username)",
+            (uid, first_name, uname, house, when, stamp))
 
     # 3) points jadvalini 2.0/3.0 ko'rinishiga keltiramiz: `house` ustuni olib
     #    tashlanadi va users ga tashqi kalit qo'shiladi. Jadval qayta
@@ -349,27 +356,36 @@ async def init(users_json="/app/users_db.json"):
 
 # ---------------------------------------------------------------- foydalanuvchi
 
-def _touch_user(conn, user_id, first_name=None):
+def _touch_user(conn, user_id, first_name=None, username=None):
     stamp = _utc_iso(now_tk())
     clean_name = first_name.strip()[:32].split()[0] if first_name else None
-    if clean_name:
+    
+    clean_uname = None
+    if username:
+        clean_uname = username.replace("@", "").strip()
+        if clean_uname.lower() in ("yo'q", "none", ""):
+            clean_uname = None
+
+    if clean_name or clean_uname:
         conn.execute(
-            "INSERT INTO users (user_id, first_name, house, sorted_at, created_at) "
-            "VALUES (?,?,NULL,NULL,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET first_name=excluded.first_name",
-            (int(user_id), clean_name, stamp))
+            "INSERT INTO users (user_id, first_name, username, house, sorted_at, created_at) "
+            "VALUES (?,?,?,NULL,NULL,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "first_name=COALESCE(excluded.first_name, users.first_name), "
+            "username=COALESCE(excluded.username, users.username)",
+            (int(user_id), clean_name, clean_uname, stamp))
     else:
         conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, first_name, house, sorted_at, created_at) "
-            "VALUES (?,NULL,NULL,NULL,?)", (int(user_id), stamp))
+            "INSERT OR IGNORE INTO users (user_id, first_name, username, house, sorted_at, created_at) "
+            "VALUES (?,NULL,NULL,NULL,NULL,?)", (int(user_id), stamp))
 
 
-async def touch_user(user_id, first_name=None):
+async def touch_user(user_id, first_name=None, username=None):
     """Foydalanuvchini ro'yxatga oladi yoki ismini yangilaydi."""
     def _do():
         conn = _connect()
         try:
-            _touch_user(conn, user_id, first_name)
+            _touch_user(conn, user_id, first_name, username)
             conn.commit()
         finally:
             conn.close()
@@ -690,7 +706,7 @@ def _hall(conn, house, user_id, season_id):
         "SELECT COUNT(*) FROM users WHERE house=?", (house,)).fetchone()[0]
 
     rows = conn.execute(
-        "SELECT u.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, COALESCE(SUM(p.points), 0) AS pts "
+        "SELECT u.user_id, u.username, COALESCE(u.first_name, 'Sehrgar') AS name, COALESCE(SUM(p.points), 0) AS pts "
         "FROM users u "
         "LEFT JOIN points p ON u.user_id=p.user_id AND p.season_id=? "
         "WHERE u.house=? "
@@ -705,6 +721,7 @@ def _hall(conn, house, user_id, season_id):
         first_word = raw_name.split()[0] if raw_name else "Sehrgar"
         members.append({
             "uid": r["user_id"],
+            "username": r["username"],
             "name": first_word[:20],
             "points": r["pts"],
             "me": (r["user_id"] == int(user_id)),
