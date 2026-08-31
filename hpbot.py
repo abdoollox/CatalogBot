@@ -577,5 +577,87 @@ def register(dp, bot, app, cfg):
             return cors(web.json_response({"ok": True, "messages": messages}))
 
     app.router.add_route("*", "/api/chat", api_chat)
+
+    async def api_chess_create(request):
+        web = _web()
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS": return cors(web.Response(status=204))
+        try: body = await request.json() if request.method == "POST" else None
+        except Exception: body = None
+        user = _cfg["verify_init_data"](_init_data_from(request, body))
+        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
+        uid = user["id"]
+        time_control = int((body and body.get("time_control")) or 300)
+        game_id = await hpcup.chess_create_game(uid, time_control)
+        return cors(web.json_response({"ok": True, "game_id": game_id}))
+
+    async def api_chess_join(request):
+        web = _web()
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS": return cors(web.Response(status=204))
+        try: body = await request.json() if request.method == "POST" else None
+        except Exception: body = None
+        user = _cfg["verify_init_data"](_init_data_from(request, body))
+        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
+        uid = user["id"]
+        game_id = (body and body.get("game_id")) or ""
+        res = await hpcup.chess_join_game(game_id, uid)
+        return cors(web.json_response(res))
+
+    async def api_chess_state(request):
+        web = _web()
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS": return cors(web.Response(status=204))
+        user = _cfg["verify_init_data"](_init_data_from(request, None))
+        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
+        game_id = request.query.get("game_id", "")
+        game = await hpcup.chess_get_game(game_id)
+        if not game: return cors(web.json_response({"error": "not_found"}, status=404))
+        return cors(web.json_response({"ok": True, "game": game}))
+
+    async def api_chess_move(request):
+        web = _web()
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS": return cors(web.Response(status=204))
+        try: body = await request.json() if request.method == "POST" else None
+        except Exception: body = None
+        user = _cfg["verify_init_data"](_init_data_from(request, body))
+        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
+        uid = user["id"]
+        game_id = body.get("game_id")
+        fen = body.get("fen")
+        turn = body.get("turn")
+        white_time = int(body.get("white_time", 300))
+        black_time = int(body.get("black_time", 300))
+        await hpcup.chess_make_move(game_id, uid, fen, turn, white_time, black_time)
+        return cors(web.json_response({"ok": True}))
+
+    async def api_chess_finish(request):
+        web = _web()
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS": return cors(web.Response(status=204))
+        try: body = await request.json() if request.method == "POST" else None
+        except Exception: body = None
+        user = _cfg["verify_init_data"](_init_data_from(request, body))
+        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
+        uid = user["id"]
+        game_id = body.get("game_id")
+        winner_uid = body.get("winner_uid")
+        reason = body.get("reason", "checkmate")
+        if game_id:
+            await hpcup.chess_finish_game(game_id, uid, winner_uid, reason)
+        if winner_uid and winner_uid == uid:
+            try:
+                await hpcup.award(uid, "chess_win", game_id or "bot", 10)
+            except Exception:
+                pass
+        return cors(web.json_response({"ok": True}))
+
+    app.router.add_route("*", "/api/chess/create", api_chess_create)
+    app.router.add_route("*", "/api/chess/join", api_chess_join)
+    app.router.add_route("*", "/api/chess/state", api_chess_state)
+    app.router.add_route("*", "/api/chess/move", api_chess_move)
+    app.router.add_route("*", "/api/chess/finish", api_chess_finish)
+
     logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",
                  "yoqilgan" if ANNOUNCE else "o'chirilgan")

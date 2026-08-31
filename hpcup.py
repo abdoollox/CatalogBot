@@ -131,6 +131,21 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS chess_games (
+    id           TEXT PRIMARY KEY,
+    white_uid    INTEGER NOT NULL,
+    black_uid    INTEGER,
+    fen          TEXT NOT NULL,
+    turn         TEXT NOT NULL DEFAULT 'w',
+    status       TEXT NOT NULL DEFAULT 'waiting',
+    winner_uid   INTEGER,
+    win_reason   TEXT,
+    white_time   INTEGER NOT NULL DEFAULT 300,
+    black_time   INTEGER NOT NULL DEFAULT 300,
+    last_move_at TEXT,
+    created_at   TEXT NOT NULL
+);
 """
 
 RESORT_KEY = "resort_until"
@@ -1276,6 +1291,120 @@ async def post_chat_message(house, user_id, message):
                 "VALUES (?,?,?,?)", (house, int(user_id), message.strip(), stamp)
             )
             conn.commit()
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chess_create_game(user_id, time_control=300):
+    def _do():
+        conn = _connect()
+        try:
+            import secrets
+            game_id = secrets.token_hex(4)
+            stamp = _utc_iso(now_tk())
+            initial_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+            conn.execute(
+                "INSERT INTO chess_games (id, white_uid, black_uid, fen, turn, status, white_time, black_time, last_move_at, created_at) "
+                "VALUES (?, ?, NULL, ?, 'w', 'waiting', ?, ?, ?, ?)",
+                (game_id, int(user_id), initial_fen, time_control, time_control, stamp, stamp)
+            )
+            conn.commit()
+            return game_id
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chess_join_game(game_id, user_id):
+    def _do():
+        conn = _connect()
+        try:
+            row = conn.execute("SELECT * FROM chess_games WHERE id=?", (game_id,)).fetchone()
+            if not row:
+                return {"ok": False, "error": "not_found"}
+            if row["status"] != "waiting":
+                if row["white_uid"] == int(user_id) or row["black_uid"] == int(user_id):
+                    return {"ok": True, "game_id": game_id}
+                return {"ok": False, "error": "game_already_started"}
+            if row["white_uid"] == int(user_id):
+                return {"ok": True, "game_id": game_id}
+            
+            stamp = _utc_iso(now_tk())
+            conn.execute(
+                "UPDATE chess_games SET black_uid=?, status='active', last_move_at=? WHERE id=?",
+                (int(user_id), stamp, game_id)
+            )
+            conn.commit()
+            return {"ok": True, "game_id": game_id}
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chess_get_game(game_id):
+    def _do():
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT g.*, "
+                "COALESCE(uw.first_name, 'Sehrgar') AS white_name, uw.house AS white_house, "
+                "COALESCE(ub.first_name, 'Sehrgar') AS black_name, ub.house AS black_house "
+                "FROM chess_games g "
+                "LEFT JOIN users uw ON uw.user_id = g.white_uid "
+                "LEFT JOIN users ub ON ub.user_id = g.black_uid "
+                "WHERE g.id=?", (game_id,)).fetchone()
+            if not row:
+                return None
+            return {
+                "id": row["id"],
+                "white_uid": row["white_uid"],
+                "white_name": row["white_name"],
+                "white_house": row["white_house"],
+                "black_uid": row["black_uid"],
+                "black_name": row["black_name"],
+                "black_house": row["black_house"],
+                "fen": row["fen"],
+                "turn": row["turn"],
+                "status": row["status"],
+                "winner_uid": row["winner_uid"],
+                "win_reason": row["win_reason"],
+                "white_time": row["white_time"],
+                "black_time": row["black_time"],
+                "last_move_at": row["last_move_at"],
+                "created_at": row["created_at"]
+            }
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chess_make_move(game_id, user_id, fen, next_turn, white_time, black_time):
+    def _do():
+        conn = _connect()
+        try:
+            stamp = _utc_iso(now_tk())
+            conn.execute(
+                "UPDATE chess_games SET fen=?, turn=?, white_time=?, black_time=?, last_move_at=? WHERE id=?",
+                (fen, next_turn, white_time, black_time, stamp, game_id)
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chess_finish_game(game_id, user_id, winner_uid, win_reason):
+    def _do():
+        conn = _connect()
+        try:
+            conn.execute(
+                "UPDATE chess_games SET status='finished', winner_uid=?, win_reason=? WHERE id=?",
+                (winner_uid, win_reason, game_id)
+            )
+            conn.commit()
+            return True
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
