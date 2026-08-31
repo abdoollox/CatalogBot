@@ -488,11 +488,10 @@ def register(dp, bot, app, cfg):
         except Exception:
             body = None
 
-        raw = _init_data_from(request, body)
-        parsed = _cfg["parse_init_data"](raw)
-        uid = _cfg["get_uid"](parsed)
-        if not uid:
+        user = _cfg["verify_init_data"](_init_data_from(request, body))
+        if not user:
             return cors(web.json_response({"error": "unauthorized"}, status=403))
+        uid = user["id"]
 
         tasks_data = await hpcup.get_user_tasks(uid)
         return cors(web.json_response(tasks_data))
@@ -508,11 +507,10 @@ def register(dp, bot, app, cfg):
         except Exception:
             return cors(web.json_response({"error": "invalid json"}, status=400))
             
-        raw = _init_data_from(request, body)
-        parsed = _cfg["parse_init_data"](raw)
-        uid = _cfg["get_uid"](parsed)
-        if not uid:
+        user = _cfg["verify_init_data"](_init_data_from(request, body))
+        if not user:
             return cors(web.json_response({"error": "unauthorized"}, status=403))
+        uid = user["id"]
             
         task_type = body.get("task_type")
         question_id = body.get("question_id")
