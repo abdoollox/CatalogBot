@@ -528,11 +528,17 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
 
     async def api_chat(request):
+        web = _web()
         cors = _cfg["cors"]
         if request.method == "OPTIONS":
             return cors(web.Response(status=204))
             
-        user = _cfg["verify_init_data"](_init_data_from(request, None))
+        try:
+            body = await request.json() if request.method == "POST" else None
+        except Exception:
+            body = None
+
+        user = _cfg["verify_init_data"](_init_data_from(request, body))
         if not user:
             return cors(web.json_response({"error": "unauthorized"}, status=403))
             
@@ -547,9 +553,7 @@ def register(dp, bot, app, cfg):
             return cors(web.json_response({"ok": True, "messages": messages}))
             
         elif request.method == "POST":
-            try:
-                body = await request.json()
-            except Exception:
+            if not body:
                 return cors(web.json_response({"error": "invalid json"}, status=400))
                 
             text = (body.get("text") or "").strip()
