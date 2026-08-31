@@ -158,23 +158,13 @@ async def send_daily(bot, user_id, message=None):
 # ---------------------------------------------------------- reyting matni
 
 def format_table(table):
-    lines = ["🏆 <b>Xogvarts kubogi</b>\n"]
-    shown = [x for x in table if x["active_members"] > 0]
-    if not shown:
-        lines.append("Bu haftada hali hech kim %d ball to'plamagan."
-                     % hpcup.ACTIVE_MIN_POINTS)
-        return "\n".join(lines)
-
+    lines = ["📊 <b>Reyting</b>\n"]
     place = 0
-    for row in shown:
+    for row in table:
         name = HOUSE_NAME.get(row["house"], row["house"])
-        if row["qualified"]:
-            place += 1
-            lines.append("<b>%d. %s</b> — %.1f o'rtacha ball (%d a'zo)" % (
-                place, name, row["avg_points"], row["active_members"]))
-        else:
-            lines.append("· %s — %d / %d a'zo" % (
-                name, row["active_members"], hpcup.MIN_ACTIVE_MEMBERS))
+        place += 1
+        lines.append("<b>%d. %s</b> — %d ball (%d a'zo)" % (
+            place, name, row["total_points"], row["active_members"]))
     lines.append("\n<i>Faol a'zo — mavsumda kamida %d ball to'plagan foydalanuvchi.</i>"
                  % hpcup.ACTIVE_MIN_POINTS)
     return "\n".join(lines)
@@ -189,9 +179,7 @@ async def _announce(bot, result):
     if winner:
         head = "🏆 <b>Hafta g'olibi — %s!</b>\n" % HOUSE_NAME.get(winner, winner)
     else:
-        head = ("🏆 <b>Hafta yakunlandi</b>\n\nBu hafta g'olib aniqlanmadi — "
-                "hech bir fakultet %d faol a'zo chegarasidan o'tmadi.\n"
-                % hpcup.MIN_ACTIVE_MEMBERS)
+        head = "🏆 <b>Hafta yakunlandi</b>\n\nBu hafta g'olib aniqlanmadi.\n"
     try:
         await bot.send_message(_cfg["channel_id"], head + "\n" +
                                format_table(result["table"]), parse_mode="HTML")
@@ -328,7 +316,7 @@ async def api_leaderboard(request):
     allowed, until = await hpcup.can_resort(user["id"])
     exam_pending = await hpcup.exam_pending(user["id"], season["id"])
     hall = await hpcup.hall(stats.get("house"), user["id"], season["id"])
-    feed = await hpcup.feed(limit=5)
+    feed = await hpcup.feed(limit=50)
 
     me = {
         "house": stats["house"],
@@ -489,6 +477,55 @@ def register(dp, bot, app, cfg):
         table = await hpcup.leaderboard(season["id"])
         await message.answer(format_table(table), parse_mode="HTML")
 
+    async def api_tasks(request):
+        web = _web()
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS":
+            return cors(web.Response(status=204))
+
+        try:
+            body = await request.json() if request.method == "POST" else None
+        except Exception:
+            body = None
+
+        raw = _extract_init_data(request, body)
+        parsed = _cfg["parse_init_data"](raw)
+        uid = _cfg["get_uid"](parsed)
+        if not uid:
+            return cors(web.json_response({"error": "unauthorized"}, status=403))
+
+        tasks_data = await hpcup.get_user_tasks(uid)
+        return cors(web.json_response(tasks_data))
+
+    async def api_submit_task(request):
+        web = _web()
+        cors = _cfg["cors"]
+        if request.method == "OPTIONS":
+            return cors(web.Response(status=204))
+            
+        try:
+            body = await request.json()
+        except Exception:
+            return cors(web.json_response({"error": "invalid json"}, status=400))
+            
+        raw = _extract_init_data(request, body)
+        parsed = _cfg["parse_init_data"](raw)
+        uid = _cfg["get_uid"](parsed)
+        if not uid:
+            return cors(web.json_response({"error": "unauthorized"}, status=403))
+            
+        task_type = body.get("task_type")
+        question_id = body.get("question_id")
+        selected_index = body.get("selected_index")
+        
+        if not all([task_type, str(question_id).isdigit(), str(selected_index).isdigit()]):
+            return cors(web.json_response({"error": "invalid parameters"}, status=400))
+            
+        res = await hpcup.submit_task_answer(uid, task_type, question_id, selected_index)
+        return cors(web.json_response(res))
+
+    app.router.add_route("*", "/api/tasks", api_tasks)
+    app.router.add_route("*", "/api/tasks/submit", api_submit_task)
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
     logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",
                  "yoqilgan" if ANNOUNCE else "o'chirilgan")

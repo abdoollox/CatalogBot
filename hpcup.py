@@ -41,7 +41,6 @@ MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_FILM_QUIZ * FILM_PARTS * QUIZ_PER_FILM
               + PTS_DAILY * DAILY_PER_WEEK)          # = 350
 
-MIN_ACTIVE_MEMBERS = 5    # fakultet g'olib bo'lishi uchun minimal faol a'zo
 ACTIVE_MIN_POINTS = 30    # foydalanuvchi "faol" hisoblanishi uchun kerak ball
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")
@@ -575,7 +574,7 @@ SELECT house,
        CAST(SUM(pts) AS REAL) / COUNT(*) AS avg_points
 FROM active
 GROUP BY house
-ORDER BY avg_points DESC
+ORDER BY total_points DESC
 """
 
 
@@ -587,26 +586,20 @@ def _leaderboard(season_id):
         out = []
         for r in rows:
             active = r["active_members"]
-            qualified = active >= MIN_ACTIVE_MEMBERS
             item = {
                 "house": r["house"],
                 "total_points": r["total_points"],
                 "active_members": active,
                 "avg_points": round(r["avg_points"], 1),
-                "qualified": qualified,
+                "qualified": True,
             }
-            if not qualified:
-                item["needed"] = MIN_ACTIVE_MEMBERS - active
             out.append(item)
             seen[r["house"]] = True
 
-        # Ball to'plamagan fakultetlar ham ko'rsatiladi - qum soati bo'sh
-        # turadi, lekin jadvaldan yo'qolib qolmaydi.
         for h in HOUSES:
             if h not in seen:
                 out.append({"house": h, "total_points": 0, "active_members": 0,
-                            "avg_points": 0.0, "qualified": False,
-                            "needed": MIN_ACTIVE_MEMBERS})
+                            "avg_points": 0.0, "qualified": True})
         return out
     finally:
         conn.close()
@@ -735,7 +728,7 @@ async def hall(house, user_id, season_id):
     return await asyncio.to_thread(_do)
 
 
-def _feed(conn, limit=5):
+def _feed(conn, limit=50):
     """So'nggi saralanishlar tasmasi (5 tagacha, yangisidan eskisiga)."""
     rows = conn.execute(
         "SELECT user_id, COALESCE(first_name, 'Sehrgar') AS name, house, sorted_at "
@@ -762,7 +755,7 @@ def _feed(conn, limit=5):
     return feed_list
 
 
-async def feed(limit=5):
+async def feed(limit=50):
     """Jonli tasma (so'nggi saralanishlar)."""
     def _do():
         conn = _connect()
@@ -1124,3 +1117,102 @@ def _counts():
 async def counts():
     """Diagnostika uchun jadval hajmlari."""
     return await asyncio.to_thread(_counts)
+
+
+import datetime
+
+async def get_user_tasks(user_id):
+    season = await current_season()
+    if not season:
+        return {"tasks": []}
+        
+    today_str = datetime.date.today().isoformat()
+    
+    def _fetch():
+        res = []
+        conn = _connect()
+        try:
+            ans = conn.execute(
+                "SELECT 1 FROM answers WHERE user_id=? AND season_id=? AND question_id IN (SELECT question_id FROM daily_schedule WHERE date=?)",
+                (int(user_id), season["id"], today_str)).fetchone()
+            has_daily = not ans
+            
+            opened_films = conn.execute(
+                "SELECT source_ref FROM points WHERE user_id=? AND season_id=? AND source_type='film_open'",
+                (int(user_id), season["id"])).fetchall()
+            opened_refs = [row["source_ref"] for row in opened_films]
+        finally:
+            conn.close()
+            
+        if has_daily:
+            dq = _daily_question(today_str)
+            if dq:
+                res.append({
+                    "id": "daily",
+                    "type": "daily",
+                    "title": "Kunlik savol",
+                    "questions": [dq]
+                })
+                
+        for mov_id in opened_refs:
+            film_part = 0
+            if mov_id.startswith("hp"):
+                try:
+                    film_part = int(mov_id[2:])
+                except:
+                    pass
+            if film_part:
+                qs = _pick_film_questions(user_id, season["id"], film_part)
+                if qs:
+                    res.append({
+                        "id": f"quiz_{mov_id}",
+                        "type": "film_quiz",
+                        "film_id": mov_id,
+                        "title": f"Garri Potter {film_part}-qismi bo'yicha imtihon",
+                        "questions": qs
+                    })
+        return res
+
+    tasks = await asyncio.to_thread(_fetch)
+    return {"tasks": tasks}
+
+
+async def submit_task_answer(user_id, task_type, question_id, selected_index):
+    season = await current_season()
+    if not season:
+        return {"ok": False, "error": "No active season"}
+        
+    def _check():
+        conn = _connect()
+        try:
+            q = conn.execute("SELECT correct_index FROM questions WHERE id=?", (int(question_id),)).fetchone()
+            if not q:
+                return {"ok": False, "error": "Question not found"}
+                
+            ans = conn.execute("SELECT 1 FROM answers WHERE user_id=? AND season_id=? AND question_id=?", 
+                               (int(user_id), season["id"], int(question_id))).fetchone()
+            if ans:
+                return {"ok": False, "error": "Already answered"}
+                
+            is_correct = (int(selected_index) == q["correct_index"])
+            return {"ok": True, "correct": is_correct, "correct_index": q["correct_index"]}
+        finally:
+            conn.close()
+
+    res = await asyncio.to_thread(_check)
+    if not res["ok"]:
+        return res
+        
+    fresh = await record_answer(user_id, season["id"], question_id, res["correct"])
+    pts = 0
+    if res["correct"] and fresh:
+        if task_type == "daily":
+            pts = PTS_DAILY
+        elif task_type == "film_quiz":
+            pts = PTS_FILM_QUIZ
+            
+        if pts > 0:
+            await award(user_id, task_type, str(question_id), pts)
+            
+    res["points"] = pts
+    return res
