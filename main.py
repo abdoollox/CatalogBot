@@ -54,7 +54,7 @@ MOVIES_DB = {
             "caption": "<b>1. Harry Potter and the Philosopher's Stone</b>"
         },
         "uz": {
-            "message_id": 26,
+            "message_id": 40,
             "caption": "<b>1. Garri Potter va Hikmatlar Toshi</b>"
         },
         "ru": {
