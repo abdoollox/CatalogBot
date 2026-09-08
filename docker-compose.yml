@@ -1,0 +1,42 @@
+services:
+  bot:
+    build: .
+    image: catalogbot:new
+    container_name: tg_bot_1
+    restart: unless-stopped
+    env_file: .env
+
+    # WebApp uchun API. Faqat lokalga bog'lanadi - tashqariga nginx orqali
+    # chiqadi (bot.tizimshunos.uz). Marvel boti 8081 da, bu 8080 da.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    volumes:
+      # Baza va statistika konteynerdan tashqarida yashaydi - yangilanish
+      # ularni o'chirmaydi.
+      - ./data:/data
+      - ./data/users_db.json:/app/users_db.json
+      - ./google_key.json:/app/google_key.json:ro
+
+    # Serverda 961 MB xotira va 5 ta konteyner bor. Bot odatda ~150 MB
+    # ishlatadi; 384 MB zaxira bilan yetadi va bir kunda butun xotirani
+    # yeb qo'yishiga yo'l qo'ymaydi.
+    mem_limit: 384m
+
+    # Bot har bir so'rovni yozib boradi va bu fayllar cheksiz o'sadi.
+    # Uchta 10 MB lik fayldan ortig'i saqlanmaydi (jami 30 MB).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Bot tirikligini har daqiqada tekshiradi: ichki veb-server javob
+    # beryaptimi. Faqat holatni belgilaydi, o'zi qayta ishga tushirmaydi.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
