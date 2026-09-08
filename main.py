@@ -21,6 +21,7 @@ import urllib.parse
 import hmac
 import hashlib
 import sheets
+import catalog
 import hpcup
 import hpbot
 from datetime import datetime
@@ -46,176 +47,12 @@ dp = Dispatcher()
 db_lock = asyncio.Lock()
 USERS_FILE = "users_db.json"
 
-# --- QAT'IY MA'LUMOTLAR BAZASI ---
-MOVIES_DB = {
-    "hp1": {
-        "en": {
-            "message_id": 10,
-            "caption": "<b>1. Harry Potter and the Philosopher's Stone</b>"
-        },
-        "uz": {
-            "message_id": 40,
-            "caption": "<b>1. Garri Potter va Hikmatlar Toshi</b>"
-        },
-        "ru": {
-            "message_id": 18,
-            "caption": "<b>1. Гарри Поттер и Философский Камень</b>"
-        }
-    },
-    
-    "hp2": {
-        "en": {
-            "message_id": 11,
-            "caption": "<b>2. Harry Potter and the Chamber of Secrets</b>"
-        },
-        "uz": {
-            "message_id": 27,
-            "caption": "<b>2. Garri Potter va Maxfiy Hujra</b>"
-        },
-        "ru": {
-            "message_id": 19,
-            "caption": "<b>2. Гарри Поттер и Тайная Kомнатa</b>"
-        }
-    },
-    
-    "hp3": {
-        "en": {
-            "message_id": 12,
-            "caption": "<b>3. Harry Potter and the Prisioner of Azkaban</b>"
-        },
-        "uz": {
-            "message_id": 28,
-            "caption": "<b>3. Garri Potter va Azkaban Maxbusi</b>"
-        },
-        "ru": {
-            "message_id": 20,
-            "caption": "<b>3. Гарри Поттер и Узник Азкабана</b>"
-        }
-    },
-    
-    "hp4": {
-        "en": {
-            "message_id": 13,
-            "caption": "<b>4. Harry Potter and the Goblet of Fire</b>"
-        },
-        "uz": {
-            "message_id": 29,
-            "caption": "<b>4. Garri Potter va Alanga Kubogi</b>"
-        },
-        "ru": {
-            "message_id": 21,
-            "caption": "<b>4. Гарри Поттер и Кубок Огня</b>"
-        }
-    },
-    
-    "hp5": {
-        "en": {
-            "message_id": 14,
-            "caption": "<b>5. Harry Potter and the Order of the Phoenix</b>"
-        },
-        "uz": {
-            "message_id": 30,
-            "caption": "<b>5. Garri Potter va Feniks Jamiyati</b>"
-        },
-        "ru": {
-            "message_id": 22,
-            "caption": "<b>5. Гарри Поттер и Орден Феникса</b>"
-        }
-    },
-    
-    "hp6": {
-        "en": {
-            "message_id": 15,
-            "caption": "<b>6. Harry Potter and the Half-Blood Prince</b>"
-        },
-        "uz": {
-            "message_id": 31,
-            "caption": "<b>6. Garri Potter va Tilsim Shaxzodasi</b>"
-        },
-        "ru": {
-            "message_id": 23,
-            "caption": "<b>6. Гарри Поттер и Принц Полукровка</b>"
-        }
-    },
+# --- FILMLAR KATALOGI ---
+# Ro'yxatning o'zi catalog.py da. Uni shu yerda takrorlamaymiz: ilgari
+# ayni ro'yxat WebApp ichida ham yozilgan edi va ikkalasi bir-biridan
+# uzoqlashib ketish xavfi bor edi.
+MOVIES_DB = catalog.FILMS
 
-    "hp7": {
-        "en": {
-            "message_id": 16,
-            "caption": "<b>7. Harry Potter and the Deathly Hallows Part 1</b>"
-        },
-        "uz": {
-            "message_id": 32,
-            "caption": "<b>7. Garri Potter va Ajal Tuhfasi 1</b>"
-        },
-        "ru": {
-            "message_id": 24,
-            "caption": "<b>7. Гарри Поттер и Дары Смерти Часть I</b>"
-        }
-    },
-    
-    "hp8": {
-        "en": {
-            "message_id": 17,
-            "caption": "<b>8. Harry Potter and the Deathly Hallows Part 2</b>"
-        },
-        "uz": {
-            "message_id": 33,
-            "caption": "<b>8. Garri Potter va Ajal Tuhfasi 2</b>"
-        },
-        "ru": {
-            "message_id": 25,
-            "caption": "<b>8. Гарри Поттер и Дары Смерти Часть II</b>"
-        }
-    },
-
-    "fb1": {
-        "en": {
-            "message_id": 37,
-            "caption": "<b>1. Fantastic Beasts and Where to Find Them</b>"
-        },
-        "uz": {
-            "message_id": 34,
-            "caption": "<b>1. Fantastik Maxluqlar</b>",
-            "vk_url": "https://vkvideo.ru/video-229969354_456239029?list=pykesy7vje26j5qv"
-        },
-        "ru": {
-            "message_id": 0,
-            "caption": "<b>1. Фантастические твари и где они обитают</b>"
-        }
-    },
-
-    "fb2": {
-        "en": {
-            "message_id": 38,
-            "caption": "<b>2. Fantastic Beasts: The Crimes of Grindelwald</b>"
-        },
-        "uz": {
-            "message_id": 35,
-            "caption": "<b>2. Fantastik Maxluqlar: Grindelvaldning jinoyatlari</b>",
-            "vk_url": "https://vkvideo.ru/video-229969354_456239030?list=6lwnawgzdaa2jnwg"
-        },
-        "ru": {
-            "message_id": 0,
-            "caption": "<b>2. Фантастические твари: Преступления Грин-де-Вальда</b>"
-        }
-    },
-
-    "fb3": {
-        "en": {
-            "message_id": 39,
-            "caption": "<b>3. Fantastic Beasts: The Secrets of Dumbledore</b>"
-        },
-        "uz": {
-            "message_id": 36,
-            "caption": "<b>3. Fantastik Maxluqlar: Dambldor sirlari</b>",
-            "vk_url": "https://vkvideo.ru/video-229969354_456239031?list=mrfufjbjfcc3gujn"
-        },
-        "ru": {
-            "message_id": 0,
-            "caption": "<b>3. Фантастические твари: Тайны Дамблдора</b>"
-        }
-    }
-}
 
 # --- MIJOZ HARAKATLARINI BAZAGA YOZISH ---
 async def log_user_action(user: types.User, payload: str):
@@ -375,8 +212,8 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Kino): '{movie_key}' bazada topilmadi.\nBazadagi mavjud kinolar: {list(MOVIES_DB.keys())}")
                 return
                 
-            if lang not in MOVIES_DB[movie_key]:
-                await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(MOVIES_DB[movie_key].keys())}")
+            if lang not in catalog.LANGS:
+                await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(catalog.LANGS)}")
                 return
                 
             movie_data = MOVIES_DB[movie_key][lang]
