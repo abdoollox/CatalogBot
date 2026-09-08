@@ -1,4 +1,5 @@
 import os
+import time
 import asyncio
 import logging
 
@@ -549,6 +550,149 @@ async def handle_house(request):
     return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
 
+# --- ILOVADAN TO'G'RIDAN-TO'G'RI YUBORISH ---
+# Ilgari WebApp filmni chuqur havola orqali ochardi: ilova YOPILIB, bot
+# chatiga o'tilardi. Natijada foydalanuvchi kubok, chat va shaxmatdan uzilib
+# qolardi va qaytish uchun ilovani boshqatdan ochishi kerak edi.
+#
+# Endi film shu API orqali yuboriladi - ilova ochiq qoladi. Tasdiq oynasi
+# o'rniga "bekor qilish" ishlatiladi: to'g'ri bosgan odam to'siqni sezmaydi,
+# xato bosgan esa 2 daqiqa ichida qaytarib oladi.
+
+UNDO_WINDOW = 120        # soniya - shu muddat ichida bekor qilinadi
+UNDO_LIMIT = 500         # xotirada saqlanadigan eng ko'p yozuv
+
+# (user_id, message_id) -> (vaqt, film_id, til). Xotirada, chunki bu
+# ma'lumot 2 daqiqadan keyin keraksiz - baza bilan band qilish ortiqcha.
+recent_sends = {}
+
+
+def remember_send(user_id, message_id, movie_key, lang):
+    if len(recent_sends) >= UNDO_LIMIT:
+        eng_eski = min(recent_sends, key=lambda k: recent_sends[k][0])
+        recent_sends.pop(eng_eski, None)
+    recent_sends[(user_id, message_id)] = (time.time(), movie_key, lang)
+
+
+def take_send(user_id, message_id):
+    """Bekor qilish mumkinmi - tekshiradi va ro'yxatdan chiqaradi."""
+    item = recent_sends.pop((user_id, message_id), None)
+    if not item:
+        return None
+    qachon, movie_key, lang = item
+    if time.time() - qachon > UNDO_WINDOW:
+        return None
+    return movie_key, lang
+
+
+async def api_send(request):
+    """WebApp so'ragan filmni foydalanuvchiga yuboradi."""
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+    if request.method != "POST":
+        return _cors(web.json_response({"ok": False, "error": "method"}, status=405))
+
+    try:
+        body = await request.json()
+    except Exception:
+        return _cors(web.json_response({"ok": False, "error": "bad_json"}, status=400))
+
+    data = verify_init_data(request.headers.get("X-Telegram-Init-Data", "")
+                            or str(body.get("initData", "")))
+    if not data:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    user = _WebUser(data)
+    movie_key = str(body.get("movie_id", ""))
+    lang = str(body.get("lang", "uz"))
+
+    movie_data = catalog.get(movie_key, lang)
+    if not movie_data:
+        return _cors(web.json_response({"ok": False, "error": "unknown"}, status=404))
+
+    # Bu tilda hali yuklanmagan. WebApp bunday kartani kulrang qilib
+    # ko'rsatadi, lekin eski ilova qolib ketishi mumkin - server ham tekshiradi.
+    if not catalog.is_ready(movie_key, lang):
+        return _cors(web.json_response({"ok": False, "error": "not_ready"}))
+
+    if not await is_subscribed(user.id):
+        # WebApp buni ko'rib, foydalanuvchini botga yo'naltiradi
+        return _cors(web.json_response({"ok": False, "error": "not_subscribed"}))
+
+    vk_url = movie_data.get("vk_url") if lang == "uz" else None
+    try:
+        sent = await bot.copy_message(
+            chat_id=user.id,
+            from_chat_id=DB_CHANNEL_ID,
+            message_id=movie_data["message_id"],
+            caption=movie_data["caption"],
+            parse_mode="HTML",
+            reply_markup=movie_delivery_keyboard(lang, vk_url),
+            protect_content=True,
+        )
+    except Exception as e:
+        # Eng ko'p uchraydigani: foydalanuvchi botni hech qachon ochmagan,
+        # shuning uchun bot unga yoza olmaydi.
+        logging.error("API orqali yuborishda xato (%s): %s", movie_key, e)
+        return _cors(web.json_response({"ok": False, "error": "send_failed"}))
+
+    await log_user_action(user, "%s_%s" % (movie_key, lang))
+    remember_send(user.id, sent.message_id, movie_key, lang)
+
+    # Xogvarts kubogi: kino ochilgani uchun ball. Film allaqachon yuborilgan,
+    # shuning uchun bu yerdagi xato foydalanuvchiga ta'sir qilmasligi kerak.
+    try:
+        await hpcup.touch_user(user.id, data.get("first_name"), data.get("username"))
+        if movie_key.startswith("hp"):
+            await hpbot.award_film_open(user, int(movie_key[2:]))
+    except Exception as cup_error:
+        logging.error("Kubok qismida xato: %s", cup_error)
+
+    return _cors(web.json_response({"ok": True,
+                                    "title": movie_data["title"],
+                                    "message_id": sent.message_id}))
+
+
+async def api_undo(request):
+    """Yangi yuborilgan filmni chatdan o'chiradi (xato bosganlar uchun)."""
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+    if request.method != "POST":
+        return _cors(web.json_response({"ok": False, "error": "method"}, status=405))
+
+    try:
+        body = await request.json()
+    except Exception:
+        return _cors(web.json_response({"ok": False, "error": "bad_json"}, status=400))
+
+    data = verify_init_data(request.headers.get("X-Telegram-Init-Data", "")
+                            or str(body.get("initData", "")))
+    if not data:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    user = _WebUser(data)
+    try:
+        message_id = int(body.get("message_id", 0))
+    except (TypeError, ValueError):
+        message_id = 0
+
+    # Ro'yxatda yo'q bo'lsa: muhlati o'tgan yoki bu xabar bu odamniki emas.
+    topildi = take_send(user.id, message_id)
+    if not topildi:
+        return _cors(web.json_response({"ok": False, "error": "expired"}))
+
+    movie_key, lang = topildi
+    try:
+        await bot.delete_message(user.id, message_id)
+    except Exception as e:
+        logging.info("Bekor qilishda o'chirib bo'lmadi (%s): %s", movie_key, e)
+        return _cors(web.json_response({"ok": False, "error": "delete_failed"}))
+
+    await log_user_action(user, "bekor_%s" % movie_key)
+    logging.info("Bekor qilindi: %s -> %s", user.id, movie_key)
+    return _cors(web.json_response({"ok": True, "movie_id": movie_key}))
+
+
 async def handle(request):
     return web.Response(text="Hogwarts Bot is Alive!")
 
@@ -558,6 +702,8 @@ async def main():
     app.router.add_get('/', handle)
     app.router.add_route('*', '/api/house', handle_house)
     app.router.add_route('*', '/api/profile', handle_house)
+    app.router.add_route('*', '/api/send', api_send)
+    app.router.add_route('*', '/api/undo', api_undo)
 
     # --- Xogvarts kubogi ---
     # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -
