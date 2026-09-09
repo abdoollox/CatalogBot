@@ -29,7 +29,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, CommandObject
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import (InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo,
+                          BotCommand)
 from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest
@@ -159,6 +160,50 @@ def movie_delivery_keyboard(lang: str = "uz", vk_url: str = None):
     return builder.as_markup()
     
 
+async def deliver_movie(user, movie_key, lang):
+    """Filmni foydalanuvchiga yuboradi. Uch joydan chaqiriladi:
+    chuqur havola (/start), WebApp (/api/send) va bot chatidagi qidiruv.
+
+    Ilgari bu mantiq ikki joyda nusxalangan edi; uchinchisi qo'shilganda
+    ular bir-biridan uzoqlashib ketishi aniq edi.
+
+    Qaytaradi: (sent_message, xato_kodi). Biri None bo'ladi.
+    """
+    data = catalog.get(movie_key, lang)
+    if not data:
+        return None, "unknown"
+    if not catalog.is_ready(movie_key, lang):
+        return None, "not_ready"
+
+    vk_url = data.get("vk_url") if lang == "uz" else None
+    try:
+        sent = await bot.copy_message(
+            chat_id=user.id,
+            from_chat_id=DB_CHANNEL_ID,
+            message_id=data["message_id"],
+            caption=data["caption"],
+            parse_mode="HTML",
+            reply_markup=movie_delivery_keyboard(lang, vk_url),
+            protect_content=True,
+        )
+    except Exception as e:
+        logging.error("Film yuborishda xato (%s_%s): %s", movie_key, lang, e)
+        return None, "send_failed"
+
+    await log_user_action(user, "%s_%s" % (movie_key, lang))
+
+    # Kubok qismidagi xato filmga ta'sir qilmasligi kerak - film allaqachon
+    # yuborilgan.
+    try:
+        await hpcup.set_lang(user.id, lang)
+        if movie_key.startswith("hp"):
+            await hpbot.award_film_open(user, int(movie_key[2:]))
+    except Exception as cup_error:
+        logging.error("Kubok qismida xato: %s", cup_error)
+
+    return sent, None
+
+
 async def is_subscribed(user_id):
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
@@ -217,37 +262,11 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(catalog.LANGS)}")
                 return
                 
-            movie_data = MOVIES_DB[movie_key][lang]
-            
-            if movie_data.get("message_id", 0) == 0:
+            sent, xato = await deliver_movie(message.from_user, movie_key, lang)
+            if xato == "not_ready":
                 await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
-                return
-
-            # Xavfsiz tizim: Mijoz harakatini qayd etish
-            await log_user_action(message.from_user, payload_clean)
-
-            vk_url = movie_data.get("vk_url") if lang == "uz" else None
-
-            # Asosiy yuborish qismi
-            await bot.copy_message(
-                chat_id=message.from_user.id,
-                from_chat_id=DB_CHANNEL_ID,
-                message_id=movie_data["message_id"],
-                caption=movie_data["caption"], 
-                parse_mode="HTML",
-                reply_markup=movie_delivery_keyboard(lang, vk_url),
-                protect_content=True
-            )
-
-            # Xogvarts kubogi: kino ochilgani uchun ball (agar fakulteti bo'lsa).
-            # Kinoning o'zi allaqachon yuborilgan - bu yerdagi xato
-            # foydalanuvchiga ta'sir qilmasligi kerak.
-            try:
-                if movie_key.startswith("hp"):
-                    film_part = int(movie_key[2:])
-                    await hpbot.award_film_open(message.from_user, film_part)
-            except Exception as cup_error:
-                logging.error("Kubok qismida xato: %s", cup_error)
+            elif xato:
+                await message.answer("⚠️ Filmni yuborib bo'lmadi. Birozdan keyin urinib ko'ring.")
 
         except Exception as e:
             logging.error(f"Kritik API xatosi: {e}")
@@ -338,6 +357,143 @@ async def check_sub_handler(callback: types.CallbackQuery):
         await callback.answer()
     else:
         await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
+
+# --- BOT CHATIDA FILM QIDIRISH ---
+# Ilgari botga biror narsa yozilsa u UMUMAN javob bermasdi. Foydalanuvchi
+# filmni topish uchun WebApp ni ochishga majbur edi.
+
+QIDIRUV = {
+    "uz": {
+        "topildi": "🔍 <b>«%s»</b> bo'yicha topildi:",
+        "yoq": ("🔍 <b>«%s»</b> bo'yicha hech narsa topilmadi.\n\n"
+                "Film nomini yoki raqamini yozing — masalan <b>Azkaban</b> yoki <b>3</b>.\n"
+                "Butun kolleksiya: /kinolar"),
+        "hammasi": "🎬 <b>Kolleksiyadagi barcha filmlar:</b>",
+        "til_tanla": "🌐 <b>%s</b> — qaysi tilda ko'rasiz?",
+        "tez_orada": "⏳ Bu film hali hech qaysi tilda yuklanmagan.",
+        "obuna": "Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!",
+    },
+    "ru": {
+        "topildi": "🔍 Найдено по запросу <b>«%s»</b>:",
+        "yoq": ("🔍 По запросу <b>«%s»</b> ничего не найдено.\n\n"
+                "Напишите название или номер фильма — например <b>Азкабана</b> или <b>3</b>.\n"
+                "Вся коллекция: /kinolar"),
+        "hammasi": "🎬 <b>Все фильмы коллекции:</b>",
+        "til_tanla": "🌐 <b>%s</b> — на каком языке смотрите?",
+        "tez_orada": "⏳ Этот фильм пока не загружен ни на одном языке.",
+        "obuna": "Чтобы смотреть фильмы, сначала подпишитесь на наш канал!",
+    },
+    "en": {
+        "topildi": "🔍 Found for <b>«%s»</b>:",
+        "yoq": ("🔍 Nothing found for <b>«%s»</b>.\n\n"
+                "Type a film name or number — for example <b>Azkaban</b> or <b>3</b>.\n"
+                "Full collection: /kinolar"),
+        "hammasi": "🎬 <b>All films in the collection:</b>",
+        "til_tanla": "🌐 <b>%s</b> — which language?",
+        "tez_orada": "⏳ This film has not been uploaded in any language yet.",
+        "obuna": "To watch the films, please subscribe to our channel first!",
+    },
+}
+
+TIL_NOMI = {"uz": "🇺🇿 O'zbekcha", "ru": "🇷🇺 Русский", "en": "🇬🇧 English"}
+
+
+async def user_lang(user_id):
+    """Eslab qolingan til. Bilinmasa o'zbekcha (bosishlarning 86% i shunda)."""
+    try:
+        return await hpcup.get_lang(user_id) or "uz"
+    except Exception:
+        return "uz"
+
+
+def search_keyboard(hits, lang):
+    """Topilgan filmlar - har biri alohida tugma."""
+    kb = InlineKeyboardBuilder()
+    for fid, film in hits:
+        nom = film[lang]["title"] if lang in film else film["uz"]["title"]
+        kb.row(InlineKeyboardButton(text="🎬 %s. %s" % (film["order"], nom),
+                                    callback_data="f:%s" % fid))
+    return kb.as_markup()
+
+
+def lang_keyboard(movie_key):
+    """Film qaysi tillarda tayyor bo'lsa - o'sha tillar tugmasi."""
+    kb = InlineKeyboardBuilder()
+    for l in catalog.LANGS:
+        if catalog.is_ready(movie_key, l):
+            kb.row(InlineKeyboardButton(text=TIL_NOMI[l],
+                                        callback_data="f:%s:%s" % (movie_key, l)))
+    return kb.as_markup()
+
+
+async def show_results(message, query, hits, lang):
+    t = QIDIRUV.get(lang, QIDIRUV["uz"])
+    if not hits:
+        await message.answer(t["yoq"] % query[:60], parse_mode="HTML")
+        return
+    sarlavha = t["hammasi"] if not query else t["topildi"] % query[:60]
+    await message.answer(sarlavha, parse_mode="HTML",
+                         reply_markup=search_keyboard(hits, lang))
+
+
+@dp.message(F.text == "/kinolar")
+async def all_movies_cmd(message: types.Message):
+    lang = await user_lang(message.from_user.id)
+    await show_results(message, "", catalog.search("", limit=20), lang)
+
+
+# Buyruq bo'lmagan har qanday matn - qidiruv so'rovi.
+# `~F.text.startswith("/")` SHART: aks holda bu handler /kunlik va /reyting
+# buyruqlarini ham yutib yuborardi (ular keyinroq ro'yxatga olinadi).
+@dp.message(F.text & ~F.text.startswith("/"))
+async def search_cmd(message: types.Message):
+    query = (message.text or "").strip()
+    if not query:
+        return
+    lang = await user_lang(message.from_user.id)
+    try:
+        await hpcup.touch_user(message.from_user.id, message.from_user.first_name,
+                               message.from_user.username)
+    except Exception:
+        pass
+    await show_results(message, query, catalog.search(query), lang)
+
+
+@dp.callback_query(F.data.startswith("f:"))
+async def send_found_movie(callback: types.CallbackQuery):
+    """Qidiruv natijasidagi tugma bosilganda filmni yuboradi."""
+    parts = callback.data.split(":")
+    movie_key = parts[1] if len(parts) > 1 else ""
+    if movie_key not in catalog.FILMS:
+        await callback.answer()
+        return
+
+    lang = parts[2] if len(parts) > 2 else await user_lang(callback.from_user.id)
+    t = QIDIRUV.get(lang, QIDIRUV["uz"])
+
+    if not await is_subscribed(callback.from_user.id):
+        await callback.message.answer(t["obuna"], reply_markup=check_sub_keyboard())
+        await callback.answer()
+        return
+
+    # Eslab qolingan tilda tayyor bo'lmasa - mavjud tillarni taklif qilamiz.
+    if not catalog.is_ready(movie_key, lang):
+        bor = [l for l in catalog.LANGS if catalog.is_ready(movie_key, l)]
+        if not bor:
+            await callback.answer(t["tez_orada"], show_alert=True)
+            return
+        nom = catalog.FILMS[movie_key][lang]["title"]
+        await callback.message.answer(t["til_tanla"] % nom, parse_mode="HTML",
+                                      reply_markup=lang_keyboard(movie_key))
+        await callback.answer()
+        return
+
+    sent, xato = await deliver_movie(callback.from_user, movie_key, lang)
+    if xato:
+        await callback.answer("⚠️ Yuborib bo'lmadi.", show_alert=True)
+        return
+    await callback.answer()
+
 
 @dp.message(F.video)
 async def get_video_info(message: types.Message):
@@ -619,35 +775,18 @@ async def api_send(request):
         # WebApp buni ko'rib, foydalanuvchini botga yo'naltiradi
         return _cors(web.json_response({"ok": False, "error": "not_subscribed"}))
 
-    vk_url = movie_data.get("vk_url") if lang == "uz" else None
-    try:
-        sent = await bot.copy_message(
-            chat_id=user.id,
-            from_chat_id=DB_CHANNEL_ID,
-            message_id=movie_data["message_id"],
-            caption=movie_data["caption"],
-            parse_mode="HTML",
-            reply_markup=movie_delivery_keyboard(lang, vk_url),
-            protect_content=True,
-        )
-    except Exception as e:
-        # Eng ko'p uchraydigani: foydalanuvchi botni hech qachon ochmagan,
-        # shuning uchun bot unga yoza olmaydi.
-        logging.error("API orqali yuborishda xato (%s): %s", movie_key, e)
-        return _cors(web.json_response({"ok": False, "error": "send_failed"}))
-
-    await log_user_action(user, "%s_%s" % (movie_key, lang))
-    remember_send(user.id, sent.message_id, movie_key, lang)
-
-    # Xogvarts kubogi: kino ochilgani uchun ball. Film allaqachon yuborilgan,
-    # shuning uchun bu yerdagi xato foydalanuvchiga ta'sir qilmasligi kerak.
     try:
         await hpcup.touch_user(user.id, data.get("first_name"), data.get("username"))
-        if movie_key.startswith("hp"):
-            await hpbot.award_film_open(user, int(movie_key[2:]))
-    except Exception as cup_error:
-        logging.error("Kubok qismida xato: %s", cup_error)
+    except Exception:
+        pass
 
+    sent, xato = await deliver_movie(user, movie_key, lang)
+    if xato:
+        # Eng ko'p uchraydigani: foydalanuvchi botni hech qachon ochmagan,
+        # shuning uchun bot unga yoza olmaydi.
+        return _cors(web.json_response({"ok": False, "error": xato}))
+
+    remember_send(user.id, sent.message_id, movie_key, lang)
     return _cors(web.json_response({"ok": True,
                                     "title": movie_data["title"],
                                     "message_id": sent.message_id}))
@@ -728,6 +867,17 @@ async def main():
     await site.start()
     logging.info("Veb-server ishga tushdi.")
     
+    # Buyruqlar menyusi. Ilgari bo'sh edi - foydalanuvchi botda nima
+    # qilish mumkinligini umuman bilmasdi.
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="kinolar", description="🎬 Barcha filmlar"),
+            BotCommand(command="kunlik", description="❓ Kunlik savol"),
+            BotCommand(command="reyting", description="🏆 Fakultetlar reytingi"),
+        ])
+    except Exception as e:
+        logging.error("Buyruqlar menyusini o'rnatishda xato: %s", e)
+
     try:
         await bot.delete_webhook(drop_pending_updates=True) 
         await dp.start_polling(bot, allowed_updates=["message", "callback_query", "my_chat_member", "chat_member"])

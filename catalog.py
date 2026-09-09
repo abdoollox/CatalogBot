@@ -157,3 +157,63 @@ def is_ready(film_id, lang):
 def not_ready(lang):
     """Shu tilda hali yuklanmagan filmlar ro'yxati (id lar)."""
     return [fid for fid in FILMS if not is_ready(fid, lang)]
+
+
+# ---------------------------------------------------------------- qidiruv
+
+# Lotin va kirill harflarini yaqinlashtirish. Foydalanuvchi "Азкабан" deb
+# ham, "azkaban" deb ham yozishi mumkin - ikkalasi bir xil topilsin.
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
+    "ж": "j", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "x", "ц": "s", "ч": "ch", "ш": "sh", "щ": "sh",
+    "ъ": "", "ы": "i", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+    # O'zbek lotinidagi shakllar ham bir ko'rinishga keltiriladi
+    "'": "", "\u2018": "", "\u2019": "", "`": "", "-": " ",
+}
+
+
+def _oddiy(matn):
+    """Qidiruv uchun matnni soddalashtiradi: kichik harf, translit, bo'shliq."""
+    matn = (matn or "").lower()
+    out = []
+    for ch in matn:
+        out.append(_TRANSLIT.get(ch, ch))
+    matn = "".join(out)
+    # h va x ni tenglashtiramiz: "Mahbusi" va "Maxbusi" ikkalasi ham yozilgan
+    matn = matn.replace("h", "x")
+    return " ".join(matn.split())
+
+
+def _kalitlar(film_id, film):
+    """Shu film uchun qidirilishi mumkin bo'lgan barcha matnlar."""
+    s = [film_id, str(film["order"]), film["num"], str(film["year"])]
+    for lang in LANGS:
+        d = film[lang]
+        s.append(d["title"])
+        # caption ichida to'liq nom bor: "Garri Potter va Azkaban Maxbusi"
+        s.append(d["caption"].replace("<b>", " ").replace("</b>", " "))
+    return [_oddiy(x) for x in s]
+
+
+def search(query, limit=10):
+    """So'rov bo'yicha filmlarni topadi. (id, film) juftliklari qaytadi.
+
+    Uch tilda ham qidiradi: nom, to'liq sarlavha, id, tartib raqami, yil.
+    Bo'sh so'rov - butun katalog.
+    """
+    q = _oddiy(query)
+    items = list(FILMS.items())
+    if not q:
+        return items[:limit]
+
+    aniq, qisman = [], []
+    for fid, film in items:
+        keys = _kalitlar(fid, film)
+        if any(k == q for k in keys):
+            aniq.append((fid, film))
+        elif any(q in k for k in keys):
+            qisman.append((fid, film))
+
+    return (aniq + qisman)[:limit]

@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS users (
     first_name  TEXT,
     house       TEXT,
     sorted_at   TEXT,
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    lang        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS seasons (
@@ -268,6 +269,10 @@ def _migrate(conn, users_json):
         conn.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
     if "username" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
+    # Oxirgi ishlatilgan til. Bot chatidagi qidiruvda kerak: film qaysi
+    # tilda yuborilishini har safar so'ramaslik uchun.
+    if "lang" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN lang TEXT")
 
     # 1) Eski `points.house` dan foydalanuvchilarni tiklaymiz. Ustun
     #    tushirilgandan keyin bu ma'lumot yo'qoladi, shuning uchun avval.
@@ -460,6 +465,37 @@ async def touch_user(user_id, first_name=None, username=None):
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
+
+
+def _set_lang(user_id, lang):
+    conn = _connect()
+    try:
+        _touch_user(conn, user_id)
+        conn.execute("UPDATE users SET lang=? WHERE user_id=?",
+                     (lang, int(user_id)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def set_lang(user_id, lang):
+    """Foydalanuvchi oxirgi marta qaysi tilda film olganini eslab qoladi."""
+    await asyncio.to_thread(_set_lang, user_id, lang)
+
+
+def _get_lang(user_id):
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT lang FROM users WHERE user_id=?",
+                           (int(user_id),)).fetchone()
+        return row["lang"] if row and row["lang"] else None
+    finally:
+        conn.close()
+
+
+async def get_lang(user_id):
+    """Eslab qolingan til yoki None."""
+    return await asyncio.to_thread(_get_lang, user_id)
 
 
 def _get_house(user_id):
