@@ -88,15 +88,100 @@ async def log_user_action(user: types.User, payload: str):
     await sheets.append_click(user.id, db[user_id]["nickname"], db[user_id]["username"], payload, now)
 
 
-def check_sub_keyboard():
+# --- BOT MATNLARI (uch tilda) ---
+# Foydalanuvchi /start da tilni bir marta tanlaydi; keyin BARCHA xabarlar
+# va filmlar shu tilda boradi.
+
+TEXTS = {
+    "uz": {
+        "subscribe": "Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!",
+        "btn_sub": "1️⃣ Kanalga obuna bo'lish",
+        "btn_check": "2️⃣ Tasdiqlash",
+        "btn_open": "🎬 Kolleksiyani ochish",
+        "btn_lang": "🌐 Tilni o'zgartirish",
+        "not_subscribed": "Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
+        "soon": "⏳ Bu tildagi film tez orada yuklanadi.",
+        "catalog": (
+            "🪄 <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
+            "Garri Potter olamidagi barcha filmlarni yuqori sifatda, "
+            "reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
+            "👇 <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
+        ),
+    },
+    "ru": {
+        "subscribe": "Чтобы смотреть фильмы, сначала подпишитесь на наш канал!",
+        "btn_sub": "1️⃣ Подписаться на канал",
+        "btn_check": "2️⃣ Подтвердить",
+        "btn_open": "🎬 Открыть коллекцию",
+        "btn_lang": "🌐 Сменить язык",
+        "not_subscribed": "Вы ещё не подписаны! Сначала вступите в канал.",
+        "soon": "⏳ Фильм на этом языке скоро появится.",
+        "catalog": (
+            "🪄 <b>Добро пожаловать в Hogwarts Cinema!</b>\n\n"
+            "Смотрите все фильмы вселенной Гарри Поттера в высоком качестве, "
+            "без рекламы и на 3 языках (🇺🇿 🇷🇺 🇬🇧).\n\n"
+            "👇 <b>Откройте коллекцию кнопкой ниже и выберите фильм:</b>"
+        ),
+    },
+    "en": {
+        "subscribe": "To watch the films, please subscribe to our channel first!",
+        "btn_sub": "1️⃣ Subscribe to the channel",
+        "btn_check": "2️⃣ Confirm",
+        "btn_open": "🎬 Open the collection",
+        "btn_lang": "🌐 Change language",
+        "not_subscribed": "You are not subscribed yet! Please join the channel first.",
+        "soon": "⏳ The film in this language will be uploaded soon.",
+        "catalog": (
+            "🪄 <b>Welcome to Hogwarts Cinema!</b>\n\n"
+            "Watch every film from the Harry Potter universe in high quality, "
+            "ad-free and in 3 languages (🇺🇿 🇷🇺 🇬🇧).\n\n"
+            "👇 <b>Open the collection with the button below and pick a film:</b>"
+        ),
+    },
+}
+
+DEFAULT_LANG = "uz"
+
+
+def T(lang):
+    return TEXTS.get(lang, TEXTS[DEFAULT_LANG])
+
+
+async def user_lang(user_id):
+    """Tanlangan til yoki None (hali tanlamagan)."""
+    try:
+        return await hpcup.get_lang(user_id)
+    except Exception as e:
+        logging.error("Tilni o'qishda xato: %s", e)
+        return None
+
+
+LANG_PROMPT = ("🌐 <b>Tilni tanlang</b>\n"
+               "Выберите язык · Choose language")
+
+
+def lang_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1️⃣ Kanalga obuna bo'lish", url=CHANNEL_URL)],
-        [InlineKeyboardButton(text="2️⃣ Tasdiqlash", callback_data="check_sub")]
+        [InlineKeyboardButton(text="🇺🇿 O'zbekcha", callback_data="lang:uz")],
+        [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang:ru")],
+        [InlineKeyboardButton(text="🇬🇧 English", callback_data="lang:en")],
     ])
 
-def webapp_keyboard():
+
+def check_sub_keyboard(lang=DEFAULT_LANG):
+    t = T(lang)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎬 Kolleksiyani ochish", web_app=WebAppInfo(url=WEBAPP_URL))]
+        [InlineKeyboardButton(text=t["btn_sub"], url=CHANNEL_URL)],
+        [InlineKeyboardButton(text=t["btn_check"], callback_data="check_sub")]
+    ])
+
+def webapp_keyboard(lang=DEFAULT_LANG):
+    t = T(lang)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t["btn_open"], web_app=WebAppInfo(url=WEBAPP_URL))],
+        # Til tugmasi SHART: aks holda noto'g'ri til tanlagan odam botda
+        # uni o'zgartira olmay qolardi.
+        [InlineKeyboardButton(text=t["btn_lang"], callback_data="lang:pick")],
     ])
 
 LOCALES = {
@@ -193,18 +278,77 @@ async def start_cmd(message: types.Message, command: CommandObject):
         except Exception:
             pass
     
-    if not await is_subscribed(user_id):
-        taklif = await message.answer(
-            "Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!",
-            reply_markup=check_sub_keyboard())
+    lang = await user_lang(user_id)
+
+    # Chuqur havolada til allaqachon bor (masalan `hp1_uz`) - so'ramaymiz,
+    # aksincha o'shani eslab qolamiz.
+    if payload and "_" in payload:
+        havola_tili = payload.strip().split("_")[-1]
+        if havola_tili in catalog.LANGS:
+            lang = havola_tili
+            try:
+                await hpcup.set_lang(user_id, lang)
+            except Exception as e:
+                logging.error("Tilni saqlashda xato: %s", e)
+
+    # Til hali tanlanmagan - birinchi qadam shu. Nima uchun kelganini
+    # eslab qolamiz, til tanlangach o'sha yerdan davom etamiz.
+    if not lang:
+        remember_pending(user_id, payload, None)
+        await bot.send_message(user_id, LANG_PROMPT, parse_mode="HTML",
+                               reply_markup=lang_keyboard())
+        return
+
+    await continue_flow(message.from_user, user_id, payload, lang)
+
+
+async def continue_flow(user, chat_id, payload, lang):
+    """Til ma'lum bo'lgandan keyingi yo'l: obuna -> film yoki katalog."""
+    if not await is_subscribed(user.id):
+        taklif = await bot.send_message(chat_id, T(lang)["subscribe"],
+                                        reply_markup=check_sub_keyboard(lang))
         # Nima uchun kelganini eslab qolamiz: a'zo bo'lgan zahoti davom etamiz.
-        remember_pending(user_id, payload, taklif.message_id)
+        remember_pending(user.id, payload, taklif.message_id)
         return
 
     if payload:
-        await handle_payload(message.from_user, user_id, payload)
+        await handle_payload(user, chat_id, payload)
     else:
-        await send_welcome(user_id, user_id)
+        await send_welcome(chat_id, lang)
+
+
+@dp.callback_query(F.data.startswith("lang:"))
+async def lang_handler(callback: types.CallbackQuery):
+    """Til tanlandi (yoki qayta tanlash so'raldi)."""
+    tanlov = callback.data.split(":", 1)[1]
+    user_id = callback.from_user.id
+
+    # Katalogdagi "Tilni o'zgartirish" tugmasi - ro'yxatni qayta ko'rsatamiz
+    if tanlov == "pick":
+        await callback.answer()
+        await callback.message.answer(LANG_PROMPT, parse_mode="HTML",
+                                      reply_markup=lang_keyboard())
+        return
+
+    if tanlov not in catalog.LANGS:
+        await callback.answer()
+        return
+
+    try:
+        await hpcup.set_lang(user_id, tanlov)
+    except Exception as e:
+        logging.error("Tilni saqlashda xato: %s", e)
+
+    # Til so'ragan xabar endi keraksiz
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        logging.warning("Til xabarini o'chirib bo'lmadi (%s): %s", user_id, e)
+
+    await callback.answer()
+
+    payload, _ = take_pending(user_id)
+    await continue_flow(callback.from_user, user_id, payload, tanlov)
 
 
 # --- OBUNA KUTAYOTGANLAR ---
@@ -267,7 +411,7 @@ async def handle_payload(user, chat_id, payload):
         movie_data = MOVIES_DB[movie_key][lang]
 
         if movie_data.get("message_id", 0) == 0:
-            await bot.send_message(chat_id, "⏳ Bu tildagi film tez orada yuklanadi.")
+            await bot.send_message(chat_id, T(lang)["soon"])
             return
 
         # Xavfsiz tizim: Mijoz harakatini qayd etish
@@ -316,6 +460,8 @@ async def after_subscribe(user, chat_id, payload, prompt_message_id=None):
 
     # "Obuna tasdiqlandi" degan alohida xabar yuborilmaydi - foydalanuvchi
     # buni o'zi biladi, ortiqcha qadam bo'lardi.
+    lang = await user_lang(user.id) or DEFAULT_LANG
+
     if payload:
         # Odam aynan shu film uchun kelgan edi - o'shani beramiz. Ilgari bu
         # yo'qolib ketardi: obunadan keyin faqat katalog ko'rsatilardi va
@@ -323,19 +469,11 @@ async def after_subscribe(user, chat_id, payload, prompt_message_id=None):
         await handle_payload(user, chat_id, payload)
         return
 
-    await send_welcome(chat_id, user.id)
+    await send_welcome(chat_id, lang)
 
 
-CATALOG_TEXT = (
-    "🪄 <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
-
-    "Garri Potter olamidagi barcha filmlarni yuqori sifatda, reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
-
-    "👇 <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
-)
-
-async def send_welcome(chat_id, user_id):
-    """Katalogni ko'rsatadi.
+async def send_welcome(chat_id, lang=DEFAULT_LANG):
+    """Katalogni foydalanuvchi tanlagan tilda ko'rsatadi.
 
     Ilgari fakulteti yo'qlarga avval saralanish taklif qilinardi. Endi
     yo'q: bot faqat film ko'rmoqchi bo'lganlar uchun, saralanish esa
@@ -345,17 +483,17 @@ async def send_welcome(chat_id, user_id):
     Xabar obyekti emas, chat_id qabul qiladi: obuna hodisasidan keyin
     ham chaqiriladi, u yerda javob beriladigan xabar yo'q.
     """
-    await bot.send_message(chat_id, CATALOG_TEXT, parse_mode="HTML",
-                           reply_markup=webapp_keyboard())
+    await bot.send_message(chat_id, T(lang)["catalog"], parse_mode="HTML",
+                           reply_markup=webapp_keyboard(lang))
 
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
     """Zaxira yo'l. Odatda `chat_member` hodisasi buni oldindan bajaradi;
     bu tugma hodisa kechikkan yoki yetib kelmagan holat uchun qoladi."""
+    lang = await user_lang(callback.from_user.id) or DEFAULT_LANG
     if not await is_subscribed(callback.from_user.id):
-        await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
-                              show_alert=True)
+        await callback.answer(T(lang)["not_subscribed"], show_alert=True)
         return
 
     payload, _ = take_pending(callback.from_user.id)
