@@ -32,6 +32,16 @@ PTS_FILM_OPEN = 5     # har qism uchun mavsumda 1 marta   -> 8 * 5  = 40
 PTS_FILM_QUIZ = 10    # har to'g'ri javob                 -> 24 * 10 = 240
 PTS_DAILY = 10        # kuniga 1 marta                    -> 7 * 10  = 70
 
+# Shaxmat FAQAT jonli o'yinda (PvP) ballanadi. Bot bilan o'ynash ball
+# bermaydi: o'zi bilan o'zi o'ynab cheksiz ball yig'ish mumkin bo'lardi.
+PTS_CHESS_WIN = 10    # jonli raqib ustidan g'alaba
+PTS_CHESS_DRAW = 5    # durang
+
+# Mavsumda nechta shaxmat natijasi ballanadi. Cheklov SHART: kim yutganini
+# server tekshira olmaydi (o'yin brauzerda hisoblanadi), shuning uchun ikki
+# do'st bir-biriga ataylab yutqazib cheksiz ball yig'a olardi.
+CHESS_MAX_PER_SEASON = 5
+
 FILM_PARTS = 8
 QUIZ_PER_FILM = 3
 DAILY_PER_WEEK = 7
@@ -39,7 +49,8 @@ DAILY_PER_WEEK = 7
 # Bir mavsumda olish mumkin bo'lgan eng ko'p ball
 MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_FILM_QUIZ * FILM_PARTS * QUIZ_PER_FILM
-              + PTS_DAILY * DAILY_PER_WEEK)          # = 350
+              + PTS_DAILY * DAILY_PER_WEEK
+              + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON)   # = 400
 
 ACTIVE_MIN_POINTS = 30    # foydalanuvchi "faol" hisoblanishi uchun kerak ball
 
@@ -67,7 +78,8 @@ CREATE TABLE IF NOT EXISTS points (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL REFERENCES users(user_id),
     season_id   INTEGER NOT NULL REFERENCES seasons(id),
-    source_type TEXT NOT NULL CHECK (source_type IN ('film_open','film_quiz','daily')),
+    source_type TEXT NOT NULL CHECK (source_type IN
+                    ('film_open','film_quiz','daily','chess_win','chess_draw')),
     source_ref  TEXT NOT NULL,
     points      INTEGER NOT NULL,
     created_at  TEXT NOT NULL,
@@ -312,6 +324,41 @@ def _migrate(conn, users_json):
                      "ON points(season_id, user_id)")
         conn.execute("PRAGMA foreign_keys = ON")
         logging.info("Kubok migratsiyasi: points.house olib tashlandi")
+
+    # 3) points.source_type cheklovi shaxmat turlarini ham qabul qilsin.
+    #    Ilgari cheklov faqat ('film_open','film_quiz','daily') edi, shuning
+    #    uchun shaxmat uchun berilgan ball bazaga tushmay, xato try/except
+    #    ichida jimgina yo'qolardi. SQLite da CHECK ni ALTER bilan
+    #    o'zgartirib bo'lmaydi - jadval qayta quriladi.
+    ddl = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='points'"
+    ).fetchone()
+    if ddl and "chess_win" not in (ddl[0] or ""):
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("""
+            CREATE TABLE points_v3 (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(user_id),
+                season_id   INTEGER NOT NULL REFERENCES seasons(id),
+                source_type TEXT NOT NULL CHECK (source_type IN
+                                ('film_open','film_quiz','daily',
+                                 'chess_win','chess_draw')),
+                source_ref  TEXT NOT NULL,
+                points      INTEGER NOT NULL,
+                created_at  TEXT NOT NULL,
+                UNIQUE (user_id, season_id, source_type, source_ref)
+            )""")
+        conn.execute(
+            "INSERT INTO points_v3 (id, user_id, season_id, source_type, "
+            "source_ref, points, created_at) "
+            "SELECT id, user_id, season_id, source_type, source_ref, points, "
+            "created_at FROM points")
+        conn.execute("DROP TABLE points")
+        conn.execute("ALTER TABLE points_v3 RENAME TO points")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_points_season_user "
+                     "ON points(season_id, user_id)")
+        conn.execute("PRAGMA foreign_keys = ON")
+        logging.info("Kubok migratsiyasi: points cheklovi shaxmatni qabul qiladi")
 
 
 def _seed_questions(questions_dir=None):
@@ -594,6 +641,53 @@ async def award(user_id, source_type, source_ref, pts):
     fakultetiga qo'shiladi.
     """
     return await asyncio.to_thread(_award, user_id, source_type, source_ref, pts)
+
+
+def _award_chess(user_id, game_id, result):
+    """Jonli shaxmat natijasi uchun ball. `result`: "win" yoki "draw"."""
+    if result == "win":
+        source_type, pts = "chess_win", PTS_CHESS_WIN
+    elif result == "draw":
+        source_type, pts = "chess_draw", PTS_CHESS_DRAW
+    else:
+        return {"ok": False, "error": "bad_result", "points": 0}
+
+    conn = _connect()
+    try:
+        _touch_user(conn, user_id)
+        season = _ensure_season(conn)
+
+        # Mavsumdagi cheklov. Ayni o'yin uchun ball avval berilgan bo'lsa
+        # ham shu son ichida turadi - pastdagi UNIQUE uni ikkinchi marta
+        # o'tkazmaydi.
+        used = conn.execute(
+            "SELECT COUNT(*) FROM points WHERE user_id=? AND season_id=? "
+            "AND source_type IN ('chess_win','chess_draw')",
+            (int(user_id), season["id"])).fetchone()[0]
+        if used >= CHESS_MAX_PER_SEASON:
+            return {"ok": False, "error": "limit", "points": 0,
+                    "used": used, "limit": CHESS_MAX_PER_SEASON}
+
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO points "
+            "(user_id, season_id, source_type, source_ref, points, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (int(user_id), season["id"], source_type, str(game_id), int(pts),
+             _utc_iso(now_tk())))
+        conn.commit()
+        if cur.rowcount == 0:
+            # Shu o'yin uchun ball allaqachon berilgan
+            return {"ok": False, "error": "already", "points": 0,
+                    "used": used, "limit": CHESS_MAX_PER_SEASON}
+        return {"ok": True, "points": pts,
+                "used": used + 1, "limit": CHESS_MAX_PER_SEASON}
+    finally:
+        conn.close()
+
+
+async def award_chess(user_id, game_id, result):
+    """Shaxmat balli. Mavsumdagi cheklovni ham tekshiradi."""
+    return await asyncio.to_thread(_award_chess, user_id, game_id, result)
 
 
 # ---------------------------------------------------------------- reyting
@@ -1396,15 +1490,55 @@ async def chess_make_move(game_id, user_id, fen, next_turn, white_time, black_ti
 
 
 async def chess_finish_game(game_id, user_id, winner_uid, win_reason):
+    """O'yinni yakunlaydi va kim yutganini QAT'IY aniqlaydi.
+
+    Shaxmat mantig'i brauzerda hisoblanadi, ya'ni natija mijozdan keladi va
+    server uni tekshira olmaydi. Himoya shu sababli uch qatlamli:
+
+      1) faqat shu o'yinning ikki qatnashchisi yozishi mumkin;
+      2) natija BIRINCHI yozilganda qayd etiladi va keyin o'zgarmaydi -
+         ikkinchi o'yinchi boshqacha da'vo qilsa, qabul qilinmaydi;
+      3) mavsumda ballanadigan o'yinlar soni cheklangan (award_chess).
+
+    Qaytaradi: {"ok": ..., "result": "win"/"loss"/"draw", ...}
+    """
     def _do():
         conn = _connect()
         try:
-            conn.execute(
-                "UPDATE chess_games SET status='finished', winner_uid=?, win_reason=? WHERE id=?",
-                (winner_uid, win_reason, game_id)
-            )
-            conn.commit()
-            return True
+            row = conn.execute("SELECT * FROM chess_games WHERE id=?",
+                               (game_id,)).fetchone()
+            if not row:
+                return {"ok": False, "error": "not_found"}
+
+            uid = int(user_id)
+            white, black = row["white_uid"], row["black_uid"]
+            if uid not in (white, black):
+                return {"ok": False, "error": "not_a_player"}
+
+            # Jonli o'yin emas: raqib qo'shilmagan yoki o'zi bilan o'zi.
+            if not black or white == black:
+                return {"ok": False, "error": "not_pvp"}
+
+            if row["status"] == "finished":
+                # Natija allaqachon qayd etilgan - o'zgartirmaymiz.
+                final_winner = row["winner_uid"]
+            else:
+                final_winner = int(winner_uid) if winner_uid else None
+                if final_winner is not None and final_winner not in (white, black):
+                    return {"ok": False, "error": "bad_winner"}
+                conn.execute(
+                    "UPDATE chess_games SET status='finished', winner_uid=?, "
+                    "win_reason=? WHERE id=?",
+                    (final_winner, win_reason, game_id))
+                conn.commit()
+
+            if final_winner is None:
+                natija = "draw"
+            elif int(final_winner) == uid:
+                natija = "win"
+            else:
+                natija = "loss"
+            return {"ok": True, "result": natija, "winner_uid": final_winner}
         finally:
             conn.close()
     return await asyncio.to_thread(_do)

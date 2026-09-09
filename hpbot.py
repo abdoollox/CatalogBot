@@ -641,17 +641,38 @@ def register(dp, bot, app, cfg):
         user = _cfg["verify_init_data"](_init_data_from(request, body))
         if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
         uid = user["id"]
+        body = body or {}
         game_id = body.get("game_id")
         winner_uid = body.get("winner_uid")
         reason = body.get("reason", "checkmate")
-        if game_id:
-            await hpcup.chess_finish_game(game_id, uid, winner_uid, reason)
-        if winner_uid and winner_uid == uid:
-            try:
-                await hpcup.award(uid, "chess_win", game_id or "bot", 10)
-            except Exception:
-                pass
-        return cors(web.json_response({"ok": True}))
+
+        # Bot bilan o'yin: server o'yinni ko'rmaydi, ball ham bermaydi.
+        # (Ilgari bu yerda ball berishga urinilardi, lekin baza cheklovi uni
+        # rad etar va xato jimgina yo'qolardi - ya'ni hech qachon ishlamagan.)
+        if not game_id:
+            return cors(web.json_response({"ok": True, "rated": False, "points": 0}))
+
+        res = await hpcup.chess_finish_game(game_id, uid, winner_uid, reason)
+        if not res.get("ok"):
+            return cors(web.json_response({"ok": False, "rated": False,
+                                           "points": 0,
+                                           "error": res.get("error")}))
+
+        natija = res["result"]
+        if natija == "loss":
+            return cors(web.json_response({"ok": True, "rated": True,
+                                           "result": natija, "points": 0}))
+
+        berildi = await hpcup.award_chess(uid, game_id, natija)
+        return cors(web.json_response({
+            "ok": True,
+            "rated": True,
+            "result": natija,
+            "points": berildi.get("points", 0),
+            "limit_reached": berildi.get("error") == "limit",
+            "used": berildi.get("used"),
+            "limit": berildi.get("limit"),
+        }))
 
     app.router.add_route("*", "/api/chess/create", api_chess_create)
     app.router.add_route("*", "/api/chess/join", api_chess_join)
