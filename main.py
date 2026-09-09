@@ -195,65 +195,135 @@ async def start_cmd(message: types.Message, command: CommandObject):
             pass
     
     if not await is_subscribed(user_id):
-        await message.answer("Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!", reply_markup=check_sub_keyboard())
+        taklif = await message.answer(
+            "Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!",
+            reply_markup=check_sub_keyboard())
+        # Nima uchun kelganini eslab qolamiz: a'zo bo'lgan zahoti davom etamiz.
+        remember_pending(user_id, payload, taklif.message_id)
         return
 
     if payload:
-        try:
-            payload_clean = payload.strip()
-            parts = payload_clean.split('_')
-            
-            if len(parts) != 2:
-                await message.answer(f"⚠️ DIAGNOSTIKA (ValueError): Signal ikkiga bo'linmadi.\nSiz yuborgan aniq signal: '{payload}'\nUzunligi: {len(payload)} ta belgi.")
-                return
-                
-            movie_key, lang = parts
-            
-            if movie_key not in MOVIES_DB:
-                await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Kino): '{movie_key}' bazada topilmadi.\nBazadagi mavjud kinolar: {list(MOVIES_DB.keys())}")
-                return
-                
-            if lang not in catalog.LANGS:
-                await message.answer(f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(catalog.LANGS)}")
-                return
-                
-            movie_data = MOVIES_DB[movie_key][lang]
-            
-            if movie_data.get("message_id", 0) == 0:
-                await message.answer("⏳ Bu tildagi film tez orada yuklanadi.")
-                return
-
-            # Xavfsiz tizim: Mijoz harakatini qayd etish
-            await log_user_action(message.from_user, payload_clean)
-
-            vk_url = movie_data.get("vk_url") if lang == "uz" else None
-
-            # Asosiy yuborish qismi
-            await bot.copy_message(
-                chat_id=message.from_user.id,
-                from_chat_id=DB_CHANNEL_ID,
-                message_id=movie_data["message_id"],
-                caption=movie_data["caption"], 
-                parse_mode="HTML",
-                reply_markup=movie_delivery_keyboard(lang, vk_url),
-                protect_content=True
-            )
-
-            # Xogvarts kubogi: kino ochilgani uchun ball (agar fakulteti bo'lsa).
-            # Kinoning o'zi allaqachon yuborilgan - bu yerdagi xato
-            # foydalanuvchiga ta'sir qilmasligi kerak.
-            try:
-                if movie_key.startswith("hp"):
-                    film_part = int(movie_key[2:])
-                    await hpbot.award_film_open(message.from_user, film_part)
-            except Exception as cup_error:
-                logging.error("Kubok qismida xato: %s", cup_error)
-
-        except Exception as e:
-            logging.error(f"Kritik API xatosi: {e}")
-            await message.answer(f"⚠️ Telegram API xatosi (Fayl yuborish quladi): {str(e)}")
+        await handle_payload(message.from_user, user_id, payload)
     else:
-        await send_welcome(message)
+        await send_welcome(user_id, user_id)
+
+
+# --- OBUNA KUTAYOTGANLAR ---
+# Odam kanalga a'zo bo'lgan ZAHOTI oqim davom etishi kerak: "Tasdiqlash"
+# tugmasini bosish shart emas. Bot kanalda administrator, ya'ni a'zolik
+# o'zgarishi haqidagi hodisani oladi (`chat_member`).
+#
+# Nima kutayotgani shu yerda saqlanadi: film havolasi bilan kelgan bo'lsa
+# o'sha film, aks holda oddiy salomlashuv. Xotirada - odam odatda bir
+# necha daqiqada obuna bo'ladi, baza bilan band qilish ortiqcha.
+
+PENDING_TTL = 3600        # soniya
+PENDING_LIMIT = 1000
+
+pending_subs = {}         # user_id -> (vaqt, payload, taklif_xabari_id)
+
+
+def remember_pending(user_id, payload, prompt_message_id):
+    if len(pending_subs) >= PENDING_LIMIT:
+        eng_eski = min(pending_subs, key=lambda k: pending_subs[k][0])
+        pending_subs.pop(eng_eski, None)
+    pending_subs[user_id] = (time.time(), payload, prompt_message_id)
+
+
+def take_pending(user_id):
+    """Kutilayotgan ishni oladi va ro'yxatdan chiqaradi."""
+    item = pending_subs.pop(user_id, None)
+    if not item:
+        return None, None
+    qachon, payload, prompt_id = item
+    if time.time() - qachon > PENDING_TTL:
+        return None, None
+    return payload, prompt_id
+
+
+async def handle_payload(user, chat_id, payload):
+    """Chuqur havola bilan kelgan filmni yuboradi.
+
+    start_cmd dan ham, obuna tasdiqlangandan keyin ham chaqiriladi -
+    shuning uchun alohida funksiya.
+    """
+    try:
+        payload_clean = payload.strip()
+        parts = payload_clean.split('_')
+
+        if len(parts) != 2:
+            await bot.send_message(chat_id, f"⚠️ DIAGNOSTIKA (ValueError): Signal ikkiga bo'linmadi.\nSiz yuborgan aniq signal: '{payload}'\nUzunligi: {len(payload)} ta belgi.")
+            return
+
+        movie_key, lang = parts
+
+        if movie_key not in MOVIES_DB:
+            await bot.send_message(chat_id, f"⚠️ DIAGNOSTIKA (KeyError - Kino): '{movie_key}' bazada topilmadi.\nBazadagi mavjud kinolar: {list(MOVIES_DB.keys())}")
+            return
+
+        if lang not in catalog.LANGS:
+            await bot.send_message(chat_id, f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(catalog.LANGS)}")
+            return
+
+        movie_data = MOVIES_DB[movie_key][lang]
+
+        if movie_data.get("message_id", 0) == 0:
+            await bot.send_message(chat_id, "⏳ Bu tildagi film tez orada yuklanadi.")
+            return
+
+        # Xavfsiz tizim: Mijoz harakatini qayd etish
+        await log_user_action(user, payload_clean)
+
+        vk_url = movie_data.get("vk_url") if lang == "uz" else None
+
+        await bot.copy_message(
+            chat_id=chat_id,
+            from_chat_id=DB_CHANNEL_ID,
+            message_id=movie_data["message_id"],
+            caption=movie_data["caption"],
+            parse_mode="HTML",
+            reply_markup=movie_delivery_keyboard(lang, vk_url),
+            protect_content=True
+        )
+
+        # Xogvarts kubogi: kino ochilgani uchun ball (agar fakulteti bo'lsa).
+        # Kinoning o'zi allaqachon yuborilgan - bu yerdagi xato
+        # foydalanuvchiga ta'sir qilmasligi kerak.
+        try:
+            if movie_key.startswith("hp"):
+                await hpbot.award_film_open(user, int(movie_key[2:]))
+        except Exception as cup_error:
+            logging.error("Kubok qismida xato: %s", cup_error)
+
+    except Exception as e:
+        logging.error(f"Kritik API xatosi: {e}")
+        await bot.send_message(chat_id, f"⚠️ Telegram API xatosi (Fayl yuborish quladi): {str(e)}")
+
+
+async def after_subscribe(user, chat_id, payload, prompt_message_id=None):
+    """Obuna tasdiqlangach oqimni davom ettiradi.
+
+    Ikki joydan chaqiriladi: `chat_member` hodisasi (avtomatik yo'l) va
+    "Tasdiqlash" tugmasi (zaxira yo'l - hodisa kechiksa yoki yetib
+    kelmasa odam baribir o'tib keta olsin).
+    """
+    # Taklif xabari endi keraksiz - chalkashtirmasin
+    if prompt_message_id:
+        try:
+            await bot.delete_message(chat_id, prompt_message_id)
+        except Exception:
+            pass
+
+    await bot.send_message(chat_id, "✅ Obuna tasdiqlandi!")
+
+    if payload:
+        # Odam aynan shu film uchun kelgan edi - o'shani beramiz. Ilgari bu
+        # yo'qolib ketardi: obunadan keyin faqat katalog ko'rsatilardi va
+        # izlab kelingan film yuborilmasdi.
+        await handle_payload(user, chat_id, payload)
+        return
+
+    await send_welcome(chat_id, user.id)
 
 
 CATALOG_TEXT = (
@@ -287,21 +357,25 @@ def sorting_keyboard():
     ])
 
 
-async def send_welcome(message):
-    """Fakulteti yo'qlarga avval shlyapa, keyin katalog."""
+async def send_welcome(chat_id, user_id):
+    """Fakulteti yo'qlarga avval shlyapa, keyin katalog.
+
+    Xabar obyekti emas, chat_id qabul qiladi: obuna hodisasidan keyin
+    ham chaqiriladi, u yerda javob beriladigan xabar yo'q.
+    """
     try:
-        has_house = await hpbot.user_house(message.from_user.id)
+        has_house = await hpbot.user_house(user_id)
     except Exception as e:
         logging.error("Fakultetni aniqlashda xato: %s", e)
         has_house = True          # shubha bo'lsa - eski oqim, yo'lni to'smaymiz
 
     if not has_house:
-        await message.answer(SORTING_TEXT, parse_mode="HTML",
-                             reply_markup=sorting_keyboard())
+        await bot.send_message(chat_id, SORTING_TEXT, parse_mode="HTML",
+                               reply_markup=sorting_keyboard())
         return
 
-    await message.answer(CATALOG_TEXT, parse_mode="HTML",
-                         reply_markup=webapp_keyboard())
+    await bot.send_message(chat_id, CATALOG_TEXT, parse_mode="HTML",
+                           reply_markup=webapp_keyboard())
 
 
 @dp.callback_query(F.data == "skip_sort")
@@ -316,28 +390,17 @@ async def skip_sort_handler(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
-    if await is_subscribed(callback.from_user.id):
-        # Oqim: start -> obuna -> saralash shlyapasi -> kinolar
-        try:
-            has_house = await hpbot.user_house(callback.from_user.id)
-        except Exception as e:
-            logging.error("Fakultetni aniqlashda xato: %s", e)
-            has_house = True
+    """Zaxira yo'l. Odatda `chat_member` hodisasi buni oldindan bajaradi;
+    bu tugma hodisa kechikkan yoki yetib kelmagan holat uchun qoladi."""
+    if not await is_subscribed(callback.from_user.id):
+        await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
+                              show_alert=True)
+        return
 
-        if has_house:
-            text, markup = "✅ Obuna tasdiqlandi! Kolleksiyani oching:", webapp_keyboard()
-        else:
-            text, markup = "✅ Obuna tasdiqlandi!\n\n" + SORTING_TEXT, sorting_keyboard()
-
-        try:
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
-        except TelegramBadRequest as e:
-            # Tugma ikki marta bosilsa xabar o'zgarmaydi - bu xato emas
-            if "message is not modified" not in str(e):
-                raise
-        await callback.answer()
-    else:
-        await callback.answer("Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.", show_alert=True)
+    payload, _ = take_pending(callback.from_user.id)
+    await callback.answer()
+    await after_subscribe(callback.from_user, callback.from_user.id, payload,
+                          callback.message.message_id)
 
 @dp.message(F.video)
 async def get_video_info(message: types.Message):
@@ -373,6 +436,18 @@ async def channel_status_changed(event: types.ChatMemberUpdated):
         await log_user_action(event.from_user, "left")
     elif is_in and not was_in:
         await log_user_action(event.from_user, "subscribed")
+
+        # Kutayotgan odam bo'lsa - oqimni O'ZIMIZ davom ettiramiz.
+        # "Tasdiqlash" tugmasini bosish shart emas.
+        payload, prompt_id = take_pending(event.from_user.id)
+        if prompt_id or payload:
+            try:
+                await after_subscribe(event.from_user, event.from_user.id,
+                                      payload, prompt_id)
+            except Exception as e:
+                # Bot bilan suhbat boshlanmagan bo'lsa yozib bo'lmaydi -
+                # bunda "Tasdiqlash" tugmasi zaxira yo'l bo'lib qoladi.
+                logging.error("Obunadan keyin davom ettirishda xato: %s", e)
 
 
 ALLOWED_ORIGIN = "https://abdoollox.github.io"
