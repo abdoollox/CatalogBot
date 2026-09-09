@@ -116,10 +116,10 @@ TEXTS = {
     "uz": {
         "subscribe": emoji.tag("yopiq") + " Filmlarni ko'rish uchun avval "
                      "kanalimizga obuna bo'ling!",
-        "btn_sub": "1️⃣ Kanalga obuna bo'lish",
-        "btn_check": "2️⃣ Tasdiqlash",
-        "btn_open": "🎬 Kolleksiyani ochish",
-        "btn_lang": "🌐 Tilni o'zgartirish",
+        "btn_sub": "Kanalga obuna bo'lish",
+        "btn_check": "Tasdiqlash",
+        "btn_open": "Kolleksiyani ochish",
+        "btn_lang": "Tilni o'zgartirish",
         "not_subscribed": "Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
         "soon": "⏳ Bu tildagi film tez orada yuklanadi.",
         "catalog": (
@@ -133,10 +133,10 @@ TEXTS = {
     "ru": {
         "subscribe": emoji.tag("yopiq") + " Чтобы смотреть фильмы, сначала "
                      "подпишитесь на наш канал!",
-        "btn_sub": "1️⃣ Подписаться на канал",
-        "btn_check": "2️⃣ Подтвердить",
-        "btn_open": "🎬 Открыть коллекцию",
-        "btn_lang": "🌐 Сменить язык",
+        "btn_sub": "Подписаться на канал",
+        "btn_check": "Подтвердить",
+        "btn_open": "Открыть коллекцию",
+        "btn_lang": "Сменить язык",
         "not_subscribed": "Вы ещё не подписаны! Сначала вступите в канал.",
         "soon": "⏳ Фильм на этом языке скоро появится.",
         "catalog": (
@@ -150,10 +150,10 @@ TEXTS = {
     "en": {
         "subscribe": emoji.tag("yopiq") + " To watch the films, please "
                      "subscribe to our channel first!",
-        "btn_sub": "1️⃣ Subscribe to the channel",
-        "btn_check": "2️⃣ Confirm",
-        "btn_open": "🎬 Open the collection",
-        "btn_lang": "🌐 Change language",
+        "btn_sub": "Subscribe to the channel",
+        "btn_check": "Confirm",
+        "btn_open": "Open the collection",
+        "btn_lang": "Change language",
         "not_subscribed": "You are not subscribed yet! Please join the channel first.",
         "soon": "⏳ The film in this language will be uploaded soon.",
         "catalog": (
@@ -203,8 +203,10 @@ def lang_keyboard():
 def check_sub_keyboard(lang=DEFAULT_LANG):
     t = T(lang)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t["btn_sub"], url=CHANNEL_URL)],
-        [InlineKeyboardButton(text=t["btn_check"], callback_data="check_sub")]
+        [InlineKeyboardButton(text=t["btn_sub"], url=CHANNEL_URL,
+                              icon_custom_emoji_id=emoji.icon("yopiq"))],
+        [InlineKeyboardButton(text=t["btn_check"], callback_data="check_sub",
+                              icon_custom_emoji_id=emoji.icon("tasdiq"))]
     ])
 
 def webapp_url(lang):
@@ -219,26 +221,28 @@ def webapp_url(lang):
 def webapp_keyboard(lang=DEFAULT_LANG):
     t = T(lang)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t["btn_open"], web_app=WebAppInfo(url=webapp_url(lang)))],
+        [InlineKeyboardButton(text=t["btn_open"], web_app=WebAppInfo(url=webapp_url(lang)),
+                              icon_custom_emoji_id=emoji.icon("kolleksiya"))],
         # Til tugmasi SHART: aks holda noto'g'ri til tanlagan odam botda
         # uni o'zgartira olmay qolardi.
-        [InlineKeyboardButton(text=t["btn_lang"], callback_data="lang:pick")],
+        [InlineKeyboardButton(text=t["btn_lang"], callback_data="lang:pick",
+                              icon_custom_emoji_id=emoji.icon("til"))],
     ])
 
 LOCALES = {
     "uz": {
-        "collection_btn": "🎬 Filmlar kolleksiyasi",
-        "share_btn": "👥 Do'stlarga ulashish",
+        "collection_btn": "Filmlar kolleksiyasi",
+        "share_btn": "Do'stlarga ulashish",
         "share_text": "🎬 Menga bu filmlar kolleksiyasi yoqdi. Siz ham foydalanib ko'ring!"
     },
     "ru": {
-        "collection_btn": "🎬 Коллекция фильмов",
-        "share_btn": "👥 Поделиться с друзьями",
+        "collection_btn": "Коллекция фильмов",
+        "share_btn": "Поделиться с друзьями",
         "share_text": "🎬 Мне понравилась эта коллекция фильмов. Попробуйте и вы!"
     },
     "en": {
-        "collection_btn": "🎬 Movie Collection",
-        "share_btn": "👥 Share with friends",
+        "collection_btn": "Movie Collection",
+        "share_btn": "Share with friends",
         "share_text": "🎬 I really liked this movie collection. Check it out!"
     }
 }
@@ -251,8 +255,9 @@ def movie_delivery_keyboard(lang: str = "uz", vk_url: str = None):
     if vk_url:
         builder.row(
             InlineKeyboardButton(
-                text="⚡️ 4K formatda ko'rish", 
-                url=vk_url
+                text="4K formatda ko'rish",
+                url=vk_url,
+                icon_custom_emoji_id=emoji.icon("sifat")
             )
         )
     
@@ -269,15 +274,17 @@ def movie_delivery_keyboard(lang: str = "uz", vk_url: str = None):
     builder.row(
         InlineKeyboardButton(
             text=loc["collection_btn"],
-            web_app=WebAppInfo(url=webapp_url(lang))
+            web_app=WebAppInfo(url=webapp_url(lang)),
+            icon_custom_emoji_id=emoji.icon("kolleksiya")
         )
     )
     
     # --- 3-QATOR: Do'stlarga ulashish ---
     builder.row(
         InlineKeyboardButton(
-            text=loc["share_btn"], 
-            url=final_share_link
+            text=loc["share_btn"],
+            url=final_share_link,
+            icon_custom_emoji_id=emoji.icon("dostlar")
         )
     )
     

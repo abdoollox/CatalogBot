@@ -46,6 +46,17 @@ def tag(name):
     return '<tg-emoji emoji-id="%s">%s</tg-emoji>' % item
 
 
+def icon(name):
+    """Tugmaning `icon_custom_emoji_id` maydoni uchun (Bot API 9.4+).
+
+    Tugma matnida HTML ishlamaydi - u yerda faqat shu maydon orqali
+    custom emoji qo'yish mumkin. Zaxira mexanizmi yo'q: belgi
+    ko'rsatilmasa tugma shunchaki belgisiz qoladi.
+    """
+    item = ICONS.get(name)
+    return item[0] if item else None
+
+
 def strip_tags(text):
     """Custom emoji teglarini olib tashlab, faqat zaxira belgilarni qoldiradi.
 
