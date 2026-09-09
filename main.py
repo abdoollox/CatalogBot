@@ -23,6 +23,7 @@ import hmac
 import hashlib
 import sheets
 import catalog
+import emoji
 import hpcup
 import hpbot
 from datetime import datetime
@@ -32,6 +33,7 @@ from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.exceptions import TelegramBadRequest
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
@@ -88,13 +90,32 @@ async def log_user_action(user: types.User, payload: str):
     await sheets.append_click(user.id, db[user_id]["nickname"], db[user_id]["username"], payload, now)
 
 
+async def send_html(chat_id, text, **kw):
+    """HTML xabar yuboradi; custom emoji ishlamasa oddiy belgilar bilan
+    qayta uriniladi.
+
+    Custom emoji faqat bot egasida Telegram Premium bo'lsa ishlaydi.
+    Premium tugasa yoki to'plam o'chsa Telegram butun xabarni rad etishi
+    mumkin - asosiy oqim shu sababdan to'xtab qolmasligi kerak.
+    """
+    try:
+        return await bot.send_message(chat_id, text, parse_mode="HTML", **kw)
+    except TelegramBadRequest as e:
+        oddiy = emoji.strip_tags(text)
+        if oddiy == text:
+            raise
+        logging.warning("Custom emoji bilan yuborilmadi (%s): %s", chat_id, e)
+        return await bot.send_message(chat_id, oddiy, parse_mode="HTML", **kw)
+
+
 # --- BOT MATNLARI (uch tilda) ---
 # Foydalanuvchi /start da tilni bir marta tanlaydi; keyin BARCHA xabarlar
 # va filmlar shu tilda boradi.
 
 TEXTS = {
     "uz": {
-        "subscribe": "Filmlarni ko'rish uchun avval kanalimizga obuna bo'ling!",
+        "subscribe": emoji.tag("yopiq") + " Filmlarni ko'rish uchun avval "
+                     "kanalimizga obuna bo'ling!",
         "btn_sub": "1️⃣ Kanalga obuna bo'lish",
         "btn_check": "2️⃣ Tasdiqlash",
         "btn_open": "🎬 Kolleksiyani ochish",
@@ -102,14 +123,16 @@ TEXTS = {
         "not_subscribed": "Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
         "soon": "⏳ Bu tildagi film tez orada yuklanadi.",
         "catalog": (
-            "🪄 <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
+            emoji.tag("kolleksiya") + " <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
             "Garri Potter olamidagi barcha filmlarni yuqori sifatda, "
             "reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
-            "👇 <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
+            + emoji.tag("tomosha") +
+            " <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
         ),
     },
     "ru": {
-        "subscribe": "Чтобы смотреть фильмы, сначала подпишитесь на наш канал!",
+        "subscribe": emoji.tag("yopiq") + " Чтобы смотреть фильмы, сначала "
+                     "подпишитесь на наш канал!",
         "btn_sub": "1️⃣ Подписаться на канал",
         "btn_check": "2️⃣ Подтвердить",
         "btn_open": "🎬 Открыть коллекцию",
@@ -117,14 +140,16 @@ TEXTS = {
         "not_subscribed": "Вы ещё не подписаны! Сначала вступите в канал.",
         "soon": "⏳ Фильм на этом языке скоро появится.",
         "catalog": (
-            "🪄 <b>Добро пожаловать в Hogwarts Cinema!</b>\n\n"
+            emoji.tag("kolleksiya") + " <b>Добро пожаловать в Hogwarts Cinema!</b>\n\n"
             "Смотрите все фильмы вселенной Гарри Поттера в высоком качестве, "
             "без рекламы и на 3 языках (🇺🇿 🇷🇺 🇬🇧).\n\n"
-            "👇 <b>Откройте коллекцию кнопкой ниже и выберите фильм:</b>"
+            + emoji.tag("tomosha") +
+            " <b>Откройте коллекцию кнопкой ниже и выберите фильм:</b>"
         ),
     },
     "en": {
-        "subscribe": "To watch the films, please subscribe to our channel first!",
+        "subscribe": emoji.tag("yopiq") + " To watch the films, please "
+                     "subscribe to our channel first!",
         "btn_sub": "1️⃣ Subscribe to the channel",
         "btn_check": "2️⃣ Confirm",
         "btn_open": "🎬 Open the collection",
@@ -132,10 +157,11 @@ TEXTS = {
         "not_subscribed": "You are not subscribed yet! Please join the channel first.",
         "soon": "⏳ The film in this language will be uploaded soon.",
         "catalog": (
-            "🪄 <b>Welcome to Hogwarts Cinema!</b>\n\n"
+            emoji.tag("kolleksiya") + " <b>Welcome to Hogwarts Cinema!</b>\n\n"
             "Watch every film from the Harry Potter universe in high quality, "
             "ad-free and in 3 languages (🇺🇿 🇷🇺 🇬🇧).\n\n"
-            "👇 <b>Open the collection with the button below and pick a film:</b>"
+            + emoji.tag("tomosha") +
+            " <b>Open the collection with the button below and pick a film:</b>"
         ),
     },
 }
@@ -158,11 +184,12 @@ async def user_lang(user_id):
 
 # Til hali noma'lum - shuning uchun matn uchala tilda ham beriladi.
 LANG_PROMPT = (
-    "🪄 <b>Hogwarts Cinema</b>\n"
-    "Garri Potter olamining to'liq kolleksiyasi\n\n"
-    "🇺🇿 <b>Tilni tanlang.</b> Filmlar va barcha xabarlar shu tilda bo'ladi.\n"
-    "🇷🇺 <b>Выберите язык.</b> Фильмы и все сообщения будут на нём.\n"
-    "🇬🇧 <b>Choose a language.</b> Films and all messages will use it.")
+    emoji.tag("til") + " 🇺🇿 <b>Tilni tanlang.</b> "
+    "Filmlar va barcha xabarlar shu tilda bo'ladi.\n"
+    + emoji.tag("til") + " 🇷🇺 <b>Выберите язык.</b> "
+    "Фильмы и все сообщения будут на нём.\n"
+    + emoji.tag("til") + " 🇬🇧 <b>Choose a language.</b> "
+    "Films and all messages will use it.")
 
 
 def lang_keyboard():
@@ -309,8 +336,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
     # eslab qolamiz, til tanlangach o'sha yerdan davom etamiz.
     if not lang:
         remember_pending(user_id, payload, None)
-        await bot.send_message(user_id, LANG_PROMPT, parse_mode="HTML",
-                               reply_markup=lang_keyboard())
+        await send_html(user_id, LANG_PROMPT, reply_markup=lang_keyboard())
         return
 
     await continue_flow(message.from_user, user_id, payload, lang)
@@ -319,8 +345,8 @@ async def start_cmd(message: types.Message, command: CommandObject):
 async def continue_flow(user, chat_id, payload, lang):
     """Til ma'lum bo'lgandan keyingi yo'l: obuna -> film yoki katalog."""
     if not await is_subscribed(user.id):
-        taklif = await bot.send_message(chat_id, T(lang)["subscribe"],
-                                        reply_markup=check_sub_keyboard(lang))
+        taklif = await send_html(chat_id, T(lang)["subscribe"],
+                                 reply_markup=check_sub_keyboard(lang))
         # Nima uchun kelganini eslab qolamiz: a'zo bo'lgan zahoti davom etamiz.
         remember_pending(user.id, payload, taklif.message_id)
         return
@@ -346,8 +372,7 @@ async def lang_handler(callback: types.CallbackQuery):
         except Exception as e:
             logging.warning("Katalog kartasini o'chirib bo'lmadi (%s): %s",
                             user_id, e)
-        await bot.send_message(user_id, LANG_PROMPT, parse_mode="HTML",
-                               reply_markup=lang_keyboard())
+        await send_html(user_id, LANG_PROMPT, reply_markup=lang_keyboard())
         return
 
     if tanlov not in catalog.LANGS:
@@ -503,8 +528,8 @@ async def send_welcome(chat_id, lang=DEFAULT_LANG):
     Xabar obyekti emas, chat_id qabul qiladi: obuna hodisasidan keyin
     ham chaqiriladi, u yerda javob beriladigan xabar yo'q.
     """
-    await bot.send_message(chat_id, T(lang)["catalog"], parse_mode="HTML",
-                           reply_markup=webapp_keyboard(lang))
+    await send_html(chat_id, T(lang)["catalog"],
+                    reply_markup=webapp_keyboard(lang))
 
 
 @dp.callback_query(F.data == "check_sub")
