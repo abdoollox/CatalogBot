@@ -32,7 +32,6 @@ from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.exceptions import TelegramBadRequest
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
@@ -307,15 +306,16 @@ async def after_subscribe(user, chat_id, payload, prompt_message_id=None):
     "Tasdiqlash" tugmasi (zaxira yo'l - hodisa kechiksa yoki yetib
     kelmasa odam baribir o'tib keta olsin).
     """
-    # Taklif xabari endi keraksiz - chalkashtirmasin
+    # "Obuna bo'ling" xabari endi keraksiz - o'chiriladi.
     if prompt_message_id:
         try:
             await bot.delete_message(chat_id, prompt_message_id)
-        except Exception:
-            pass
+        except Exception as e:
+            # Jim yutmaymiz: o'chmay qolsa sababini bilishimiz kerak.
+            logging.warning("Taklif xabarini o'chirib bo'lmadi (%s): %s", chat_id, e)
 
-    await bot.send_message(chat_id, "✅ Obuna tasdiqlandi!")
-
+    # "Obuna tasdiqlandi" degan alohida xabar yuborilmaydi - foydalanuvchi
+    # buni o'zi biladi, ortiqcha qadam bo'lardi.
     if payload:
         # Odam aynan shu film uchun kelgan edi - o'shani beramiz. Ilgari bu
         # yo'qolib ketardi: obunadan keyin faqat katalog ko'rsatilardi va
@@ -334,59 +334,20 @@ CATALOG_TEXT = (
     "👇 <b>Kino tanlash uchun pastdagi tugma orqali kolleksiyani oching:</b>"
 )
 
-SORTING_TEXT = (
-    "🎩 <b>Saralovchi shlyapa sizni kutmoqda</b>\n\n"
-
-    "Bir necha savol — va siz o'z fakultetingizni bilib olasiz. "
-    "Shundan keyin har ko'rgan kinongiz fakultetingizga ball olib keladi, "
-    "haftalik <b>Xogvarts kubogi</b>da esa fakultetlar bellashadi.\n\n"
-
-    "Bu majburiy emas — kinolarni shusiz ham ko'raverasiz."
-)
-
-
-def sorting_keyboard():
-    """Saralanish taklifi. O'tkazib yuborish tugmasi SHART —
-    foydalanuvchilarning 40% i aniq bir kinoni qidirib keladi, yo'lni
-    to'sib qo'ysak asosiy qiymat buziladi."""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎩 Saralanish",
-                              web_app=WebAppInfo(url=WEBAPP_URL + "?screen=sort"))],
-        [InlineKeyboardButton(text="Hozir emas, kinolarni ko'rsat",
-                              callback_data="skip_sort")],
-    ])
-
-
 async def send_welcome(chat_id, user_id):
-    """Fakulteti yo'qlarga avval shlyapa, keyin katalog.
+    """Katalogni ko'rsatadi.
+
+    Ilgari fakulteti yo'qlarga avval saralanish taklif qilinardi. Endi
+    yo'q: bot faqat film ko'rmoqchi bo'lganlar uchun, saralanish esa
+    WebApp'dagi Xogvarts kubogining bir qismi. Botga filmga aloqasi
+    bo'lmagan qadam qo'shilmaydi.
 
     Xabar obyekti emas, chat_id qabul qiladi: obuna hodisasidan keyin
     ham chaqiriladi, u yerda javob beriladigan xabar yo'q.
     """
-    try:
-        has_house = await hpbot.user_house(user_id)
-    except Exception as e:
-        logging.error("Fakultetni aniqlashda xato: %s", e)
-        has_house = True          # shubha bo'lsa - eski oqim, yo'lni to'smaymiz
-
-    if not has_house:
-        await bot.send_message(chat_id, SORTING_TEXT, parse_mode="HTML",
-                               reply_markup=sorting_keyboard())
-        return
-
     await bot.send_message(chat_id, CATALOG_TEXT, parse_mode="HTML",
                            reply_markup=webapp_keyboard())
 
-
-@dp.callback_query(F.data == "skip_sort")
-async def skip_sort_handler(callback: types.CallbackQuery):
-    try:
-        await callback.message.edit_text(CATALOG_TEXT, parse_mode="HTML",
-                                         reply_markup=webapp_keyboard())
-    except TelegramBadRequest as e:
-        if "message is not modified" not in str(e):
-            raise
-    await callback.answer()
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_handler(callback: types.CallbackQuery):
