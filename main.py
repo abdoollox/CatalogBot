@@ -123,7 +123,7 @@ TEXTS = {
         "not_subscribed": "Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
         "soon": "⏳ Bu tildagi film tez orada yuklanadi.",
         "catalog": (
-            emoji.tag("kolleksiya") + " <b>Hogwarts Cinema'ga Xush Kelibsiz!</b>\n\n"
+            emoji.tag("kolleksiya") + " <b>Garri Potter Kolleksiyasiga xush kelibsiz!</b>\n\n"
             "Garri Potter olamidagi barcha filmlarni yuqori sifatda, "
             "reklamalarsiz va 3 xil tilda (🇺🇿 🇷🇺 🇬🇧) tomosha qiling.\n\n"
             + emoji.tag("tomosha") +
@@ -140,7 +140,7 @@ TEXTS = {
         "not_subscribed": "Вы ещё не подписаны! Сначала вступите в канал.",
         "soon": "⏳ Фильм на этом языке скоро появится.",
         "catalog": (
-            emoji.tag("kolleksiya") + " <b>Добро пожаловать в Hogwarts Cinema!</b>\n\n"
+            emoji.tag("kolleksiya") + " <b>Добро пожаловать в коллекцию «Гарри Поттер»!</b>\n\n"
             "Смотрите все фильмы вселенной Гарри Поттера в высоком качестве, "
             "без рекламы и на 3 языках (🇺🇿 🇷🇺 🇬🇧).\n\n"
             + emoji.tag("tomosha") +
@@ -157,7 +157,7 @@ TEXTS = {
         "not_subscribed": "You are not subscribed yet! Please join the channel first.",
         "soon": "⏳ The film in this language will be uploaded soon.",
         "catalog": (
-            emoji.tag("kolleksiya") + " <b>Welcome to Hogwarts Cinema!</b>\n\n"
+            emoji.tag("kolleksiya") + " <b>Welcome to the Harry Potter Collection!</b>\n\n"
             "Watch every film from the Harry Potter universe in high quality, "
             "ad-free and in 3 languages (🇺🇿 🇷🇺 🇬🇧).\n\n"
             + emoji.tag("tomosha") +
@@ -913,7 +913,7 @@ async def api_undo(request):
 
 
 async def handle(request):
-    return web.Response(text="Hogwarts Bot is Alive!")
+    return web.Response(text="Bot is alive!")
 
 async def main():
     logging.info("Bot va Server ishga tushmoqda...")
