@@ -156,8 +156,13 @@ async def user_lang(user_id):
         return None
 
 
-LANG_PROMPT = ("🌐 <b>Tilni tanlang</b>\n"
-               "Выберите язык · Choose language")
+# Til hali noma'lum - shuning uchun matn uchala tilda ham beriladi.
+LANG_PROMPT = (
+    "🪄 <b>Hogwarts Cinema</b>\n"
+    "Garri Potter olamining to'liq kolleksiyasi\n\n"
+    "🇺🇿 <b>Tilni tanlang.</b> Filmlar va barcha xabarlar shu tilda bo'ladi.\n"
+    "🇷🇺 <b>Выберите язык.</b> Фильмы и все сообщения будут на нём.\n"
+    "🇬🇧 <b>Choose a language.</b> Films and all messages will use it.")
 
 
 def lang_keyboard():
@@ -175,10 +180,19 @@ def check_sub_keyboard(lang=DEFAULT_LANG):
         [InlineKeyboardButton(text=t["btn_check"], callback_data="check_sub")]
     ])
 
+def webapp_url(lang):
+    """WebApp manzili tanlangan til bilan.
+
+    Busiz ilova o'z til ekranini qaytadan ko'rsatardi - foydalanuvchi
+    tilni ikki marta tanlashiga to'g'ri kelardi.
+    """
+    return "%s?lang=%s" % (WEBAPP_URL, lang if lang in catalog.LANGS else DEFAULT_LANG)
+
+
 def webapp_keyboard(lang=DEFAULT_LANG):
     t = T(lang)
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t["btn_open"], web_app=WebAppInfo(url=WEBAPP_URL))],
+        [InlineKeyboardButton(text=t["btn_open"], web_app=WebAppInfo(url=webapp_url(lang)))],
         # Til tugmasi SHART: aks holda noto'g'ri til tanlagan odam botda
         # uni o'zgartira olmay qolardi.
         [InlineKeyboardButton(text=t["btn_lang"], callback_data="lang:pick")],
@@ -227,8 +241,8 @@ def movie_delivery_keyboard(lang: str = "uz", vk_url: str = None):
     # --- 2-QATOR: Kolleksiya WebApp ---
     builder.row(
         InlineKeyboardButton(
-            text=loc["collection_btn"], 
-            web_app=WebAppInfo(url=WEBAPP_URL)
+            text=loc["collection_btn"],
+            web_app=WebAppInfo(url=webapp_url(lang))
         )
     )
     
@@ -323,11 +337,17 @@ async def lang_handler(callback: types.CallbackQuery):
     tanlov = callback.data.split(":", 1)[1]
     user_id = callback.from_user.id
 
-    # Katalogdagi "Tilni o'zgartirish" tugmasi - ro'yxatni qayta ko'rsatamiz
+    # Katalogdagi "Tilni o'zgartirish" tugmasi - ro'yxatni qayta ko'rsatamiz.
+    # Eski xabar o'chiriladi: chatda ikkita katalog kartasi qolib ketmasin.
     if tanlov == "pick":
         await callback.answer()
-        await callback.message.answer(LANG_PROMPT, parse_mode="HTML",
-                                      reply_markup=lang_keyboard())
+        try:
+            await callback.message.delete()
+        except Exception as e:
+            logging.warning("Katalog kartasini o'chirib bo'lmadi (%s): %s",
+                            user_id, e)
+        await bot.send_message(user_id, LANG_PROMPT, parse_mode="HTML",
+                               reply_markup=lang_keyboard())
         return
 
     if tanlov not in catalog.LANGS:
