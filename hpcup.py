@@ -289,6 +289,11 @@ def _migrate(conn, users_json):
         conn.execute("ALTER TABLE users ADD COLUMN ref_awarded_at TEXT")
     if "refs" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN refs INTEGER NOT NULL DEFAULT 0")
+    # Reklama manbasi: odamni qaysi kanal/post BIRINCHI olib kelgani.
+    if "source" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN source TEXT")
+    if "source_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN source_at TEXT")
 
     # 1) Eski `points.house` dan foydalanuvchilarni tiklaymiz. Ustun
     #    tushirilgandan keyin bu ma'lumot yo'qoladi, shuning uchun avval.
@@ -616,6 +621,52 @@ def _referral_count(user_id):
 async def referral_count(user_id):
     """Shu odam nechta do'st keltirgan."""
     return await asyncio.to_thread(_referral_count, user_id)
+
+
+# ---------------------------------------------------------------- manba
+# Reklama havolasi: t.me/<bot>?start=src_kanal yoki watch_hp1_uz-skanal.
+# Faqat yangi odam uchun va faqat BIRINCHI manba - qaysi reklama odamni
+# olib kelganini bilish uchun.
+
+def _remember_source(user_id, code):
+    conn = _connect()
+    try:
+        _touch_user(conn, user_id)
+        cur = conn.execute(
+            "UPDATE users SET source=?, source_at=? "
+            "WHERE user_id=? AND source IS NULL",
+            (code, _utc_iso(now_tk()), int(user_id)))
+        conn.commit()
+        return cur.rowcount == 1
+    finally:
+        conn.close()
+
+
+async def remember_source(user_id, code):
+    return await asyncio.to_thread(_remember_source, user_id, code)
+
+
+def _source_report():
+    conn = _connect()
+    try:
+        total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        rows = conn.execute(
+            "SELECT source, COUNT(*) n FROM users WHERE source IS NOT NULL "
+            "GROUP BY source ORDER BY n DESC").fetchall()
+        referred = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE ref_awarded_at IS NOT NULL").fetchone()[0]
+        attached = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE invited_by IS NOT NULL").fetchone()[0]
+        return {"total": total,
+                "sources": [(r["source"], r["n"]) for r in rows],
+                "referred": referred, "attached": attached}
+    finally:
+        conn.close()
+
+
+async def source_report():
+    """Admin hisoboti uchun: jami, manbalar bo'yicha, do'st taklifi bilan."""
+    return await asyncio.to_thread(_source_report)
 
 
 # Darajalar: (kerakli do'stlar soni, kod), kattadan kichikka.

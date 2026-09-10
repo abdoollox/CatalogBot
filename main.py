@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO, force=True)
 logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
 import json
+import html
 import aiofiles
 import urllib.parse
 import hmac
@@ -31,7 +32,7 @@ import hpbot
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart, CommandObject
+from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -44,6 +45,9 @@ CHANNEL_URL = "https://t.me/garripotter_kolleksiya"
 WEBAPP_URL = "https://abdoollox.github.io/CatalogWebApp/"
 IMG_URL = "https://abdoollox.github.io/CatalogWebApp/img"
 BOT_USERNAME = "garripotterkinobot"
+# /holat kabi xizmat buyruqlari faqat shu odamlarga (.env: ADMIN_IDS=1,2)
+ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",")
+             if x.isdigit()}
 DB_CHANNEL_ID = -1003641399832
 
 bot = Bot(token=TOKEN)
@@ -137,6 +141,13 @@ TEXTS = {
                     "Darajangiz: <b>%s</b>\n"
                     "Xogvarts kubogi: <b>+%d ball</b>"),
         "btn_share_more": "Yana ulashish",
+        "promo_title": "Kolleksiyani taklif qilish",
+        "promo_desc": "Garri Potter Kolleksiyasi — sizning havolangiz bilan",
+        "promo": ["%d ta film — hammasi bir joyda",
+                  "O'zbek, rus va ingliz tillarida",
+                  "1080p sifatda, reklamasiz, bepul",
+                  "Taklif qildi: <b>%s</b>",
+                  "Tugmani bosing va istalgan filmni oling"],
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Garri Potter Kolleksiyasiga xush kelibsiz!</b>\n\n"
             "Garri Potter olamidagi barcha filmlarni yuqori sifatda, "
@@ -165,6 +176,13 @@ TEXTS = {
                     "Ваш уровень: <b>%s</b>\n"
                     "Кубок Хогвартса: <b>+%d очков</b>"),
         "btn_share_more": "Поделиться ещё",
+        "promo_title": "Пригласить в коллекцию",
+        "promo_desc": "Коллекция «Гарри Поттер» — с вашей ссылкой",
+        "promo": ["%d фильмов — всё в одном месте",
+                  "На узбекском, русском и английском",
+                  "В качестве 1080p, без рекламы, бесплатно",
+                  "Пригласил(а): <b>%s</b>",
+                  "Нажмите кнопку и получите любой фильм"],
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Добро пожаловать в коллекцию «Гарри Поттер»!</b>\n\n"
             "Смотрите все фильмы вселенной Гарри Поттера в высоком качестве, "
@@ -193,6 +211,13 @@ TEXTS = {
                     "Your rank: <b>%s</b>\n"
                     "Hogwarts Cup: <b>+%d points</b>"),
         "btn_share_more": "Share more",
+        "promo_title": "Invite to the collection",
+        "promo_desc": "Harry Potter Collection — with your link",
+        "promo": ["%d films — all in one place",
+                  "In Uzbek, Russian and English",
+                  "1080p quality, ad-free, free",
+                  "Invited by: <b>%s</b>",
+                  "Tap the button and get any film"],
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Welcome to the Harry Potter Collection!</b>\n\n"
             "Watch every film from the Harry Potter universe in high quality, "
@@ -335,7 +360,6 @@ async def start_cmd(message: types.Message, command: CommandObject):
         
     raw = (command.args or "").strip()
     user_id = message.from_user.id
-    # Manba (`-s`) hozircha faqat ajratiladi - u keyingi bosqichda ishlatiladi.
     payload, inviter_id, source = parse_payload(raw)
 
     is_new = True
@@ -364,6 +388,16 @@ async def start_cmd(message: types.Message, command: CommandObject):
                 await log_user_action(message.from_user, "invited_%d" % inviter_id)
         except Exception as e:
             logging.error("Taklif qilganni yozishda xato: %s", e)
+
+    # Reklama manbasi (`src_kanal`, `...-skanal`): faqat yangi odam va faqat
+    # birinchisi - odamni qaysi reklama BIRINCHI olib kelgani muhim.
+    source = clean_source(source)
+    if source and is_new:
+        try:
+            if await hpcup.remember_source(user_id, source):
+                await log_user_action(message.from_user, "src_" + source)
+        except Exception as e:
+            logging.error("Manbani yozishda xato: %s", e)
     
     lang = await user_lang(user_id)
 
@@ -726,6 +760,11 @@ async def inline_search(query: types.InlineQuery):
     t = T(lang)
     raw = (query.query or "").strip()
 
+    # "taklif" - film emas, butun kolleksiyaning reklama kartasi.
+    if raw.lower() in PROMO_QUERIES:
+        await answer_promo(query, lang)
+        return
+
     # Aniq film+til ("hp3_uz") - film ostidagi "Ulashish" tugmasi shuni
     # yuboradi. Bunda faqat o'sha bitta karta: odam aynan qaysi versiyani
     # ko'rgan bo'lsa, o'shani ulashadi.
@@ -813,6 +852,35 @@ def movie_from_markup(markup):
                 if topildi:
                     return topildi.group(1)
     return None
+
+
+@dp.message(Command("holat"), F.from_user.id.in_(ADMIN_IDS))
+async def status_cmd(message: types.Message):
+    """Admin uchun: katalog, rasmlar va odamlar qayerdan kelgani."""
+    tayyor = ", ".join("%s %d/%d" % (BAYROQ[l], len(catalog.FILMS) - len(catalog.not_ready(l)),
+                                       len(catalog.FILMS)) for l in catalog.LANGS)
+    rep = await hpcup.source_report()
+    lines = [
+        "📊 <b>Holat</b>", "",
+        "Yuklangan filmlar: %s" % tayyor,
+        "Karta rasmlari: <b>%d / %d</b>" % (len(wide_versions),
+                                            len(catalog.FILMS) * len(catalog.LANGS)),
+        "Reklama kartasi: <b>%d / %d</b>" % (sum(1 for l in catalog.LANGS
+                                                if (promo_state.get(l) or {}).get("id")),
+                                             len(catalog.LANGS)),
+        "", "👥 <b>Foydalanuvchilar: %d</b>" % rep["total"], "", "📣 <b>Manbalar</b>",
+    ]
+    for code, n in rep["sources"]:
+        lines.append("• %s — <b>%d</b>" % (html.escape(SOURCES.get(code, code)), n))
+    if not rep["sources"]:
+        lines.append("<i>Hali reklama havolasidan kelgan yo'q.</i>")
+    lines.append("• Do'st taklifi bilan — <b>%d</b> (obuna bo'lmagan: %d)"
+                 % (rep["referred"], rep["attached"] - rep["referred"]))
+    lines += ["", "🔗 <b>Reklama havolalari</b>"]
+    for code, name in SOURCES.items():
+        lines.append("%s:\n<code>%s</code>" % (html.escape(name), source_link(code)))
+    await message.answer("\n".join(lines), parse_mode="HTML",
+                         link_preview_options=types.LinkPreviewOptions(is_disabled=True))
 
 
 @dp.message(F.via_bot)
@@ -1127,6 +1195,35 @@ def parse_payload(raw):
     return body, inviter, source
 
 
+# Reklama joylari. Kod havolaga yoziladi: t.me/<bot>?start=src_kanal
+# Ro'yxatda yo'q kod ham yoziladi - hisobotda kodning o'zi ko'rinadi.
+SOURCES = {
+    "kanal":  "Garri Potter Kolleksiya kanali",
+    "marvel": "Marvel Kolleksiya",
+    "kino":   "Kino Kolleksiya",
+}
+_SOURCE_RE = re.compile(r"[a-z0-9_]{1,32}")
+
+
+def clean_source(code):
+    """Havoladagi manba kodi: kichik harf, faqat [a-z0-9_]. Yaroqsiz - ""."""
+    code = (code or "").strip().lower()
+    return code if _SOURCE_RE.fullmatch(code) else ""
+
+
+def source_link(code, movie_key=None, lang=DEFAULT_LANG):
+    """Reklama uchun havola. Film berilsa - to'g'ridan o'sha filmga."""
+    if movie_key:
+        payload = "%s%s_%s-s%s" % (WATCH_PREFIX, movie_key, lang, code)
+    else:
+        payload = SRC_PREFIX + code
+    return "https://t.me/%s?start=%s" % (BOT_USERNAME, payload)
+
+
+def ref_link(user_id):
+    return "https://t.me/%s?start=%s%d" % (BOT_USERNAME, REF_PREFIX, user_id)
+
+
 def film_link(movie_key, lang, sharer_id=None):
     """Ulashiladigan havola. Payload FAQAT shu yerda yig'iladi."""
     payload = "%s%s_%s" % (WATCH_PREFIX, movie_key, lang)
@@ -1227,6 +1324,10 @@ async def wide_watcher(interval=6 * 3600):
             await refresh_wides()
         except Exception as e:
             logging.error("Karta rasmlarini tekshirishda xato: %s", e)
+        try:
+            await ensure_promo()
+        except Exception as e:
+            logging.error("Reklama rasmini tekshirishda xato: %s", e)
         await asyncio.sleep(interval)
 
 
@@ -1242,6 +1343,114 @@ def preview_options(movie_key, lang):
         prefer_large_media=True,
         show_above_text=True,         # rasm matn USTIDA
     )
+
+
+# --- REKLAMA KARTASI ("taklif") ---
+# Inline'da "taklif" yozilsa (tugmalar switch_inline_query="taklif" yuboradi)
+# film emas, butun kolleksiyaning rasmli kartasi chiqadi. Tugmasidagi
+# havolada ulashgan odamning id si bor - referal xuddi film kartasidagidek.
+#
+# Nega CachedPhoto: tashqi URL bilan yuborilgan InlineQueryResultPhoto da
+# Telegram caption'ni tashlab yuborishi mumkin (Marvel botida shunday
+# bo'lgan). Shuning uchun rasm bir marta yopiq kanalga yuklanadi va
+# file_id saqlanadi. Rasm yangilansa (ETag o'zgarsa) - qayta yuklanadi.
+# Rasmlar: CatalogWebApp/img/promo_<til>.jpg (tools/promogen.py).
+
+PROMO_QUERIES = {"taklif", "invite", "пригласить"}
+PROMO_FILE = os.getenv("PROMO_FILE", "/data/promo.json")
+promo_state = {}          # til -> {"etag": ..., "id": file_id}
+
+
+def promo_path(lang):
+    return "%s/promo_%s.jpg" % (IMG_URL, lang)
+
+
+async def load_promo():
+    try:
+        async with aiofiles.open(PROMO_FILE, "r", encoding="utf-8") as f:
+            promo_state.update(json.loads(await f.read() or "{}"))
+    except (FileNotFoundError, ValueError):
+        pass
+
+
+async def ensure_promo():
+    """Har til uchun rasm yopiq kanalga yuklanganiga ishonch hosil qiladi."""
+    changed = False
+    vaqt = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=vaqt) as s:
+        for lang in catalog.LANGS:
+            try:
+                async with s.head(promo_path(lang)) as r:
+                    if r.status != 200:
+                        continue
+                    belgi = r.headers.get("ETag") or r.headers.get("Last-Modified") or "1"
+            except Exception:
+                continue            # tarmoq uzildi - eski file_id qolaveradi
+            etag = hashlib.md5(belgi.encode()).hexdigest()[:8]
+            joriy = promo_state.get(lang) or {}
+            if joriy.get("id") and joriy.get("etag") == etag:
+                continue
+            try:
+                msg = await bot.send_photo(DB_CHANNEL_ID,
+                                           "%s?v=%s" % (promo_path(lang), etag),
+                                           disable_notification=True)
+                promo_state[lang] = {"etag": etag, "id": msg.photo[-1].file_id}
+                changed = True
+                logging.info("Reklama rasmi yuklandi: %s", lang)
+            except Exception as e:
+                logging.error("Reklama rasmini yuklashda xato (%s): %s", lang, e)
+    if changed:
+        try:
+            async with aiofiles.open(PROMO_FILE, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(promo_state, ensure_ascii=False))
+        except Exception as e:
+            logging.error("promo.json ga yozishda xato: %s", e)
+
+
+def promo_caption(lang, inviter_name=None):
+    t = T(lang)
+    p = t["promo"]
+    films = len(catalog.FILMS)
+    lines = [
+        '%s <b>%s</b>' % (emoji.tag("kolleksiya"), t["brand"]),
+        "— — — — — — — — — —",
+        "%s %s" % (emoji.tag("tomosha"), p[0] % films),
+        "%s %s" % (emoji.tag("til"), p[1]),
+        "%s %s" % (emoji.tag("sifat"), p[2]),
+    ]
+    if inviter_name:
+        lines += ["", "%s %s" % (emoji.tag("dostlar"), p[3] % html.escape(inviter_name))]
+    lines += ["", p[4]]
+    return "\n".join(lines)
+
+
+def promo_keyboard(lang, sharer_id):
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=T(lang)["btn_open"], url=ref_link(sharer_id),
+        icon_custom_emoji_id=emoji.icon("kolleksiya"))]])
+
+
+async def answer_promo(query, lang):
+    t = T(lang)
+    cap = promo_caption(lang, query.from_user.first_name)
+    kb = promo_keyboard(lang, query.from_user.id)
+    file_id = (promo_state.get(lang) or {}).get("id")
+    if file_id:
+        card = types.InlineQueryResultCachedPhoto(
+            id="promo", photo_file_id=file_id, title=t["promo_title"],
+            description=t["promo_desc"], caption=cap, parse_mode="HTML",
+            reply_markup=kb)
+    else:
+        # Zaxira: rasm hali kanalga yuklanmagan bo'lsa - tashqi manzil
+        card = types.InlineQueryResultPhoto(
+            id="promo", photo_url=promo_path(lang), thumbnail_url=promo_path(lang),
+            photo_width=1280, photo_height=720, title=t["promo_title"],
+            description=t["promo_desc"], caption=cap, parse_mode="HTML",
+            reply_markup=kb)
+    try:
+        await query.answer([card], cache_time=0, is_personal=True)
+    except Exception as e:
+        logging.error("Reklama kartasida xato: %s", e)
 
 
 def sq_url(movie_key, lang):
@@ -1412,6 +1621,7 @@ async def main():
         logging.error("Xogvarts kubogi ishga tushmadi: %s", cup_error)
 
     # Karta rasmlari kubokka bog'liq emas - u ishlamasa ham ishga tushsin.
+    await load_promo()
     asyncio.create_task(wide_watcher())
 
     runner = web.AppRunner(app)
