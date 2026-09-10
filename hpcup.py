@@ -137,6 +137,13 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_house_id ON chat_messages(house, id);
 
+CREATE TABLE IF NOT EXISTS chat_reactions (
+    message_id INTEGER NOT NULL,
+    user_id    INTEGER NOT NULL,
+    emoji      TEXT NOT NULL,
+    PRIMARY KEY (message_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS badges (
     user_id   INTEGER NOT NULL,
     code      TEXT NOT NULL,
@@ -295,6 +302,22 @@ def _migrate(conn, users_json):
         conn.execute("ALTER TABLE users ADD COLUMN source TEXT")
     if "source_at" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN source_at TEXT")
+
+    # Chat: javob, tahrir, o'chirish. `rev` - o'zgarish raqami: yangi xabar,
+    # tahrir, o'chirish va reaksiya uni oshiradi; ilova "shu raqamdan keyin
+    # nima o'zgardi?" deb so'raydi va hammasini birdaniga oladi.
+    chat_cols = [r[1] for r in conn.execute("PRAGMA table_info(chat_messages)")]
+    if "reply_to" not in chat_cols:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN reply_to INTEGER")
+    if "edited_at" not in chat_cols:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN edited_at TEXT")
+    if "deleted" not in chat_cols:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
+    if "rev" not in chat_cols:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN rev INTEGER")
+        conn.execute("UPDATE chat_messages SET rev = id")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_rev ON chat_messages(rev)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_house_rev ON chat_messages(house, rev)")
 
     # 1) Eski `points.house` dan foydalanuvchilarni tiklaymiz. Ustun
     #    tushirilgandan keyin bu ma'lumot yo'qoladi, shuning uchun avval.
@@ -1638,63 +1661,210 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
     return res
 
 _CHAT_SELECT = (
-    "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, c.message, c.created_at "
+    "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, "
+    "c.message, c.created_at, c.reply_to, c.edited_at, c.deleted, c.rev, "
+    "r.user_id AS r_uid, COALESCE(ru.first_name, 'Sehrgar') AS r_name, ru.house AS r_house, r.message AS r_text, r.deleted AS r_deleted "
     "FROM chat_messages c "
-    "LEFT JOIN users u ON u.user_id = c.user_id ")
+    "LEFT JOIN users u ON u.user_id = c.user_id "
+    "LEFT JOIN chat_messages r ON r.id = c.reply_to "
+    "LEFT JOIN users ru ON ru.user_id = r.user_id ")
+
+_NEXT_REV = "(SELECT COALESCE(MAX(rev), 0) + 1 FROM chat_messages)"
+
+CHAT_EDIT_HOURS = 48
+CHAT_REACTIONS = ("👍", "❤️", "😂", "🔥", "😮", "⚡")
 
 
 def _chat_row(r):
-    return {
+    if r["deleted"]:
+        return {"id": r["id"], "rev": r["rev"], "deleted": True}
+    m = {
         "id": r["id"],
         "uid": r["user_id"],
         "name": r["name"],
         "house": r["user_house"],
         "text": r["message"],
-        "time": r["created_at"]
+        "time": r["created_at"],
+        "rev": r["rev"],
     }
+    if r["edited_at"]:
+        m["edited"] = True
+    if r["reply_to"]:
+        if r["r_uid"] is None or r["r_deleted"]:
+            m["reply"] = {"id": r["reply_to"], "deleted": True}
+        else:
+            m["reply"] = {"id": r["reply_to"], "uid": r["r_uid"], "name": r["r_name"],
+                          "house": r["r_house"], "text": (r["r_text"] or "")[:120]}
+    return m
 
 
-async def get_chat_messages(house, limit=50, after=None, before=None):
+def _chat_reactions(conn, messages, viewer):
+    """Har xabarga [{"e": emoji, "n": soni, "me": bosganmi}] qo'shadi."""
+    ids = [m["id"] for m in messages if not m.get("deleted")]
+    if not ids:
+        return messages
+    rows = conn.execute(
+        "SELECT message_id, emoji, COUNT(*) AS n, MAX(user_id = ?) AS mine "
+        "FROM chat_reactions WHERE message_id IN (%s) "
+        "GROUP BY message_id, emoji ORDER BY MIN(rowid)" % ",".join("?" * len(ids)),
+        [int(viewer or 0)] + ids).fetchall()
+    by_id = {}
+    for r in rows:
+        by_id.setdefault(r["message_id"], []).append(
+            {"e": r["emoji"], "n": r["n"], "me": bool(r["mine"])})
+    for m in messages:
+        if m["id"] in by_id:
+            m["reactions"] = by_id[m["id"]]
+    return messages
+
+
+def _chat_one(conn, msg_id, viewer):
+    row = conn.execute(_CHAT_SELECT + "WHERE c.id=?", (msg_id,)).fetchone()
+    return _chat_reactions(conn, [_chat_row(row)], viewer)[0] if row else None
+
+
+async def get_chat_messages(house, limit=50, after=None, before=None, since=None, viewer=0):
     """Xona xabarlari, eskisidan yangisiga.
 
-    after  - shu id dan KEYINGI xabarlar (jonli yangilanish uchun);
+    since  - shu o'zgarish raqamidan keyin nima o'zgardi (yangi, tahrirlangan,
+             o'chirilgan, reaksiya olgan xabarlar) - jonli yangilanish uchun;
+    after  - shu id dan KEYINGI xabarlar (eski ilova shunday so'raydi);
     before - shu id dan OLDINGI xabarlar (yuqoriga surilganda eski sahifa).
-    Ikkalasi ham berilmasa - oxirgi `limit` ta xabar.
+    Hech biri berilmasa - oxirgi `limit` ta xabar.
     """
     def _do():
         conn = _connect()
         try:
+            if since is not None:
+                rows = conn.execute(
+                    _CHAT_SELECT + "WHERE c.house=? AND c.rev>? ORDER BY c.rev ASC LIMIT ?",
+                    (house, int(since), limit)).fetchall()
+                return _chat_reactions(conn, [_chat_row(r) for r in rows], viewer)
             if after is not None:
                 rows = conn.execute(
-                    _CHAT_SELECT + "WHERE c.house=? AND c.id>? ORDER BY c.id ASC LIMIT ?",
+                    _CHAT_SELECT + "WHERE c.house=? AND c.id>? AND c.deleted=0 ORDER BY c.id ASC LIMIT ?",
                     (house, int(after), limit)).fetchall()
-                return [_chat_row(r) for r in rows]
+                return _chat_reactions(conn, [_chat_row(r) for r in rows], viewer)
             if before is not None:
                 rows = conn.execute(
-                    _CHAT_SELECT + "WHERE c.house=? AND c.id<? ORDER BY c.id DESC LIMIT ?",
+                    _CHAT_SELECT + "WHERE c.house=? AND c.id<? AND c.deleted=0 ORDER BY c.id DESC LIMIT ?",
                     (house, int(before), limit)).fetchall()
             else:
                 rows = conn.execute(
-                    _CHAT_SELECT + "WHERE c.house=? ORDER BY c.id DESC LIMIT ?",
+                    _CHAT_SELECT + "WHERE c.house=? AND c.deleted=0 ORDER BY c.id DESC LIMIT ?",
                     (house, limit)).fetchall()
-            return [_chat_row(r) for r in reversed(rows)]
+            return _chat_reactions(conn, [_chat_row(r) for r in reversed(rows)], viewer)
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
 
-async def post_chat_message(house, user_id, message):
-    """Xabarni saqlaydi va uni ro'yxatdagi ko'rinishida qaytaradi."""
+
+async def chat_max_rev(house):
     def _do():
         conn = _connect()
         try:
+            return conn.execute("SELECT COALESCE(MAX(rev), 0) FROM chat_messages WHERE house=?",
+                                (house,)).fetchone()[0]
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def post_chat_message(house, user_id, message, reply_to=None):
+    """Xabarni saqlaydi va uni ro'yxatdagi ko'rinishida qaytaradi.
+
+    reply_to boshqa xonadagi yoki o'chirilgan xabarga ishora qilsa - e'tiborsiz qoldiriladi.
+    """
+    def _do():
+        conn = _connect()
+        try:
+            target = None
+            if reply_to:
+                ok = conn.execute(
+                    "SELECT 1 FROM chat_messages WHERE id=? AND house=? AND deleted=0",
+                    (int(reply_to), house)).fetchone()
+                target = int(reply_to) if ok else None
             stamp = _utc_iso(now_tk())
             cur = conn.execute(
-                "INSERT INTO chat_messages (house, user_id, message, created_at) "
-                "VALUES (?,?,?,?)", (house, int(user_id), message.strip(), stamp)
+                "INSERT INTO chat_messages (house, user_id, message, created_at, reply_to, rev) "
+                "VALUES (?,?,?,?,?," + _NEXT_REV + ")",
+                (house, int(user_id), message.strip(), stamp, target)
             )
             conn.commit()
-            row = conn.execute(_CHAT_SELECT + "WHERE c.id=?", (cur.lastrowid,)).fetchone()
-            return _chat_row(row)
+            return _chat_one(conn, cur.lastrowid, user_id)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+def _own_live_message(conn, house, msg_id):
+    return conn.execute(
+        "SELECT id, user_id, created_at FROM chat_messages WHERE id=? AND house=? AND deleted=0",
+        (int(msg_id), house)).fetchone()
+
+
+async def edit_chat_message(house, user_id, msg_id, text):
+    """O'z xabarini tahrirlash (CHAT_EDIT_HOURS soat ichida). Xato bo'lsa - matn kodi."""
+    def _do():
+        conn = _connect()
+        try:
+            row = _own_live_message(conn, house, msg_id)
+            if not row or row["user_id"] != int(user_id):
+                return "not_found"
+            made = _parse_iso(row["created_at"])
+            if made and (now_tk() - made).total_seconds() > CHAT_EDIT_HOURS * 3600:
+                return "too_old"
+            conn.execute(
+                "UPDATE chat_messages SET message=?, edited_at=?, rev=" + _NEXT_REV + " WHERE id=?",
+                (text.strip(), _utc_iso(now_tk()), row["id"]))
+            conn.commit()
+            return _chat_one(conn, row["id"], user_id)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def delete_chat_message(house, user_id, msg_id, admin=False):
+    """O'z xabarini (admin - istalganini) o'chiradi. Qator qoladi, matn tozalanadi:
+    boshqa ilovalar o'zgarish raqami orqali "o'chirildi" deb bilib oladi."""
+    def _do():
+        conn = _connect()
+        try:
+            row = _own_live_message(conn, house, msg_id)
+            if not row or (row["user_id"] != int(user_id) and not admin):
+                return False
+            conn.execute(
+                "UPDATE chat_messages SET message='', deleted=1, rev=" + _NEXT_REV + " WHERE id=?",
+                (row["id"],))
+            conn.execute("DELETE FROM chat_reactions WHERE message_id=?", (row["id"],))
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def react_chat_message(house, user_id, msg_id, emoji):
+    """Reaksiya: bir odam - bir xabarga bitta. Xuddi shu belgini qayta bosish uni olib tashlaydi."""
+    def _do():
+        conn = _connect()
+        try:
+            row = _own_live_message(conn, house, msg_id)
+            if not row:
+                return None
+            old = conn.execute(
+                "SELECT emoji FROM chat_reactions WHERE message_id=? AND user_id=?",
+                (row["id"], int(user_id))).fetchone()
+            if old and old["emoji"] == emoji:
+                conn.execute("DELETE FROM chat_reactions WHERE message_id=? AND user_id=?",
+                             (row["id"], int(user_id)))
+            else:
+                conn.execute(
+                    "INSERT OR REPLACE INTO chat_reactions (message_id, user_id, emoji) VALUES (?,?,?)",
+                    (row["id"], int(user_id), emoji))
+            conn.execute("UPDATE chat_messages SET rev=" + _NEXT_REV + " WHERE id=?", (row["id"],))
+            conn.commit()
+            return _chat_one(conn, row["id"], user_id)
         finally:
             conn.close()
     return await asyncio.to_thread(_do)

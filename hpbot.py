@@ -560,8 +560,10 @@ def register(dp, bot, app, cfg):
     # Ilgari ilova har 4 soniyada butun ro'yxatni qayta so'rardi.
     CHAT_WAIT = 25
     CHAT_LIMIT, CHAT_WINDOW = 5, 10     # 10 soniyada 5 tadan ko'p xabar yo'q
+    REACT_LIMIT = 15                    # reaksiya/tahrir/o'chirish - 10 soniyada 15 ta
     chat_events = {}                    # xona -> asyncio.Event
     chat_sent = {}                      # uid -> oxirgi xabarlar vaqti
+    chat_acts = {}                      # uid -> oxirgi reaksiya/tahrir/o'chirish vaqti
     chat_cids = {}                      # (uid, cid) -> xabar; qayta yuborishda takror yo'q
     chat_cid_of = {}                    # xabar id -> (uid, cid); ilova o'z xabarini taniydi
 
@@ -576,6 +578,17 @@ def register(dp, bot, app, cfg):
         ev = chat_events.pop(target, None)
         if ev:
             ev.set()
+
+    def chat_slow(store, uid, limit):
+        """Cheklovdan oshsa - necha soniya kutish kerakligi, aks holda None."""
+        now = time.monotonic()
+        sent = store.setdefault(uid, deque())
+        while sent and now - sent[0] > CHAT_WINDOW:
+            sent.popleft()
+        if len(sent) >= limit:
+            return max(1, math.ceil(CHAT_WINDOW - (now - sent[0])))
+        sent.append(now)
+        return None
 
     def chat_int(value):
         try:
@@ -609,25 +622,42 @@ def register(dp, bot, app, cfg):
                 return cors(web.json_response({"error": "no_house"}, status=403))
             after = chat_int(request.query.get("after"))
             before = chat_int(request.query.get("before"))
+            since = chat_int(request.query.get("since"))
+            if since is not None:
+                # Hodisani so'rovdan OLDIN olamiz: so'rov paytidagi o'zgarish
+                # ham shu hodisani uyg'otadi va yo'qolib qolmaydi.
+                ev = chat_events.setdefault(target, asyncio.Event())
+                messages = await hpcup.get_chat_messages(target, 100, since=since, viewer=uid)
+                if not messages and request.query.get("wait"):
+                    try:
+                        await asyncio.wait_for(ev.wait(), CHAT_WAIT)
+                    except asyncio.TimeoutError:
+                        pass
+                    messages = await hpcup.get_chat_messages(target, 100, since=since, viewer=uid)
+                rev = max([m["rev"] for m in messages] + [since])
+                return cors(web.json_response({"ok": True, "messages": chat_tag(messages), "rev": rev}))
             if before is not None:
-                messages = await hpcup.get_chat_messages(target, 50, before=before)
+                messages = await hpcup.get_chat_messages(target, 50, before=before, viewer=uid)
                 return cors(web.json_response(
                     {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50}))
             if after is not None:
                 # Hodisani so'rovdan OLDIN olamiz: so'rov paytida yozilgan
                 # xabar ham shu hodisani uyg'otadi va yo'qolib qolmaydi.
                 ev = chat_events.setdefault(target, asyncio.Event())
-                messages = await hpcup.get_chat_messages(target, 100, after=after)
+                messages = await hpcup.get_chat_messages(target, 100, after=after, viewer=uid)
                 if not messages and request.query.get("wait"):
                     try:
                         await asyncio.wait_for(ev.wait(), CHAT_WAIT)
                     except asyncio.TimeoutError:
                         pass
-                    messages = await hpcup.get_chat_messages(target, 100, after=after)
+                    messages = await hpcup.get_chat_messages(target, 100, after=after, viewer=uid)
                 return cors(web.json_response({"ok": True, "messages": chat_tag(messages)}))
-            messages = await hpcup.get_chat_messages(target, 50)
+            # Raqamni ro'yxatdan OLDIN olamiz: oradagi o'zgarish keyingi so'rovda
+            # takror kelsa ham ilova uni id bo'yicha taniydi, yo'qolmaydi.
+            rev = await hpcup.chat_max_rev(target)
+            messages = await hpcup.get_chat_messages(target, 50, viewer=uid)
             return cors(web.json_response(
-                {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50}))
+                {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50, "rev": rev}))
             
         elif request.method == "POST":
             if not body:
@@ -637,6 +667,36 @@ def register(dp, bot, app, cfg):
             target = "global" if room == "global" else house
             if not target:
                 return cors(web.json_response({"error": "no_house"}, status=403))
+
+            action = body.get("action") or "send"
+            if action in ("edit", "delete", "react"):
+                msg_id = chat_int(body.get("id"))
+                if msg_id is None:
+                    return cors(web.json_response({"error": "invalid id"}, status=400))
+                retry = chat_slow(chat_acts, uid, REACT_LIMIT)
+                if retry:
+                    return cors(web.json_response({"error": "slow", "retry": retry}, status=429))
+                if action == "react":
+                    emoji = body.get("emoji")
+                    if emoji not in hpcup.CHAT_REACTIONS:
+                        return cors(web.json_response({"error": "invalid emoji"}, status=400))
+                    message = await hpcup.react_chat_message(target, uid, msg_id, emoji)
+                elif action == "edit":
+                    text = (body.get("text") or "").strip()
+                    if not text or len(text) > 1000:
+                        return cors(web.json_response({"error": "invalid message"}, status=400))
+                    message = await hpcup.edit_chat_message(target, uid, msg_id, text)
+                    if isinstance(message, str):
+                        return cors(web.json_response({"error": message}, status=403))
+                else:
+                    message = await hpcup.delete_chat_message(target, uid, msg_id)
+                    if message:
+                        chat_wake(target)
+                        return cors(web.json_response({"ok": True, "id": msg_id}))
+                if not message:
+                    return cors(web.json_response({"error": "not_found"}, status=404))
+                chat_wake(target)
+                return cors(web.json_response({"ok": True, "message": message}))
                 
             text = (body.get("text") or "").strip()
             if not text or len(text) > 1000:
@@ -647,21 +707,16 @@ def register(dp, bot, app, cfg):
             if cid and (uid, cid) in chat_cids:
                 return cors(web.json_response({"ok": True, "message": chat_cids[(uid, cid)]}))
 
-            now = time.monotonic()
-            sent = chat_sent.setdefault(uid, deque())
-            while sent and now - sent[0] > CHAT_WINDOW:
-                sent.popleft()
-            if len(sent) >= CHAT_LIMIT:
-                retry = max(1, math.ceil(CHAT_WINDOW - (now - sent[0])))
+            retry = chat_slow(chat_sent, uid, CHAT_LIMIT)
+            if retry:
                 return cors(web.json_response({"error": "slow", "retry": retry}, status=429))
-            sent.append(now)
                 
             try:
                 await hpcup.touch_user(uid, user.get("first_name"), user.get("username"))
             except Exception:
                 pass
                 
-            message = await hpcup.post_chat_message(target, uid, text)
+            message = await hpcup.post_chat_message(target, uid, text, chat_int(body.get("reply_to")))
             if cid:
                 message["cid"] = cid
                 chat_cids[(uid, cid)] = message
