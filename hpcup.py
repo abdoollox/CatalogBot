@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     message      TEXT NOT NULL,
     created_at   TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_chat_house_id ON chat_messages(house, id);
 
 CREATE TABLE IF NOT EXISTS badges (
     user_id   INTEGER NOT NULL,
@@ -1636,41 +1637,64 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
     res["points"] = pts
     return res
 
-async def get_chat_messages(house, limit=50):
+_CHAT_SELECT = (
+    "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, c.message, c.created_at "
+    "FROM chat_messages c "
+    "LEFT JOIN users u ON u.user_id = c.user_id ")
+
+
+def _chat_row(r):
+    return {
+        "id": r["id"],
+        "uid": r["user_id"],
+        "name": r["name"],
+        "house": r["user_house"],
+        "text": r["message"],
+        "time": r["created_at"]
+    }
+
+
+async def get_chat_messages(house, limit=50, after=None, before=None):
+    """Xona xabarlari, eskisidan yangisiga.
+
+    after  - shu id dan KEYINGI xabarlar (jonli yangilanish uchun);
+    before - shu id dan OLDINGI xabarlar (yuqoriga surilganda eski sahifa).
+    Ikkalasi ham berilmasa - oxirgi `limit` ta xabar.
+    """
     def _do():
         conn = _connect()
         try:
-            rows = conn.execute(
-                "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, c.message, c.created_at "
-                "FROM chat_messages c "
-                "LEFT JOIN users u ON u.user_id = c.user_id "
-                "WHERE c.house=? "
-                "ORDER BY c.id DESC LIMIT ?", (house, limit)).fetchall()
-            out = []
-            for r in rows:
-                out.append({
-                    "id": r["id"],
-                    "uid": r["user_id"],
-                    "name": r["name"],
-                    "house": r["user_house"],
-                    "text": r["message"],
-                    "time": r["created_at"]
-                })
-            return list(reversed(out))
+            if after is not None:
+                rows = conn.execute(
+                    _CHAT_SELECT + "WHERE c.house=? AND c.id>? ORDER BY c.id ASC LIMIT ?",
+                    (house, int(after), limit)).fetchall()
+                return [_chat_row(r) for r in rows]
+            if before is not None:
+                rows = conn.execute(
+                    _CHAT_SELECT + "WHERE c.house=? AND c.id<? ORDER BY c.id DESC LIMIT ?",
+                    (house, int(before), limit)).fetchall()
+            else:
+                rows = conn.execute(
+                    _CHAT_SELECT + "WHERE c.house=? ORDER BY c.id DESC LIMIT ?",
+                    (house, limit)).fetchall()
+            return [_chat_row(r) for r in reversed(rows)]
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
 
 async def post_chat_message(house, user_id, message):
+    """Xabarni saqlaydi va uni ro'yxatdagi ko'rinishida qaytaradi."""
     def _do():
         conn = _connect()
         try:
             stamp = _utc_iso(now_tk())
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO chat_messages (house, user_id, message, created_at) "
                 "VALUES (?,?,?,?)", (house, int(user_id), message.strip(), stamp)
             )
             conn.commit()
+            row = conn.execute(_CHAT_SELECT + "WHERE c.id=?", (cur.lastrowid,)).fetchone()
+            return _chat_row(row)
         finally:
             conn.close()
     return await asyncio.to_thread(_do)

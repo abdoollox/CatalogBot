@@ -10,6 +10,9 @@ import os
 import random
 import asyncio
 import logging
+import math
+import time
+from collections import deque
 from datetime import datetime, timezone
 
 from aiogram import types, F
@@ -551,6 +554,35 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
     app.router.add_route("*", "/api/referrals", api_referrals)
 
+    # Chat "jonli": ilova "shu id dan keyingi xabar bormi?" deb so'raydi va
+    # yangi xabar bo'lmasa javob CHAT_WAIT soniyagacha ushlab turiladi -
+    # kimdir yozgan zahoti hamma kutib turganlarga darhol qaytadi.
+    # Ilgari ilova har 4 soniyada butun ro'yxatni qayta so'rardi.
+    CHAT_WAIT = 25
+    CHAT_LIMIT, CHAT_WINDOW = 5, 10     # 10 soniyada 5 tadan ko'p xabar yo'q
+    chat_events = {}                    # xona -> asyncio.Event
+    chat_sent = {}                      # uid -> oxirgi xabarlar vaqti
+    chat_cids = {}                      # (uid, cid) -> xabar; qayta yuborishda takror yo'q
+    chat_cid_of = {}                    # xabar id -> (uid, cid); ilova o'z xabarini taniydi
+
+    def chat_tag(messages):
+        for m in messages:
+            key = chat_cid_of.get(m["id"])
+            if key:
+                m["cid"] = key[1]
+        return messages
+
+    def chat_wake(target):
+        ev = chat_events.pop(target, None)
+        if ev:
+            ev.set()
+
+    def chat_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     async def api_chat(request):
         web = _web()
         cors = _cfg["cors"]
@@ -575,8 +607,27 @@ def register(dp, bot, app, cfg):
             target = "global" if room == "global" else house
             if not target:
                 return cors(web.json_response({"error": "no_house"}, status=403))
+            after = chat_int(request.query.get("after"))
+            before = chat_int(request.query.get("before"))
+            if before is not None:
+                messages = await hpcup.get_chat_messages(target, 50, before=before)
+                return cors(web.json_response(
+                    {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50}))
+            if after is not None:
+                # Hodisani so'rovdan OLDIN olamiz: so'rov paytida yozilgan
+                # xabar ham shu hodisani uyg'otadi va yo'qolib qolmaydi.
+                ev = chat_events.setdefault(target, asyncio.Event())
+                messages = await hpcup.get_chat_messages(target, 100, after=after)
+                if not messages and request.query.get("wait"):
+                    try:
+                        await asyncio.wait_for(ev.wait(), CHAT_WAIT)
+                    except asyncio.TimeoutError:
+                        pass
+                    messages = await hpcup.get_chat_messages(target, 100, after=after)
+                return cors(web.json_response({"ok": True, "messages": chat_tag(messages)}))
             messages = await hpcup.get_chat_messages(target, 50)
-            return cors(web.json_response({"ok": True, "messages": messages}))
+            return cors(web.json_response(
+                {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50}))
             
         elif request.method == "POST":
             if not body:
@@ -590,15 +641,39 @@ def register(dp, bot, app, cfg):
             text = (body.get("text") or "").strip()
             if not text or len(text) > 1000:
                 return cors(web.json_response({"error": "invalid message"}, status=400))
+
+            # Internet uzilib, ilova xabarni qayta yuborsa - ikkinchi nusxa yozilmaydi.
+            cid = str(body.get("cid") or "")[:40]
+            if cid and (uid, cid) in chat_cids:
+                return cors(web.json_response({"ok": True, "message": chat_cids[(uid, cid)]}))
+
+            now = time.monotonic()
+            sent = chat_sent.setdefault(uid, deque())
+            while sent and now - sent[0] > CHAT_WINDOW:
+                sent.popleft()
+            if len(sent) >= CHAT_LIMIT:
+                retry = max(1, math.ceil(CHAT_WINDOW - (now - sent[0])))
+                return cors(web.json_response({"error": "slow", "retry": retry}, status=429))
+            sent.append(now)
                 
             try:
                 await hpcup.touch_user(uid, user.get("first_name"), user.get("username"))
             except Exception:
                 pass
                 
-            await hpcup.post_chat_message(target, uid, text)
-            messages = await hpcup.get_chat_messages(target, 50)
-            return cors(web.json_response({"ok": True, "messages": messages}))
+            message = await hpcup.post_chat_message(target, uid, text)
+            if cid:
+                message["cid"] = cid
+                chat_cids[(uid, cid)] = message
+                chat_cid_of[message["id"]] = (uid, cid)
+                while len(chat_cid_of) > 500:
+                    chat_cids.pop(chat_cid_of.pop(next(iter(chat_cid_of))), None)
+            chat_wake(target)
+            result = {"ok": True, "message": message}
+            if not body.get("v"):
+                # Eski ilova butun ro'yxatni kutadi.
+                result["messages"] = await hpcup.get_chat_messages(target, 50)
+            return cors(web.json_response(result))
 
     app.router.add_route("*", "/api/chat", api_chat)
 
