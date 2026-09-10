@@ -567,23 +567,22 @@ BOT_ID = None
 # versiyani ulashgan odamning kartasi ruscha), foydalanuvchi tilida emas.
 KARTA = {
     "uz": {"seriya": "Seriya", "yil": "Yil", "vaqt": "Davomiyligi",
-           "til": "Til", "boshqa": "yana", "sifat": "Sifat",
+           "til": "Til", "sifat": "Sifat",
            "soat": "%d soat %d daqiqa"},
     "ru": {"seriya": "Франшиза", "yil": "Год", "vaqt": "Длительность",
-           "til": "Язык", "boshqa": "также", "sifat": "Качество",
+           "til": "Язык", "sifat": "Качество",
            "soat": "%d ч %d мин"},
     "en": {"seriya": "Series", "yil": "Year", "vaqt": "Runtime",
-           "til": "Language", "boshqa": "also", "sifat": "Quality",
+           "til": "Language", "sifat": "Quality",
            "soat": "%d h %d min"},
 }
 
 
-def share_caption(movie_key, film, lang, sharer_id=None, boshqa_tillar=True):
+def share_caption(movie_key, film, lang, sharer_id=None):
     """Ulashiladigan karta matni (Marvel botidagi karta tartibida).
 
-    Yuborilgan film ostida ham shu matn turadi (send_film), faqat "yana
-    🇷🇺 🇬🇧" qismisiz (boshqa_tillar=False): film allaqachon olingan, u yerda
-    boshqa tillar kerak emas (foydalanuvchi so'ragan, 2026-09-10).
+    Yuborilgan film ostida ham AYNAN SHU matn turadi (send_film) - odam
+    ikki xil ko'rinish ko'rmasin.
 
     Oxirgi qatordagi havola - ulashayotgan odamning havolasi. Odam matnni
     nusxalab tarqatsa ham ball unga tushadi.
@@ -606,14 +605,10 @@ def share_caption(movie_key, film, lang, sharer_id=None, boshqa_tillar=True):
     # Sifat faqat yuklangan versiyada - yuklanmaganida bu va'da bo'lib qolardi
     if catalog.is_ready(movie_key, lang):
         lines.append("%s %s: %s" % (emoji.tag("sifat"), k["sifat"], catalog.QUALITY))
-    # Kartadagi tugma aynan shu tildagi versiyani ochadi - u birinchi va
-    # nomi bilan; boshqa tillar faqat bayroq bilan, "yana" so'zidan keyin.
-    til = "%s %s: %s %s" % (emoji.tag("til"), k["til"], BAYROQ[lang], TIL_NOMI[lang])
-    boshqa = [BAYROQ[l] for l in catalog.LANGS
-              if l != lang and catalog.is_ready(movie_key, l)]
-    if boshqa and boshqa_tillar:
-        til += "  ·  %s %s" % (k["boshqa"], " ".join(boshqa))
-    lines.append(til)
+    # Faqat shu versiyaning tili. Boshqa tillar ("yana 🇷🇺 🇬🇧") ataylab
+    # yozilmaydi - foydalanuvchi kerak emas dedi (2026-09-10).
+    lines.append("%s %s: %s %s" % (emoji.tag("til"), k["til"],
+                                   BAYROQ[lang], TIL_NOMI[lang]))
     reyting = catalog.IMDB.get(movie_key)
     if reyting:
         lines.append("%s IMDb: %.1f" % (emoji.tag("yulduz"), reyting))
@@ -633,8 +628,7 @@ async def send_film(chat_id, movie_key, lang, vk_url=None):
     Custom emoji rad etilsa (Premium tugagan va h.k.) - oddiy belgilar bilan
     qayta yuboriladi: film yetkazish HECH QACHON shu sababdan to'xtamasin.
     """
-    matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id,
-                         boshqa_tillar=False)
+    matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id)
     kw = dict(chat_id=chat_id, from_chat_id=DB_CHANNEL_ID,
               message_id=catalog.FILMS[movie_key][lang]["message_id"],
               parse_mode="HTML",
