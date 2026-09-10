@@ -137,6 +137,14 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_house_id ON chat_messages(house, id);
 
+-- Har odam har xonada qaysi xabargacha o'qigani.
+CREATE TABLE IF NOT EXISTS chat_reads (
+    user_id INTEGER NOT NULL,
+    room    TEXT NOT NULL,
+    last_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, room)
+);
+
 CREATE TABLE IF NOT EXISTS chat_reactions (
     message_id INTEGER NOT NULL,
     user_id    INTEGER NOT NULL,
@@ -1754,6 +1762,84 @@ async def get_chat_messages(house, limit=50, after=None, before=None, since=None
                     _CHAT_SELECT + "WHERE c.house=? AND c.deleted=0 ORDER BY c.id DESC LIMIT ?",
                     (house, limit)).fetchall()
             return _chat_reactions(conn, [_chat_row(r) for r in reversed(rows)], viewer)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+def _read_state(conn, house, user_id):
+    row = conn.execute("SELECT last_id FROM chat_reads WHERE user_id=? AND room=?",
+                       (int(user_id), house)).fetchone()
+    if row is None:
+        # Birinchi marta: hammasi o'qilgan hisoblanadi - yangi odam (yoki shu
+        # imkoniyat qo'shilgan kun hamma) yuzlab eski xabarni "yangi" deb ko'rmasin.
+        top = conn.execute("SELECT COALESCE(MAX(id), 0) FROM chat_messages WHERE house=?",
+                           (house,)).fetchone()[0]
+        conn.execute("INSERT OR IGNORE INTO chat_reads (user_id, room, last_id) VALUES (?,?,?)",
+                     (int(user_id), house, top))
+        conn.commit()
+        return top, 0
+    unread = conn.execute(
+        "SELECT COUNT(*) FROM chat_messages WHERE house=? AND id>? AND deleted=0 AND user_id<>?",
+        (house, row["last_id"], int(user_id))).fetchone()[0]
+    return row["last_id"], unread
+
+
+async def chat_read_state(house, user_id):
+    """(o'qilgan oxirgi xabar id si, o'qilmaganlar soni)."""
+    def _do():
+        conn = _connect()
+        try:
+            return _read_state(conn, house, user_id)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_unread_counts(user_id, rooms):
+    """{xona: o'qilmaganlar soni} - kubok oynasidagi tugma va chat yorliqlari uchun."""
+    def _do():
+        conn = _connect()
+        try:
+            return {room: _read_state(conn, house, user_id)[1] for room, house in rooms.items()}
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def mark_chat_read(house, user_id, msg_id):
+    """O'qilgan joyni faqat oldinga suradi (eski qurilma orqaga qaytara olmaydi)."""
+    def _do():
+        conn = _connect()
+        try:
+            top = conn.execute("SELECT COALESCE(MAX(id), 0) FROM chat_messages WHERE house=?",
+                               (house,)).fetchone()[0]
+            last = min(int(msg_id), top)
+            conn.execute(
+                "INSERT INTO chat_reads (user_id, room, last_id) VALUES (?,?,?) "
+                "ON CONFLICT(user_id, room) DO UPDATE SET last_id=MAX(last_id, excluded.last_id)",
+                (int(user_id), house, last))
+            conn.commit()
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def get_chat_around(house, read_id, viewer, before=15, after=100):
+    """Birinchi o'qilmagan xabar atrofi: o'qilganlardan `before` tasi (tushunish uchun)
+    va o'qilmaganlardan `after` tasi. (xabarlar, tepada yana bormi, pastda yana bormi)."""
+    def _do():
+        conn = _connect()
+        try:
+            old = conn.execute(
+                _CHAT_SELECT + "WHERE c.house=? AND c.id<=? AND c.deleted=0 ORDER BY c.id DESC LIMIT ?",
+                (house, int(read_id), before + 1)).fetchall()
+            new = conn.execute(
+                _CHAT_SELECT + "WHERE c.house=? AND c.id>? AND c.deleted=0 ORDER BY c.id ASC LIMIT ?",
+                (house, int(read_id), after + 1)).fetchall()
+            more, more_new = len(old) > before, len(new) > after
+            rows = list(reversed(old[:before])) + new[:after]
+            return _chat_reactions(conn, [_chat_row(r) for r in rows], viewer), more, more_new
         finally:
             conn.close()
     return await asyncio.to_thread(_do)

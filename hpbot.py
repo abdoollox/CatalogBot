@@ -616,6 +616,12 @@ def register(dp, bot, app, cfg):
         house = stats.get("house")
         
         if request.method == "GET":
+            if request.query.get("counts"):
+                rooms = {"global": "global"}
+                if house:
+                    rooms["house"] = house
+                counts = await hpcup.chat_unread_counts(uid, rooms)
+                return cors(web.json_response({"ok": True, "counts": counts}))
             room = request.query.get("room", "house")
             target = "global" if room == "global" else house
             if not target:
@@ -651,13 +657,22 @@ def register(dp, bot, app, cfg):
                     except asyncio.TimeoutError:
                         pass
                     messages = await hpcup.get_chat_messages(target, 100, after=after, viewer=uid)
-                return cors(web.json_response({"ok": True, "messages": chat_tag(messages)}))
+                return cors(web.json_response(
+                    {"ok": True, "messages": chat_tag(messages), "more_new": len(messages) == 100}))
             # Raqamni ro'yxatdan OLDIN olamiz: oradagi o'zgarish keyingi so'rovda
             # takror kelsa ham ilova uni id bo'yicha taniydi, yo'qolmaydi.
             rev = await hpcup.chat_max_rev(target)
+            read, unread = await hpcup.chat_read_state(target, uid)
+            if unread and request.query.get("unread"):
+                # O'qilmagan xabar bor - chat birinchi o'qilmagan xabardan ochiladi.
+                messages, more, more_new = await hpcup.get_chat_around(target, read, uid)
+                return cors(web.json_response(
+                    {"ok": True, "messages": chat_tag(messages), "more": more, "more_new": more_new,
+                     "rev": rev, "read": read, "unread": unread}))
             messages = await hpcup.get_chat_messages(target, 50, viewer=uid)
             return cors(web.json_response(
-                {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50, "rev": rev}))
+                {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50, "rev": rev,
+                 "read": read, "unread": unread}))
             
         elif request.method == "POST":
             if not body:
@@ -669,6 +684,12 @@ def register(dp, bot, app, cfg):
                 return cors(web.json_response({"error": "no_house"}, status=403))
 
             action = body.get("action") or "send"
+            if action == "read":
+                msg_id = chat_int(body.get("id"))
+                if msg_id is None:
+                    return cors(web.json_response({"error": "invalid id"}, status=400))
+                await hpcup.mark_chat_read(target, uid, msg_id)
+                return cors(web.json_response({"ok": True}))
             if action in ("edit", "delete", "react"):
                 msg_id = chat_int(body.get("id"))
                 if msg_id is None:
@@ -717,6 +738,8 @@ def register(dp, bot, app, cfg):
                 pass
                 
             message = await hpcup.post_chat_message(target, uid, text, chat_int(body.get("reply_to")))
+            # Yozgan odam chatni ko'rib turibdi - o'z xabarigacha hammasi o'qilgan.
+            await hpcup.mark_chat_read(target, uid, message["id"])
             if cid:
                 message["cid"] = cid
                 chat_cids[(uid, cid)] = message
