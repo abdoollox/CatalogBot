@@ -133,7 +133,9 @@ TEXTS = {
         "btn_search": "Qidirish",
         "ref_new": (emoji.tag("dostlar") + " <b>Yangi do'st qo'shildi!</b>\n\n"
                     "Siz ulashgan havola orqali yana bir kishi kolleksiyaga "
-                    "qo'shildi.\n\nTaklif qilgan do'stlaringiz: <b>%d</b>"),
+                    "qo'shildi.\n\nTaklif qilgan do'stlaringiz: <b>%d</b>\n"
+                    "Darajangiz: <b>%s</b>\n"
+                    "Xogvarts kubogi: <b>+%d ball</b>"),
         "btn_share_more": "Yana ulashish",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Garri Potter Kolleksiyasiga xush kelibsiz!</b>\n\n"
@@ -159,7 +161,9 @@ TEXTS = {
         "btn_search": "Поиск",
         "ref_new": (emoji.tag("dostlar") + " <b>Новый друг присоединился!</b>\n\n"
                     "По вашей ссылке к коллекции присоединился ещё один "
-                    "человек.\n\nПриглашённых друзей: <b>%d</b>"),
+                    "человек.\n\nПриглашённых друзей: <b>%d</b>\n"
+                    "Ваш уровень: <b>%s</b>\n"
+                    "Кубок Хогвартса: <b>+%d очков</b>"),
         "btn_share_more": "Поделиться ещё",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Добро пожаловать в коллекцию «Гарри Поттер»!</b>\n\n"
@@ -185,7 +189,9 @@ TEXTS = {
         "btn_search": "Search",
         "ref_new": (emoji.tag("dostlar") + " <b>A new friend joined!</b>\n\n"
                     "One more person joined the collection through the link "
-                    "you shared.\n\nFriends invited: <b>%d</b>"),
+                    "you shared.\n\nFriends invited: <b>%d</b>\n"
+                    "Your rank: <b>%s</b>\n"
+                    "Hogwarts Cup: <b>+%d points</b>"),
         "btn_share_more": "Share more",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Welcome to the Harry Potter Collection!</b>\n\n"
@@ -562,7 +568,9 @@ async def notify_inviter(user):
     try:
         # Tugma yangi ulashishga undaydi: chat tanlatadi va o'sha yerda
         # film qidiruvi ochiladi - aylanma shu bilan davom etadi.
-        await send_html(inviter_id, t["ref_new"] % refs,
+        matn = t["ref_new"] % (refs, hpcup.rank_name(refs, lang),
+                               hpcup.PTS_REFERRAL)
+        await send_html(inviter_id, matn,
                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                             InlineKeyboardButton(
                                 text=t["btn_share_more"], switch_inline_query="",

@@ -350,6 +350,29 @@ async def api_leaderboard(request):
     return cors(web.json_response(resp))
 
 
+async def api_referrals(request):
+    """Ilovadagi "Do'stlar reytingi": TOP 10, o'z o'rni, daraja.
+
+    Til so'rovda keladi (?lang=ru) - daraja nomlari shu tilda qaytadi.
+    Nomlar faqat hpcup.RANK_NAMES da: bot xabari bilan bir xil bo'lsin.
+    """
+    web = _web()
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+
+    user = _cfg["verify_init_data"](_init_data_from(request))
+    if not user:
+        return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    lang = request.query.get("lang", "uz")
+    if lang not in hpcup.RANK_NAMES:
+        lang = "uz"
+    board = await hpcup.referral_board(user["id"], lang)
+    board["ok"] = True
+    return cors(web.json_response(board))
+
+
 async def profile_extra(user_id):
     """/api/profile javobiga qo'shiladigan kubok ma'lumotlari."""
     season = await hpcup.current_season()
@@ -526,6 +549,7 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/tasks", api_tasks)
     app.router.add_route("*", "/api/tasks/submit", api_submit_task)
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
+    app.router.add_route("*", "/api/referrals", api_referrals)
 
     async def api_chat(request):
         web = _web()

@@ -37,6 +37,11 @@ PTS_DAILY = 10        # kuniga 1 marta                    -> 7 * 10  = 70
 PTS_CHESS_WIN = 10    # jonli raqib ustidan g'alaba
 PTS_CHESS_DRAW = 5    # durang
 
+# Do'st taklif qilish: taklif qilingan odam kanalga obuna bo'lganda. Mavsum
+# chegarasiga (MAX_POINTS) kirmaydi - har bir do'st haqiqiy yangi obunachi,
+# uni soxtalashtirish qiyin, shuning uchun cheklanmaydi.
+PTS_REFERRAL = 20
+
 # Mavsumda nechta shaxmat natijasi ballanadi. Cheklov SHART: kim yutganini
 # server tekshira olmaydi (o'yin brauzerda hisoblanadi), shuning uchun ikki
 # do'st bir-biriga ataylab yutqazib cheksiz ball yig'a olardi.
@@ -80,7 +85,8 @@ CREATE TABLE IF NOT EXISTS points (
     user_id     INTEGER NOT NULL REFERENCES users(user_id),
     season_id   INTEGER NOT NULL REFERENCES seasons(id),
     source_type TEXT NOT NULL CHECK (source_type IN
-                    ('film_open','film_quiz','daily','chess_win','chess_draw')),
+                    ('film_open','film_quiz','daily','chess_win','chess_draw',
+                     'referral')),
     source_ref  TEXT NOT NULL,
     points      INTEGER NOT NULL,
     created_at  TEXT NOT NULL,
@@ -340,15 +346,14 @@ def _migrate(conn, users_json):
         conn.execute("PRAGMA foreign_keys = ON")
         logging.info("Kubok migratsiyasi: points.house olib tashlandi")
 
-    # 3) points.source_type cheklovi shaxmat turlarini ham qabul qilsin.
-    #    Ilgari cheklov faqat ('film_open','film_quiz','daily') edi, shuning
-    #    uchun shaxmat uchun berilgan ball bazaga tushmay, xato try/except
-    #    ichida jimgina yo'qolardi. SQLite da CHECK ni ALTER bilan
-    #    o'zgartirib bo'lmaydi - jadval qayta quriladi.
+    # 3) points.source_type cheklovi barcha ball turlarini qabul qilsin
+    #    (avval shaxmat, keyin 'referral' qo'shildi). Cheklovda yo'q tur
+    #    bazaga tushmay, xato try/except ichida jimgina yo'qolardi. SQLite da
+    #    CHECK ni ALTER bilan o'zgartirib bo'lmaydi - jadval qayta quriladi.
     ddl = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='points'"
     ).fetchone()
-    if ddl and "chess_win" not in (ddl[0] or ""):
+    if ddl and "'referral'" not in (ddl[0] or ""):
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.execute("""
             CREATE TABLE points_v3 (
@@ -357,7 +362,7 @@ def _migrate(conn, users_json):
                 season_id   INTEGER NOT NULL REFERENCES seasons(id),
                 source_type TEXT NOT NULL CHECK (source_type IN
                                 ('film_open','film_quiz','daily',
-                                 'chess_win','chess_draw')),
+                                 'chess_win','chess_draw','referral')),
                 source_ref  TEXT NOT NULL,
                 points      INTEGER NOT NULL,
                 created_at  TEXT NOT NULL,
@@ -373,7 +378,7 @@ def _migrate(conn, users_json):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_points_season_user "
                      "ON points(season_id, user_id)")
         conn.execute("PRAGMA foreign_keys = ON")
-        logging.info("Kubok migratsiyasi: points cheklovi shaxmatni qabul qiladi")
+        logging.info("Kubok migratsiyasi: points cheklovi yangilandi (referral)")
 
 
 def _seed_questions(questions_dir=None):
@@ -559,6 +564,9 @@ async def remember_inviter(user_id, inviter_id):
 def _award_referral(user_id):
     conn = _connect()
     try:
+        # Mavsum ENG AVVAL: yangi hafta boshlangan bo'lsa _ensure_season o'zi
+        # commit qiladi - bu pastdagi tranzaksiyani yarmida saqlab qo'ymasin.
+        season = _ensure_season(conn)
         # Bitta UPDATE - ikki so'rov bir vaqtda kelsa ham ball bir marta
         # beriladi (SQLite yozishni navbat bilan bajaradi).
         cur = conn.execute(
@@ -572,6 +580,15 @@ def _award_referral(user_id):
                                   (int(user_id),)).fetchone()["invited_by"]
         conn.execute("UPDATE users SET refs = refs + 1 WHERE user_id=?",
                      (inviter_id,))
+        # Kubok bali ham - xuddi shu tranzaksiyada: yo ikkalasi, yo hech biri.
+        # Fakultet shart emas: reyting users bilan JOIN orqali hisoblanadi,
+        # keyinroq saralansa ball fakultetiga qo'shiladi (award() dagidek).
+        conn.execute(
+            "INSERT OR IGNORE INTO points "
+            "(user_id, season_id, source_type, source_ref, points, created_at) "
+            "VALUES (?,?,'referral',?,?,?)",
+            (inviter_id, season["id"], str(int(user_id)), PTS_REFERRAL,
+             _utc_iso(now_tk())))
         refs = conn.execute("SELECT refs FROM users WHERE user_id=?",
                             (inviter_id,)).fetchone()["refs"]
         conn.commit()
@@ -599,6 +616,100 @@ def _referral_count(user_id):
 async def referral_count(user_id):
     """Shu odam nechta do'st keltirgan."""
     return await asyncio.to_thread(_referral_count, user_id)
+
+
+# Darajalar: (kerakli do'stlar soni, kod), kattadan kichikka.
+RANKS = [
+    (50, "great_wizard"),
+    (20, "auror"),
+    (10, "quidditch_captain"),
+    (5,  "prefect"),
+    (1,  "first_year"),
+    (0,  "muggle"),
+]
+
+# Nomlar shu yerda - bot xabari ham, ilova ham shu yerdan oladi.
+RANK_NAMES = {
+    "uz": {"great_wizard": "Buyuk sehrgar", "auror": "Auror",
+           "quidditch_captain": "Kvidich sardori", "prefect": "Prefekt",
+           "first_year": "Birinchi kurs talabasi", "muggle": "Maggl"},
+    "ru": {"great_wizard": "Великий волшебник", "auror": "Аврор",
+           "quidditch_captain": "Капитан по квиддичу", "prefect": "Староста",
+           "first_year": "Первокурсник", "muggle": "Маггл"},
+    "en": {"great_wizard": "Great Wizard", "auror": "Auror",
+           "quidditch_captain": "Quidditch Captain", "prefect": "Prefect",
+           "first_year": "First-year", "muggle": "Muggle"},
+}
+
+REF_TOP = 10
+
+
+def rank_of(refs):
+    """Do'stlar soniga qarab daraja kodi."""
+    for need, code in RANKS:
+        if refs >= need:
+            return code
+    return RANKS[-1][1]
+
+
+def rank_name(refs, lang="uz"):
+    names = RANK_NAMES.get(lang) or RANK_NAMES["uz"]
+    return names[rank_of(refs)]
+
+
+def _next_rank(refs):
+    """Keyingi daraja: (kerakli son, kod) yoki None - eng yuqorisida."""
+    for need, code in reversed(RANKS):
+        if need > refs:
+            return need, code
+    return None
+
+
+def _referral_board(user_id, lang="uz"):
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT user_id, first_name, house, refs FROM users WHERE refs > 0 "
+            "ORDER BY refs DESC, COALESCE(ref_awarded_at, created_at) ASC, "
+            "user_id ASC").fetchall()
+        mine = conn.execute("SELECT refs FROM users WHERE user_id=?",
+                            (int(user_id),)).fetchone()
+        my_refs = int(mine["refs"]) if mine else 0
+
+        top, place = [], None
+        for i, r in enumerate(rows):
+            if r["user_id"] == int(user_id):
+                place = i + 1
+            if i < REF_TOP:
+                top.append({"pos": i + 1, "name": r["first_name"] or "Sehrgar",
+                            "house": r["house"], "refs": int(r["refs"]),
+                            "me": r["user_id"] == int(user_id)})
+
+        names = RANK_NAMES.get(lang) or RANK_NAMES["uz"]
+        nxt = _next_rank(my_refs)
+        return {
+            "top": top,
+            "total": len(rows),
+            "me": {
+                "refs": my_refs,
+                "place": place,                   # None - hali do'st yo'q
+                "rank": rank_of(my_refs),
+                "rank_name": names[rank_of(my_refs)],
+                "next_need": nxt[0] if nxt else None,
+                "next_name": names[nxt[1]] if nxt else None,
+                "cup_points": my_refs * PTS_REFERRAL,
+            },
+            "ranks": [{"need": need, "code": code, "name": names[code]}
+                      for need, code in reversed(RANKS)],
+            "pts_per_friend": PTS_REFERRAL,
+        }
+    finally:
+        conn.close()
+
+
+async def referral_board(user_id, lang="uz"):
+    """Ilovadagi reyting bo'limi uchun: TOP 10, o'z o'rni, darajalar."""
+    return await asyncio.to_thread(_referral_board, user_id, lang)
 
 
 def _resort_until(conn):
