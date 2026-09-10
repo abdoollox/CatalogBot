@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import asyncio
 import logging
@@ -40,6 +41,8 @@ TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003826689337"))
 CHANNEL_URL = "https://t.me/garripotter_kolleksiya"
 WEBAPP_URL = "https://abdoollox.github.io/CatalogWebApp/"
+IMG_URL = "https://abdoollox.github.io/CatalogWebApp/img"
+BOT_USERNAME = "garripotterkinobot"
 DB_CHANNEL_ID = -1003641399832
 
 bot = Bot(token=TOKEN)
@@ -122,6 +125,12 @@ TEXTS = {
         "btn_lang": "Tilni o'zgartirish",
         "not_subscribed": "Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
         "soon": "⏳ Bu tildagi film tez orada yuklanadi.",
+        "brand": "GARRI POTTER KOLLEKSIYA",
+        "nothing_found": "Topilmadi",
+        "try_other": "Boshqa nom bilan urinib ko'ring",
+        "btn_watch": "Tomosha qilish",
+        "btn_search": "Qidirish",
+        "soon_short": "tez orada",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Garri Potter Kolleksiyasiga xush kelibsiz!</b>\n\n"
             "Garri Potter olamidagi barcha filmlarni yuqori sifatda, "
@@ -139,6 +148,12 @@ TEXTS = {
         "btn_lang": "Сменить язык",
         "not_subscribed": "Вы ещё не подписаны! Сначала вступите в канал.",
         "soon": "⏳ Фильм на этом языке скоро появится.",
+        "brand": "КОЛЛЕКЦИЯ ГАРРИ ПОТТЕРА",
+        "nothing_found": "Ничего не найдено",
+        "try_other": "Попробуйте другое название",
+        "btn_watch": "Смотреть",
+        "btn_search": "Поиск",
+        "soon_short": "скоро",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Добро пожаловать в коллекцию «Гарри Поттер»!</b>\n\n"
             "Смотрите все фильмы вселенной Гарри Поттера в высоком качестве, "
@@ -156,6 +171,12 @@ TEXTS = {
         "btn_lang": "Change language",
         "not_subscribed": "You are not subscribed yet! Please join the channel first.",
         "soon": "⏳ The film in this language will be uploaded soon.",
+        "brand": "HARRY POTTER COLLECTION",
+        "nothing_found": "Nothing found",
+        "try_other": "Try another title",
+        "btn_watch": "Watch",
+        "btn_search": "Search",
+        "soon_short": "coming soon",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Welcome to the Harry Potter Collection!</b>\n\n"
             "Watch every film from the Harry Potter universe in high quality, "
@@ -247,47 +268,37 @@ LOCALES = {
     }
 }
 
-def movie_delivery_keyboard(lang: str = "uz", vk_url: str = None):
+def movie_delivery_keyboard(movie_key, lang="uz", vk_url=None):
+    """Film ostidagi tugmalar.
+
+    "Ulashish" endi `switch_inline_query` ishlatadi: Telegram chat tanlatadi
+    va o'sha chatga film KARTASI tushadi. Ilgari bu oddiy `t.me/share/url`
+    havolasi edi - u shunchaki matn yuborardi, karta ham, referal ham yo'q edi.
+    """
     loc = LOCALES.get(lang, LOCALES["uz"])
+    t = T(lang)
     builder = InlineKeyboardBuilder()
-    
-    # --- 1-QATOR: 4K Formatda ko'rish (faqat havola mavjud bo'lsa) ---
+
     if vk_url:
-        builder.row(
-            InlineKeyboardButton(
-                text="4K formatda ko'rish",
-                url=vk_url,
-                icon_custom_emoji_id=emoji.icon("sifat")
-            )
-        )
-    
-    # 1. Ulashish matni va havolasi
-    share_text = loc["share_text"]
-    share_url = "https://t.me/garripotterkinobot/catalog"
-    
-    # 2. URL Encoding
-    safe_text = urllib.parse.quote(share_text)
-    safe_url = urllib.parse.quote(share_url)
-    final_share_link = f"https://t.me/share/url?url={safe_url}&text={safe_text}"
-    
-    # --- 2-QATOR: Kolleksiya WebApp ---
+        builder.row(InlineKeyboardButton(
+            text="4K formatda ko'rish", url=vk_url,
+            icon_custom_emoji_id=emoji.icon("sifat")))
+
+    builder.row(InlineKeyboardButton(
+        text=loc["collection_btn"],
+        web_app=WebAppInfo(url=webapp_url(lang)),
+        icon_custom_emoji_id=emoji.icon("kolleksiya")))
+
     builder.row(
+        # Chat tanlatadi va o'sha chatga shu filmning kartasi tushadi.
         InlineKeyboardButton(
-            text=loc["collection_btn"],
-            web_app=WebAppInfo(url=webapp_url(lang)),
-            icon_custom_emoji_id=emoji.icon("kolleksiya")
-        )
-    )
-    
-    # --- 3-QATOR: Do'stlarga ulashish ---
-    builder.row(
+            text=loc["share_btn"], switch_inline_query=movie_key,
+            icon_custom_emoji_id=emoji.icon("dostlar")),
+        # Bo'sh qator: chat tanlatmaydi, qidiruv shu chatda boshlanadi.
         InlineKeyboardButton(
-            text=loc["share_btn"],
-            url=final_share_link,
-            icon_custom_emoji_id=emoji.icon("dostlar")
-        )
-    )
-    
+            text=t["btn_search"], switch_inline_query_current_chat="",
+            icon_custom_emoji_id=emoji.icon("qidiruv")))
+
     return builder.as_markup()
     
 
@@ -306,8 +317,11 @@ async def start_cmd(message: types.Message, command: CommandObject):
     except Exception:
         pass 
         
-    payload = command.args
+    raw = (command.args or "").strip()
     user_id = message.from_user.id
+    # Referal va manba hozircha faqat ajratiladi - ular keyingi bosqichda
+    # ishlatiladi. Havola formati esa allaqachon ularni qo'llab-quvvatlaydi.
+    payload, inviter_id, source = parse_payload(raw)
 
     is_new = True
     try:
@@ -328,16 +342,15 @@ async def start_cmd(message: types.Message, command: CommandObject):
     
     lang = await user_lang(user_id)
 
-    # Chuqur havolada til allaqachon bor (masalan `hp1_uz`) - so'ramaymiz,
+    # Chuqur havolada til allaqachon bor (`watch_hp1_uz`) - so'ramaymiz,
     # aksincha o'shani eslab qolamiz.
-    if payload and "_" in payload:
-        havola_tili = payload.strip().split("_")[-1]
-        if havola_tili in catalog.LANGS:
-            lang = havola_tili
-            try:
-                await hpcup.set_lang(user_id, lang)
-            except Exception as e:
-                logging.error("Tilni saqlashda xato: %s", e)
+    _, havola_tili = film_va_til(payload)
+    if havola_tili:
+        lang = havola_tili
+        try:
+            await hpcup.set_lang(user_id, lang)
+        except Exception as e:
+            logging.error("Tilni saqlashda xato: %s", e)
 
     # Til hali tanlanmagan - birinchi qadam shu. Nima uchun kelganini
     # eslab qolamiz, til tanlangach o'sha yerdan davom etamiz.
@@ -443,24 +456,16 @@ async def handle_payload(user, chat_id, payload):
     shuning uchun alohida funksiya.
     """
     try:
-        payload_clean = payload.strip()
-        parts = payload_clean.split('_')
-
-        if len(parts) != 2:
-            await bot.send_message(chat_id, f"⚠️ DIAGNOSTIKA (ValueError): Signal ikkiga bo'linmadi.\nSiz yuborgan aniq signal: '{payload}'\nUzunligi: {len(payload)} ta belgi.")
-            return
-
-        movie_key, lang = parts
-
-        if movie_key not in MOVIES_DB:
-            await bot.send_message(chat_id, f"⚠️ DIAGNOSTIKA (KeyError - Kino): '{movie_key}' bazada topilmadi.\nBazadagi mavjud kinolar: {list(MOVIES_DB.keys())}")
-            return
-
-        if lang not in catalog.LANGS:
-            await bot.send_message(chat_id, f"⚠️ DIAGNOSTIKA (KeyError - Til): '{movie_key}' kinoda '{lang}' tili topilmadi.\nMavjud tillar: {list(catalog.LANGS)}")
+        movie_key, lang = film_va_til(payload)
+        if not movie_key:
+            logging.warning("Tanib bo'lmagan havola: %r", payload)
+            await bot.send_message(chat_id, T(await user_lang(chat_id) or DEFAULT_LANG)["soon"])
             return
 
         movie_data = MOVIES_DB[movie_key][lang]
+        # Statistika kaliti: har doim `hp3_uz` ko'rinishida, `watch_` va
+        # referal qismisiz - eski yozuvlar bilan bir xil bo'lsin.
+        payload_clean = "%s_%s" % (movie_key, lang)
 
         if movie_data.get("message_id", 0) == 0:
             await bot.send_message(chat_id, T(lang)["soon"])
@@ -477,7 +482,7 @@ async def handle_payload(user, chat_id, payload):
             message_id=movie_data["message_id"],
             caption=movie_data["caption"],
             parse_mode="HTML",
-            reply_markup=movie_delivery_keyboard(lang, vk_url),
+            reply_markup=movie_delivery_keyboard(movie_key, lang, vk_url),
             protect_content=True
         )
 
@@ -552,6 +557,171 @@ async def check_sub_handler(callback: types.CallbackQuery):
     await callback.answer()
     await after_subscribe(callback.from_user, callback.from_user.id, payload,
                           callback.message.message_id)
+
+# --- INLINE QIDIRUV ---
+# Istalgan chatda `@bot azkaban` deb yozilganda ishlaydi. Ulashilgan
+# kartaning har bir havolasi ulashgan odamning id sini olib yuradi -
+# ulashish va do'st taklif qilish bitta mexanizm.
+
+INLINE_LIMIT = 20
+BAYROQ = {"uz": "🇺🇿", "ru": "🇷🇺", "en": "🇬🇧"}
+
+# Bot o'z kartasini boshqa botnikidan ajratishi uchun (ishga tushishda olinadi)
+BOT_ID = None
+
+
+def share_caption(movie_key, film, lang, sharer_id=None):
+    """Ulashiladigan karta matni. Film ostidagi matn bilan bir xil ko'rinishda.
+
+    Oxirgi qatordagi havola - ulashayotgan odamning havolasi. Odam matnni
+    nusxalab tarqatsa ham ball unga tushadi.
+    """
+    t = T(lang)
+    tillar = " ".join(BAYROQ[l] for l in catalog.LANGS
+                      if catalog.is_ready(movie_key, l))
+    return "\n".join([
+        film[lang]["caption"],
+        "%s %s   %s" % (emoji.tag("yil"), film["year"], tillar),
+        "",
+        '%s <b><a href="%s">%s</a></b>' % (
+            emoji.tag("tasdiq"), film_link(movie_key, lang, sharer_id), t["brand"]),
+    ])
+
+
+def share_keyboard(movie_key, lang, sharer_id=None):
+    t = T(lang)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t["btn_watch"],
+                              url=film_link(movie_key, lang, sharer_id),
+                              icon_custom_emoji_id=emoji.icon("tomosha"))],
+        # Bo'sh qator: chat tanlatmaydi, shu chatning o'zida qidiruv boshlanadi.
+        [InlineKeyboardButton(text=t["btn_search"],
+                              switch_inline_query_current_chat="",
+                              icon_custom_emoji_id=emoji.icon("qidiruv"))],
+    ])
+
+
+@dp.inline_query()
+async def inline_search(query: types.InlineQuery):
+    """Natijalar HAR DOIM Article ko'rinishida.
+
+    Faqat rasmdan iborat natijalarni (InlineQueryResultPhoto) Telegram to'r
+    qilib chizadi va nom bilan tavsifni UMUMAN ko'rsatmaydi - qaysi film
+    ekani bilinmay qolardi.
+    """
+    lang = await user_lang(query.from_user.id) or DEFAULT_LANG
+    t = T(lang)
+    raw = (query.query or "").strip()
+
+    topildi = catalog.search(raw, limit=INLINE_LIMIT)
+    if not raw:
+        # Bo'sh so'rovda birinchi taassurot "tez orada" bilan to'lib qolmasin
+        tayyor = [(i, f) for i, f in topildi if catalog.is_ready(i, lang)]
+        topildi = tayyor or topildi
+
+    natijalar = []
+    for movie_key, film in topildi:
+        qator1 = "%s %s" % (film["year"], BAYROQ[lang])
+        if not catalog.is_ready(movie_key, lang):
+            qator1 += "  ·  %s" % t["soon_short"]
+        qator2 = catalog.SERIES.get(film["kind"], "")
+
+        natijalar.append(types.InlineQueryResultArticle(
+            id="%s_%s" % (movie_key, lang),
+            title="%d. %s" % (film["order"], film[lang]["title"]),
+            description=qator1 + "\n" + qator2,
+            thumbnail_url=sq_url(movie_key, lang),
+            thumbnail_width=320,
+            thumbnail_height=320,
+            input_message_content=types.InputTextMessageContent(
+                message_text=share_caption(movie_key, film, lang,
+                                           query.from_user.id),
+                parse_mode="HTML",
+                # Rasm hali yo'q. O'chirmasak Telegram matndagi birinchi
+                # havolani ochib, bot kartasini chizib qo'yardi.
+                link_preview_options=types.LinkPreviewOptions(is_disabled=True)),
+            reply_markup=share_keyboard(movie_key, lang, query.from_user.id),
+        ))
+
+    if not natijalar:
+        natijalar.append(types.InlineQueryResultArticle(
+            id="empty",
+            title=t["nothing_found"],
+            description=t["try_other"],
+            input_message_content=types.InputTextMessageContent(
+                message_text="https://t.me/%s" % BOT_USERNAME)))
+
+    try:
+        # is_personal SHART: kartadagi havola ulashgan odamning id sini olib
+        # yuradi. Umumiy keshda birovning havolasi boshqasiga tushib qolardi.
+        await query.answer(natijalar, cache_time=30, is_personal=True)
+    except Exception as e:
+        logging.error("Inline javobida xato: %s", e)
+
+
+@dp.chosen_inline_result()
+async def inline_shared(chosen: types.ChosenInlineResult):
+    """Karta haqiqatan yuborilganda ishlaydi (ulashish statistikasi).
+
+    Faqat BotFather'da /setinlinefeedback yoqilgan bo'lsa keladi.
+    """
+    if chosen.result_id == "empty":
+        return
+    try:
+        await log_user_action(chosen.from_user, "share_%s" % chosen.result_id)
+    except Exception as e:
+        logging.error("Ulashishni yozishda xato: %s", e)
+
+
+# Karta tugmasidagi havoladan film id sini ajratamiz. Bu matnni tahlil
+# qilishdan ishonchliroq: matn o'zgarishi mumkin, havola formati esa
+# barqaror. Regex `-` da to'xtaydi, ya'ni referal qismi tushib qoladi.
+VIA_START = re.compile(r"[?&]start=watch_([A-Za-z0-9_]+)")
+
+
+def movie_from_markup(markup):
+    if not markup:
+        return None
+    for qator in markup.inline_keyboard:
+        for tugma in qator:
+            if tugma.url:
+                topildi = VIA_START.search(tugma.url)
+                if topildi:
+                    return topildi.group(1)
+    return None
+
+
+@dp.message(F.via_bot)
+async def inline_pick(message: types.Message):
+    """Bot bilan chatda qidiruvdan film tanlanganda - filmni yuboramiz.
+
+    Guruhda ushlamaymiz: u yerda karta do'stlarga ulashish uchun tashlangan,
+    unga javoban film yuborish noqulay bo'lardi.
+    """
+    if not message.via_bot or (BOT_ID and message.via_bot.id != BOT_ID):
+        return
+    if message.chat.type != "private":
+        return
+
+    payload = movie_from_markup(message.reply_markup)
+    if not payload:
+        return
+
+    user_id = message.from_user.id
+    lang = await user_lang(user_id) or DEFAULT_LANG
+
+    if not await is_subscribed(user_id):
+        taklif = await send_html(user_id, T(lang)["subscribe"],
+                                 reply_markup=check_sub_keyboard(lang))
+        remember_pending(user_id, payload, taklif.message_id)
+        return
+
+    await handle_payload(message.from_user, user_id, payload)
+    try:
+        await bot.delete_message(message.chat.id, message.message_id)
+    except Exception:
+        pass          # ruxsat bo'lmasa jim o'tamiz
+
 
 @dp.message(F.video)
 async def get_video_info(message: types.Message):
@@ -776,6 +946,90 @@ async def handle_house(request):
     return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
 
+# --- CHUQUR HAVOLA GRAMMATIKASI ---
+# Hamma narsa shu yerdan boshlanadi: ulashilgan karta ham, reklama manbasi
+# ham `t.me/<bot>?start=<payload>` orqali keladi.
+#
+#     <asosiy qism>[-r<taklif qilgan id>][-s<manba kodi>]
+#
+# Asosiy qism: `hp3_uz` (film) yoki `watch_hp3_uz` (ulashilgan kartadan).
+# `_` film ichida, `-` qo'shimchalar orasida - ular chalkashmaydi.
+#
+# `watch_` prefiksi kod qo'lda yozilganmi yoki kartadan bosilganmi - shuni
+# ajratadi, ya'ni ulashish qancha odam keltirganini o'lchash imkonini beradi.
+#
+# Telegram cheklovi: payload 64 belgigacha, faqat A-Za-z0-9_- .
+
+REF_PREFIX = "ref"
+REF_SEP = "-r"
+SRC_PREFIX = "src_"
+WATCH_PREFIX = "watch_"
+
+
+def parse_ref(payload):
+    """'ref123456' -> 123456. Boshqa payload uchun None."""
+    if not payload.startswith(REF_PREFIX):
+        return None
+    tail = payload[len(REF_PREFIX):]
+    return int(tail) if tail.isdigit() else None
+
+
+def parse_payload(raw):
+    """Payload'ni uch qismga ajratadi: (film, taklif qilgan id, manba)."""
+    parts = (raw or "").split("-")
+    body = parts[0]
+    inviter = None
+    source = ""
+
+    for tail in parts[1:]:
+        if tail[:1] == "r" and tail[1:].isdigit():
+            inviter = int(tail[1:])
+        elif tail[:1] == "s" and tail[1:]:
+            source = tail[1:]
+
+    if body.startswith(SRC_PREFIX):
+        source = source or body[len(SRC_PREFIX):]
+        body = ""
+    else:
+        ref = parse_ref(body)
+        if ref is not None:
+            inviter = inviter if inviter is not None else ref
+            body = ""
+
+    return body, inviter, source
+
+
+def film_link(movie_key, lang, sharer_id=None):
+    """Ulashiladigan havola. Payload FAQAT shu yerda yig'iladi."""
+    payload = "%s%s_%s" % (WATCH_PREFIX, movie_key, lang)
+    if sharer_id:
+        payload += "%s%d" % (REF_SEP, sharer_id)
+    return "https://t.me/%s?start=%s" % (BOT_USERNAME, payload)
+
+
+def film_va_til(payload):
+    """`watch_hp3_uz` yoki `hp3_uz` -> ("hp3", "uz"). Tanimasa (None, None).
+
+    `watch_` prefiksi ulashilgan kartadan kelganini bildiradi - filmni
+    topishda u ahamiyatsiz, shuning uchun shu yerda olib tashlanadi.
+    """
+    body = (payload or "").strip()
+    if body.startswith(WATCH_PREFIX):
+        body = body[len(WATCH_PREFIX):]
+    parts = body.split("_")
+    if len(parts) != 2:
+        return None, None
+    movie_key, lang = parts
+    if movie_key not in catalog.FILMS or lang not in catalog.LANGS:
+        return None, None
+    return movie_key, lang
+
+
+def sq_url(movie_key, lang):
+    """Inline ro'yxatdagi kvadrat ikonka (tools/sqgen.py yasaydi)."""
+    return "%s/sq/%s_%s.jpg" % (IMG_URL, movie_key, lang)
+
+
 # --- ILOVADAN TO'G'RIDAN-TO'G'RI YUBORISH ---
 # Ilgari WebApp filmni chuqur havola orqali ochardi: ilova YOPILIB, bot
 # chatiga o'tilardi. Natijada foydalanuvchi kubok, chat va shaxmatdan uzilib
@@ -853,7 +1107,7 @@ async def api_send(request):
             message_id=movie_data["message_id"],
             caption=movie_data["caption"],
             parse_mode="HTML",
-            reply_markup=movie_delivery_keyboard(lang, vk_url),
+            reply_markup=movie_delivery_keyboard(movie_key, lang, vk_url),
             protect_content=True,
         )
     except Exception as e:
@@ -954,9 +1208,24 @@ async def main():
     await site.start()
     logging.info("Veb-server ishga tushdi.")
     
+    # Bot o'z inline kartasini boshqa botnikidan ajratishi uchun kerak.
+    global BOT_ID
+    try:
+        BOT_ID = (await bot.me()).id
+        logging.info("Bot id: %s", BOT_ID)
+    except Exception as e:
+        logging.error("Bot id sini olishda xato: %s", e)
+
     try:
         await bot.delete_webhook(drop_pending_updates=True) 
-        await dp.start_polling(bot, allowed_updates=["message", "callback_query", "my_chat_member", "chat_member"])
+        await dp.start_polling(
+            bot,
+            # inline_query SHART: ro'yxatda bo'lmasa Telegram bu update'ni
+            # umuman yubormaydi va qidiruv jimgina ishlamaydi. chat_member
+            # ham xuddi shunday - sukut bo'yicha yuborilmaydi.
+            allowed_updates=["message", "callback_query", "my_chat_member",
+                             "chat_member", "inline_query",
+                             "chosen_inline_result"])
     except Exception as e:
         logging.error(f"BOT KRITIK XATOGA UCHRADI: {e}")
         raise e
