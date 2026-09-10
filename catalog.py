@@ -68,14 +68,14 @@ FILMS = {
     "hp2": {
         "kind": "hp", "order": 2, "num": "II", "year": 2002,
         "uz": {"title": "Maxfiy Hujra", "caption": "<b>2. Garri Potter va Maxfiy Hujra</b>", "message_id": 27},
-        "ru": {"title": "Тайная Комната", "caption": "<b>2. Гарри Поттер и Тайная Kомнатa</b>", "message_id": 19},
+        "ru": {"title": "Тайная Комната", "caption": "<b>2. Гарри Поттер и Тайная Комната</b>", "message_id": 19},
         "en": {"title": "Chamber of Secrets", "caption": "<b>2. Harry Potter and the Chamber of Secrets</b>", "message_id": 11},
     },
     "hp3": {
         "kind": "hp", "order": 3, "num": "III", "year": 2004,
-        "uz": {"title": "Azkaban Mahbusi", "caption": "<b>3. Garri Potter va Azkaban Maxbusi</b>", "message_id": 28},
+        "uz": {"title": "Azkaban Mahbusi", "caption": "<b>3. Garri Potter va Azkaban Mahbusi</b>", "message_id": 28},
         "ru": {"title": "Узник Азкабана", "caption": "<b>3. Гарри Поттер и Узник Азкабана</b>", "message_id": 20},
-        "en": {"title": "Prisoner of Azkaban", "caption": "<b>3. Harry Potter and the Prisioner of Azkaban</b>", "message_id": 12},
+        "en": {"title": "Prisoner of Azkaban", "caption": "<b>3. Harry Potter and the Prisoner of Azkaban</b>", "message_id": 12},
     },
     "hp4": {
         "kind": "hp", "order": 4, "num": "IV", "year": 2005,
@@ -126,6 +126,33 @@ FILMS = {
         "ru": {"title": "Фантастические твари 3", "caption": "<b>3. Фантастические твари: Тайны Дамблдора</b>", "message_id": 0},
         "en": {"title": "Fantastic Beasts 3", "caption": "<b>3. Fantastic Beasts: The Secrets of Dumbledore</b>", "message_id": 39},
     },}
+
+
+# Seriya nomi har tilda - ulashilgan kartadagi "Seriya:" qatori uchun.
+# (SERIES esa WebApp bo'limlari uchun, u faqat o'zbekcha.)
+SERIES_NAMES = {
+    "hp": {"uz": "Garri Potter", "ru": "Гарри Поттер", "en": "Harry Potter"},
+    "fb": {"uz": "Fantastik Maxluqlar", "ru": "Фантастические твари",
+           "en": "Fantastic Beasts"},
+}
+
+# Kanaldagi fayllar sifati. Hozir BARCHA filmlar bitta sifatda. Keyinroq
+# 2160p / 720p / 480p qo'shilganda bu har film-til uchun ro'yxatga aylanadi.
+QUALITY = "1080p"
+
+# Kinoteatr versiyasining davomiyligi, daqiqada.
+RUNTIME = {
+    "hp1": 152, "hp2": 161, "hp3": 142, "hp4": 157,
+    "hp5": 138, "hp6": 153, "hp7": 146, "hp8": 130,
+    "fb1": 133, "fb2": 134, "fb3": 142,
+}
+
+# IMDb reytinglari (2026-09 holati). Bir-ikki yilda 0.1 ga siljishi mumkin.
+IMDB = {
+    "hp1": 7.7, "hp2": 7.4, "hp3": 7.9, "hp4": 7.7,
+    "hp5": 7.5, "hp6": 7.6, "hp7": 7.7, "hp8": 8.1,
+    "fb1": 7.2, "fb2": 6.5, "fb3": 6.2,
+}
 
 
 # ---------------------------------------------------------------- yordamchi

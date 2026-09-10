@@ -474,15 +474,7 @@ async def handle_payload(user, chat_id, payload):
 
         vk_url = movie_data.get("vk_url") if lang == "uz" else None
 
-        await bot.copy_message(
-            chat_id=chat_id,
-            from_chat_id=DB_CHANNEL_ID,
-            message_id=movie_data["message_id"],
-            caption=movie_data["caption"],
-            parse_mode="HTML",
-            reply_markup=movie_delivery_keyboard(movie_key, lang, vk_url),
-            protect_content=True
-        )
+        await send_film(chat_id, movie_key, lang, vk_url)
 
         # Xogvarts kubogi: kino ochilgani uchun ball (agar fakulteti bo'lsa).
         # Kinoning o'zi allaqachon yuborilgan - bu yerdagi xato
@@ -571,22 +563,86 @@ TIL_NOMI = {"uz": "O'zbekcha", "ru": "Русский", "en": "English"}
 BOT_ID = None
 
 
+# Karta qatorlarining nomlari - karta FILM tilida yoziladi (ruscha
+# versiyani ulashgan odamning kartasi ruscha), foydalanuvchi tilida emas.
+KARTA = {
+    "uz": {"seriya": "Seriya", "yil": "Yil", "vaqt": "Davomiyligi",
+           "til": "Til", "boshqa": "yana", "sifat": "Sifat",
+           "soat": "%d soat %d daqiqa"},
+    "ru": {"seriya": "Франшиза", "yil": "Год", "vaqt": "Длительность",
+           "til": "Язык", "boshqa": "также", "sifat": "Качество",
+           "soat": "%d ч %d мин"},
+    "en": {"seriya": "Series", "yil": "Year", "vaqt": "Runtime",
+           "til": "Language", "boshqa": "also", "sifat": "Quality",
+           "soat": "%d h %d min"},
+}
+
+
 def share_caption(movie_key, film, lang, sharer_id=None):
-    """Ulashiladigan karta matni. Film ostidagi matn bilan bir xil ko'rinishda.
+    """Ulashiladigan karta matni (Marvel botidagi karta tartibida).
+
+    Yuborilgan film ostida ham AYNAN SHU matn turadi (send_film) - odam
+    ikki xil ko'rinish ko'rmasin.
 
     Oxirgi qatordagi havola - ulashayotgan odamning havolasi. Odam matnni
     nusxalab tarqatsa ham ball unga tushadi.
     """
-    t = T(lang)
-    tillar = " ".join(BAYROQ[l] for l in catalog.LANGS
-                      if catalog.is_ready(movie_key, l))
-    return "\n".join([
+    t, k = T(lang), KARTA[lang]
+    seriya = catalog.SERIES_NAMES[film["kind"]][lang]
+    jami = len(catalog.series(film["kind"]))
+
+    lines = [
         film[lang]["caption"],
-        "%s %s   %s" % (emoji.tag("yil"), film["year"], tillar),
+        "— — — — — — — — — —",
+        "%s %s: %s (%d/%d)" % (emoji.tag("seriya"), k["seriya"], seriya,
+                               film["order"], jami),
+        "%s %s: %s" % (emoji.tag("yil"), k["yil"], film["year"]),
+    ]
+    daqiqa = catalog.RUNTIME.get(movie_key)
+    if daqiqa:
+        lines.append("%s %s: %s" % (emoji.tag("vaqt"), k["vaqt"],
+                                    k["soat"] % divmod(daqiqa, 60)))
+    # Sifat faqat yuklangan versiyada - yuklanmaganida bu va'da bo'lib qolardi
+    if catalog.is_ready(movie_key, lang):
+        lines.append("%s %s: %s" % (emoji.tag("sifat"), k["sifat"], catalog.QUALITY))
+    # Kartadagi tugma aynan shu tildagi versiyani ochadi - u birinchi va
+    # nomi bilan; boshqa tillar faqat bayroq bilan, "yana" so'zidan keyin.
+    til = "%s %s: %s %s" % (emoji.tag("til"), k["til"], BAYROQ[lang], TIL_NOMI[lang])
+    boshqa = [BAYROQ[l] for l in catalog.LANGS
+              if l != lang and catalog.is_ready(movie_key, l)]
+    if boshqa:
+        til += "  ·  %s %s" % (k["boshqa"], " ".join(boshqa))
+    lines.append(til)
+    reyting = catalog.IMDB.get(movie_key)
+    if reyting:
+        lines.append("%s IMDb: %.1f" % (emoji.tag("yulduz"), reyting))
+
+    lines += [
         "",
         '%s <b><a href="%s">%s</a></b>' % (
             emoji.tag("tasdiq"), film_link(movie_key, lang, sharer_id), t["brand"]),
-    ])
+    ]
+    return "\n".join(lines)
+
+
+async def send_film(chat_id, movie_key, lang, vk_url=None):
+    """Filmni yopiq kanaldan nusxalab yuboradi, ostida to'liq karta matni.
+
+    Matndagi havola filmni olgan odamning o'z havolasi (Marvel botidagidek).
+    Custom emoji rad etilsa (Premium tugagan va h.k.) - oddiy belgilar bilan
+    qayta yuboriladi: film yetkazish HECH QACHON shu sababdan to'xtamasin.
+    """
+    matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id)
+    kw = dict(chat_id=chat_id, from_chat_id=DB_CHANNEL_ID,
+              message_id=catalog.FILMS[movie_key][lang]["message_id"],
+              parse_mode="HTML",
+              reply_markup=movie_delivery_keyboard(movie_key, lang, vk_url),
+              protect_content=True)
+    try:
+        return await bot.copy_message(caption=matn, **kw)
+    except TelegramBadRequest as e:
+        logging.warning("Film custom emoji bilan yuborilmadi (%s): %s", chat_id, e)
+        return await bot.copy_message(caption=emoji.strip_tags(matn), **kw)
 
 
 def share_keyboard(movie_key, lang, sharer_id=None):
@@ -636,6 +692,8 @@ async def inline_search(query: types.InlineQuery):
         # Til birinchi qatorda aniq ko'rinsin - bir filmning uch versiyasi
         # yonma-yon turadi, ular faqat shu bilan ajraladi.
         qator1 = "%s %s  ·  %s" % (BAYROQ[film_tili], TIL_NOMI[film_tili], film["year"])
+        if movie_key in catalog.IMDB:
+            qator1 += "  ·  ⭐ %.1f" % catalog.IMDB[movie_key]
         qator2 = catalog.SERIES.get(film["kind"], "")
 
         natijalar.append(types.InlineQueryResultArticle(
@@ -1202,15 +1260,7 @@ async def api_send(request):
 
     vk_url = movie_data.get("vk_url") if lang == "uz" else None
     try:
-        sent = await bot.copy_message(
-            chat_id=user.id,
-            from_chat_id=DB_CHANNEL_ID,
-            message_id=movie_data["message_id"],
-            caption=movie_data["caption"],
-            parse_mode="HTML",
-            reply_markup=movie_delivery_keyboard(movie_key, lang, vk_url),
-            protect_content=True,
-        )
+        sent = await send_film(user.id, movie_key, lang, vk_url)
     except Exception as e:
         # Eng ko'p uchraydigani: foydalanuvchi botni hech qachon ochmagan,
         # shuning uchun bot unga yoza olmaydi.
