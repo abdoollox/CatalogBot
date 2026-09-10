@@ -22,6 +22,7 @@ import aiofiles
 import urllib.parse
 import hmac
 import hashlib
+import aiohttp
 import sheets
 import catalog
 import emoji
@@ -648,9 +649,7 @@ async def inline_search(query: types.InlineQuery):
                 message_text=share_caption(movie_key, film, film_tili,
                                            query.from_user.id),
                 parse_mode="HTML",
-                # Rasm hali yo'q. O'chirmasak Telegram matndagi birinchi
-                # havolani ochib, bot kartasini chizib qo'yardi.
-                link_preview_options=types.LinkPreviewOptions(is_disabled=True)),
+                link_preview_options=preview_options(movie_key, film_tili)),
             reply_markup=share_keyboard(movie_key, film_tili, query.from_user.id),
         ))
 
@@ -1036,6 +1035,76 @@ def film_va_til(payload):
     return movie_key, lang
 
 
+# --- 16:9 KARTA RASMLARI ---
+# Ulashilgan kartada rasm matn USTIDA chiqadi (link preview). Rasmlar
+# GitHub Pages da: img/wide/<id>_<til>.jpg (CatalogWebApp/tools/widegen.py).
+#
+# Qaysi rasm haqiqatan borligini bot o'zi tekshiradi (HEAD so'rov). Rasmi
+# yo'q filmda preview o'chiriladi - aks holda Telegram matndagi birinchi
+# havolani ochib, o'rniga bot kartasini chizib qo'yardi.
+#
+# Versiya: Telegram rasmni URL bo'yicha KESHLAYDI. Rasm yangilansa ham URL
+# o'zgarmasa - eski rasm ko'rinib qolaveradi. Shuning uchun URL oxiriga
+# ETag dan olingan belgi qo'shiladi (?v=...). Tekshiruv ishga tushishda va
+# har 6 soatda - rasm qo'shilsa botni qayta ishga tushirish shart emas.
+
+wide_versions = {}        # (film, til) -> versiya belgisi
+
+
+def wide_path(movie_key, lang):
+    return "%s/wide/%s_%s.jpg" % (IMG_URL, movie_key, lang)
+
+
+def wide_url(movie_key, lang):
+    versiya = wide_versions.get((movie_key, lang))
+    url = wide_path(movie_key, lang)
+    return "%s?v=%s" % (url, versiya) if versiya else url
+
+
+async def refresh_wides():
+    topildi = {}
+    vaqt = aiohttp.ClientTimeout(total=20)
+    async with aiohttp.ClientSession(timeout=vaqt) as s:
+        async def bitta(k, l):
+            try:
+                async with s.head(wide_path(k, l)) as r:
+                    if r.status == 200:
+                        belgi = (r.headers.get("ETag") or
+                                 r.headers.get("Last-Modified") or "1")
+                        topildi[(k, l)] = hashlib.md5(belgi.encode()).hexdigest()[:8]
+            except Exception:
+                pass
+        await asyncio.gather(*(bitta(k, l) for k in catalog.FILMS
+                               for l in catalog.LANGS))
+    wide_versions.clear()
+    wide_versions.update(topildi)
+    logging.info("Karta rasmlari: %d / %d", len(topildi),
+                 len(catalog.FILMS) * len(catalog.LANGS))
+
+
+async def wide_watcher(interval=6 * 3600):
+    while True:
+        try:
+            await refresh_wides()
+        except Exception as e:
+            logging.error("Karta rasmlarini tekshirishda xato: %s", e)
+        await asyncio.sleep(interval)
+
+
+def preview_options(movie_key, lang):
+    if (movie_key, lang) not in wide_versions:
+        return types.LinkPreviewOptions(is_disabled=True)
+    return types.LinkPreviewOptions(
+        # Aniq False: aiogram bu maydonga "standart qiymat" belgisini qo'yadi,
+        # u esa Python'da rost deb o'qiladi va chalkashtiradi. Aniq qiymat
+        # bilan Telegramga nima ketishi shubhasiz bo'ladi.
+        is_disabled=False,
+        url=wide_url(movie_key, lang),
+        prefer_large_media=True,
+        show_above_text=True,         # rasm matn USTIDA
+    )
+
+
 def sq_url(movie_key, lang):
     """Inline ro'yxatdagi kvadrat ikonka (tools/sqgen.py yasaydi)."""
     return "%s/sq/%s_%s.jpg" % (IMG_URL, movie_key, lang)
@@ -1210,6 +1279,9 @@ async def main():
         asyncio.create_task(hpbot.season_watcher(bot))
     except Exception as cup_error:
         logging.error("Xogvarts kubogi ishga tushmadi: %s", cup_error)
+
+    # Karta rasmlari kubokka bog'liq emas - u ishlamasa ham ishga tushsin.
+    asyncio.create_task(wide_watcher())
 
     runner = web.AppRunner(app)
     await runner.setup()
