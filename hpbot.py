@@ -570,6 +570,7 @@ def register(dp, bot, app, cfg):
     CHAT_ONLINE = 35                    # so'nggi 35 soniyada so'rov yuborgan - onlayn
     CHAT_TYPING = 6                     # "yozmoqda" belgisi 6 soniya yashaydi
     chat_seen = {}                      # xona -> {uid: vaqt}
+    chat_seen_any = {}                  # uid -> vaqt (istalgan xonada) - a'zolar ro'yxatidagi "onlayn"
     chat_typing = {}                    # xona -> {uid: (tugash vaqti, ism, fakultet)}
     chat_ban_cache = {}                 # uid -> until (None - butunlay); birinchi so'rovda yuklanadi
     chat_ban_loaded = []
@@ -602,13 +603,31 @@ def register(dp, bot, app, cfg):
         now = time.monotonic()
         seen = chat_seen.setdefault(target, {})
         seen[uid] = now
+        chat_seen_any[uid] = now
         for k in [k for k, t in seen.items() if now - t > CHAT_ONLINE]:
             del seen[k]
         typing = chat_typing.get(target, {})
         for k in [k for k, v in typing.items() if v[0] < now]:
             del typing[k]
-        return {"online": len(seen),
+        live = {"online": len(seen),
                 "typing": [{"uid": k, "name": v[1], "house": v[2]} for k, v in typing.items() if k != uid]}
+        if target.startswith("dm:"):
+            live["peer_online"] = chat_is_online(hpcup._dm_peer(target, uid))
+        return live
+
+    def chat_is_online(who):
+        return who is not None and time.monotonic() - chat_seen_any.get(who, -1e9) < CHAT_ONLINE
+
+    def chat_target(room, uid, house):
+        """Ilova aytgan xona -> bazadagi nomi. "dm:<odam>" - ikki kishilik suhbat."""
+        if room == "global":
+            return "global"
+        if room and room.startswith("dm:"):
+            peer = chat_int(room[3:])
+            if not peer or peer == uid:
+                return None
+            return "dm:%d:%d" % (min(uid, peer), max(uid, peer))
+        return house
 
     async def chat_banned(uid):
         """Blok muddati (None - butunlay) yoki False - bloklanmagan."""
@@ -651,16 +670,38 @@ def register(dp, bot, app, cfg):
         banned = await chat_banned(uid)
         
         if request.method == "GET":
+            chat_seen_any[uid] = time.monotonic()
             if request.query.get("counts"):
                 rooms = {"global": "global"}
                 if house:
                     rooms["house"] = house
                 counts = await hpcup.chat_unread_counts(uid, rooms)
+                counts["dm"] = sum(d["unread"] for d in await hpcup.chat_dm_list(uid))
                 return cors(web.json_response({"ok": True, "counts": counts}))
+            if request.query.get("dms"):
+                dms = await hpcup.chat_dm_list(uid)
+                for d in dms:
+                    d["peer"]["online"] = chat_is_online(d["peer"]["uid"])
+                return cors(web.json_response({"ok": True, "dms": dms}))
+            if request.query.get("members"):
+                which = request.query.get("members")
+                if which != "global" and not house:
+                    return cors(web.json_response({"error": "no_house"}, status=403))
+                season = await hpcup.current_season()
+                members = await hpcup.chat_members(None if which == "global" else house, season["id"])
+                for m in members:
+                    m["online"] = chat_is_online(m["uid"])
+                return cors(web.json_response({"ok": True, "members": members}))
             room = request.query.get("room", "house")
-            target = "global" if room == "global" else house
+            target = chat_target(room, uid, house)
             if not target:
                 return cors(web.json_response({"error": "no_house"}, status=403))
+            peer = None
+            if target.startswith("dm:"):
+                peer = await hpcup.chat_user(hpcup._dm_peer(target, uid))
+                if not peer:
+                    return cors(web.json_response({"error": "no_user"}, status=404))
+                peer["online"] = chat_is_online(peer["uid"])
             after = chat_int(request.query.get("after"))
             before = chat_int(request.query.get("before"))
             since = chat_int(request.query.get("since"))
@@ -705,6 +746,8 @@ def register(dp, bot, app, cfg):
                       "admin": admin, "banned": banned}
             if admin:
                 result["bans"] = [{"uid": k, "until": v} for k, v in chat_ban_cache.items()]
+            if peer:
+                result["peer"] = peer
             result.update(chat_live(target, uid))
             if unread and request.query.get("unread"):
                 # O'qilmagan xabar bor - chat birinchi o'qilmagan xabardan ochiladi.
@@ -720,9 +763,12 @@ def register(dp, bot, app, cfg):
                 return cors(web.json_response({"error": "invalid json"}, status=400))
                 
             room = body.get("room", "house")
-            target = "global" if room == "global" else house
+            target = chat_target(room, uid, house)
             if not target:
                 return cors(web.json_response({"error": "no_house"}, status=403))
+            if target.startswith("dm:") and (body.get("action") or "send") == "send":
+                if not await hpcup.chat_user(hpcup._dm_peer(target, uid)):
+                    return cors(web.json_response({"error": "no_user"}, status=404))
 
             action = body.get("action") or "send"
             if action == "typing":

@@ -1778,7 +1778,10 @@ async def get_chat_messages(house, limit=50, after=None, before=None, since=None
 def _read_state(conn, house, user_id):
     row = conn.execute("SELECT last_id FROM chat_reads WHERE user_id=? AND room=?",
                        (int(user_id), house)).fetchone()
-    if row is None:
+    if row is None and house.startswith("dm:"):
+        # Shaxsiy suhbat: hali ochilmagan bo'lsa - undagi hamma xabar o'qilmagan.
+        row = {"last_id": 0}
+    elif row is None:
         # Birinchi marta: hammasi o'qilgan hisoblanadi - yangi odam (yoki shu
         # imkoniyat qo'shilgan kun hamma) yuzlab eski xabarni "yangi" deb ko'rmasin.
         top = conn.execute("SELECT COALESCE(MAX(id), 0) FROM chat_messages WHERE house=?",
@@ -1889,6 +1892,81 @@ async def chat_unban(user_id):
         try:
             conn.execute("DELETE FROM chat_bans WHERE user_id=?", (int(user_id),))
             conn.commit()
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+def _dm_peer(room, user_id):
+    """ "dm:5:12" va 5 -> 12."""
+    try:
+        a, b = (int(x) for x in room[3:].split(":"))
+    except ValueError:
+        return None
+    return b if a == int(user_id) else a if b == int(user_id) else None
+
+
+async def chat_user(user_id):
+    """Chat uchun odam: {uid, name, house} yoki None."""
+    def _do():
+        conn = _connect()
+        try:
+            r = conn.execute("SELECT user_id, COALESCE(first_name, 'Sehrgar') AS name, house "
+                             "FROM users WHERE user_id=?", (int(user_id),)).fetchone()
+            return {"uid": r["user_id"], "name": r["name"], "house": r["house"]} if r else None
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_members(house, season_id):
+    """Fakultetga kirganlar (house None - hamma fakultet), shu mavsum ballari bo'yicha."""
+    def _do():
+        conn = _connect()
+        try:
+            where, args = "u.house IN (%s)" % ",".join("?" * len(HOUSES)), list(HOUSES)
+            if house:
+                where, args = "u.house=?", [house]
+            rows = conn.execute(
+                "SELECT u.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house, "
+                "COALESCE(SUM(p.points), 0) AS pts FROM users u "
+                "LEFT JOIN points p ON p.user_id=u.user_id AND p.season_id=? "
+                "WHERE " + where + " GROUP BY u.user_id ORDER BY pts DESC, u.user_id ASC",
+                [season_id] + args).fetchall()
+            return [{"uid": r["user_id"], "name": (r["name"] or "Sehrgar").strip()[:40],
+                     "house": r["house"], "points": r["pts"]} for r in rows]
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_dm_list(user_id):
+    """Shaxsiy suhbatlar: oxirgi xabari bo'yicha, yangisi tepada."""
+    def _do():
+        conn = _connect()
+        try:
+            uid = int(user_id)
+            rooms = conn.execute(
+                "SELECT house AS room, MAX(id) AS last_id FROM chat_messages "
+                "WHERE deleted=0 AND (house LIKE ? OR house LIKE ?) "
+                "GROUP BY house ORDER BY last_id DESC LIMIT 100",
+                ("dm:%d:%%" % uid, "dm:%%:%d" % uid)).fetchall()
+            out = []
+            for r in rooms:
+                peer = _dm_peer(r["room"], uid)
+                if peer is None:
+                    continue
+                p = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name, house FROM users "
+                                 "WHERE user_id=?", (peer,)).fetchone()
+                m = conn.execute("SELECT user_id, message, created_at FROM chat_messages WHERE id=?",
+                                 (r["last_id"],)).fetchone()
+                out.append({
+                    "room": "dm:%d" % peer,
+                    "peer": {"uid": peer, "name": p["name"] if p else "Sehrgar", "house": p["house"] if p else None},
+                    "last": {"uid": m["user_id"], "text": (m["message"] or "")[:120], "time": m["created_at"]},
+                    "unread": _read_state(conn, r["room"], uid)[1],
+                })
+            return out
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
