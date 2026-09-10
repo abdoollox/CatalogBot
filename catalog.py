@@ -128,14 +128,6 @@ FILMS = {
     },}
 
 
-# Seriya nomi har tilda - ulashilgan kartadagi "Seriya:" qatori uchun.
-# (SERIES esa WebApp bo'limlari uchun, u faqat o'zbekcha.)
-SERIES_NAMES = {
-    "hp": {"uz": "Garri Potter", "ru": "Гарри Поттер", "en": "Harry Potter"},
-    "fb": {"uz": "Fantastik Maxluqlar", "ru": "Фантастические твари",
-           "en": "Fantastic Beasts"},
-}
-
 # Kanaldagi fayllar sifati. Hozir BARCHA filmlar bitta sifatda. Keyinroq
 # 2160p / 720p / 480p qo'shilganda bu har film-til uchun ro'yxatga aylanadi.
 QUALITY = "1080p"

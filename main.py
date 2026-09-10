@@ -566,13 +566,13 @@ BOT_ID = None
 # Karta qatorlarining nomlari - karta FILM tilida yoziladi (ruscha
 # versiyani ulashgan odamning kartasi ruscha), foydalanuvchi tilida emas.
 KARTA = {
-    "uz": {"seriya": "Seriya", "yil": "Yil", "vaqt": "Davomiyligi",
+    "uz": {"yil": "Yil", "vaqt": "Davomiyligi",
            "til": "Til", "sifat": "Sifat",
            "soat": "%d soat %d daqiqa"},
-    "ru": {"seriya": "Франшиза", "yil": "Год", "vaqt": "Длительность",
+    "ru": {"yil": "Год", "vaqt": "Длительность",
            "til": "Язык", "sifat": "Качество",
            "soat": "%d ч %d мин"},
-    "en": {"seriya": "Series", "yil": "Year", "vaqt": "Runtime",
+    "en": {"yil": "Year", "vaqt": "Runtime",
            "til": "Language", "sifat": "Quality",
            "soat": "%d h %d min"},
 }
@@ -588,14 +588,13 @@ def share_caption(movie_key, film, lang, sharer_id=None):
     nusxalab tarqatsa ham ball unga tushadi.
     """
     t, k = T(lang), KARTA[lang]
-    seriya = catalog.SERIES_NAMES[film["kind"]][lang]
-    jami = len(catalog.series(film["kind"]))
 
+    # "Seriya: Garri Potter (2/8)" qatori ATAYLAB yo'q: 2026-yil dekabrda
+    # Garri Potter SERIALI chiqadi va "seriya" so'zi odamni chalg'itishi
+    # mumkin (foydalanuvchi qarori, 2026-09-10).
     lines = [
         film[lang]["caption"],
         "— — — — — — — — — —",
-        "%s %s: %s (%d/%d)" % (emoji.tag("seriya"), k["seriya"], seriya,
-                               film["order"], jami),
         "%s %s: %s" % (emoji.tag("yil"), k["yil"], film["year"]),
     ]
     daqiqa = catalog.RUNTIME.get(movie_key)
