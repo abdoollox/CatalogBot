@@ -130,7 +130,6 @@ TEXTS = {
         "try_other": "Boshqa nom bilan urinib ko'ring",
         "btn_watch": "Tomosha qilish",
         "btn_search": "Qidirish",
-        "soon_short": "tez orada",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Garri Potter Kolleksiyasiga xush kelibsiz!</b>\n\n"
             "Garri Potter olamidagi barcha filmlarni yuqori sifatda, "
@@ -153,7 +152,6 @@ TEXTS = {
         "try_other": "Попробуйте другое название",
         "btn_watch": "Смотреть",
         "btn_search": "Поиск",
-        "soon_short": "скоро",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Добро пожаловать в коллекцию «Гарри Поттер»!</b>\n\n"
             "Смотрите все фильмы вселенной Гарри Поттера в высоком качестве, "
@@ -176,7 +174,6 @@ TEXTS = {
         "try_other": "Try another title",
         "btn_watch": "Watch",
         "btn_search": "Search",
-        "soon_short": "coming soon",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Welcome to the Harry Potter Collection!</b>\n\n"
             "Watch every film from the Harry Potter universe in high quality, "
@@ -292,7 +289,7 @@ def movie_delivery_keyboard(movie_key, lang="uz", vk_url=None):
     builder.row(
         # Chat tanlatadi va o'sha chatga shu filmning kartasi tushadi.
         InlineKeyboardButton(
-            text=loc["share_btn"], switch_inline_query=movie_key,
+            text=loc["share_btn"], switch_inline_query="%s_%s" % (movie_key, lang),
             icon_custom_emoji_id=emoji.icon("dostlar")),
         # Bo'sh qator: chat tanlatmaydi, qidiruv shu chatda boshlanadi.
         InlineKeyboardButton(
@@ -563,8 +560,11 @@ async def check_sub_handler(callback: types.CallbackQuery):
 # kartaning har bir havolasi ulashgan odamning id sini olib yuradi -
 # ulashish va do'st taklif qilish bitta mexanizm.
 
-INLINE_LIMIT = 20
+# Telegram bitta javobda eng ko'pi 50 ta natija qabul qiladi. Bizda
+# 11 film x 3 til = 33 - hammasi sig'adi.
+INLINE_LIMIT = 50
 BAYROQ = {"uz": "🇺🇿", "ru": "🇷🇺", "en": "🇬🇧"}
+TIL_NOMI = {"uz": "O'zbekcha", "ru": "Русский", "en": "English"}
 
 # Bot o'z kartasini boshqa botnikidan ajratishi uchun (ishga tushishda olinadi)
 BOT_ID = None
@@ -613,34 +613,45 @@ async def inline_search(query: types.InlineQuery):
     t = T(lang)
     raw = (query.query or "").strip()
 
-    topildi = catalog.search(raw, limit=INLINE_LIMIT)
-    if not raw:
-        # Bo'sh so'rovda birinchi taassurot "tez orada" bilan to'lib qolmasin
-        tayyor = [(i, f) for i, f in topildi if catalog.is_ready(i, lang)]
-        topildi = tayyor or topildi
+    # Aniq film+til ("hp3_uz") - film ostidagi "Ulashish" tugmasi shuni
+    # yuboradi. Bunda faqat o'sha bitta karta: odam aynan qaysi versiyani
+    # ko'rgan bo'lsa, o'shani ulashadi.
+    aniq_film, aniq_til = film_va_til(raw)
+    if aniq_film:
+        juftlar = [(aniq_film, aniq_til)]
+    else:
+        # Har bir topilgan film UCHALA tildagi versiyasi bilan chiqadi.
+        # Foydalanuvchining o'z tili birinchi - avval o'z tilidagi to'plam.
+        tartib = [lang] + [l for l in catalog.LANGS if l != lang]
+        topildi = catalog.search(raw, limit=len(catalog.FILMS))
+        juftlar = [(fid, l) for l in tartib for fid, _ in topildi]
+
+    # Yuklanmagan versiya ko'rsatilmaydi: ulashilsa, do'st uni ocha olmasdi.
+    juftlar = [(f, l) for f, l in juftlar if catalog.is_ready(f, l)][:INLINE_LIMIT]
 
     natijalar = []
-    for movie_key, film in topildi:
-        qator1 = "%s %s" % (film["year"], BAYROQ[lang])
-        if not catalog.is_ready(movie_key, lang):
-            qator1 += "  ·  %s" % t["soon_short"]
+    for movie_key, film_tili in juftlar:
+        film = catalog.FILMS[movie_key]
+        # Til birinchi qatorda aniq ko'rinsin - bir filmning uch versiyasi
+        # yonma-yon turadi, ular faqat shu bilan ajraladi.
+        qator1 = "%s %s  ·  %s" % (BAYROQ[film_tili], TIL_NOMI[film_tili], film["year"])
         qator2 = catalog.SERIES.get(film["kind"], "")
 
         natijalar.append(types.InlineQueryResultArticle(
-            id="%s_%s" % (movie_key, lang),
-            title="%d. %s" % (film["order"], film[lang]["title"]),
+            id="%s_%s" % (movie_key, film_tili),
+            title="%d. %s" % (film["order"], film[film_tili]["title"]),
             description=qator1 + "\n" + qator2,
-            thumbnail_url=sq_url(movie_key, lang),
+            thumbnail_url=sq_url(movie_key, film_tili),
             thumbnail_width=320,
             thumbnail_height=320,
             input_message_content=types.InputTextMessageContent(
-                message_text=share_caption(movie_key, film, lang,
+                message_text=share_caption(movie_key, film, film_tili,
                                            query.from_user.id),
                 parse_mode="HTML",
                 # Rasm hali yo'q. O'chirmasak Telegram matndagi birinchi
                 # havolani ochib, bot kartasini chizib qo'yardi.
                 link_preview_options=types.LinkPreviewOptions(is_disabled=True)),
-            reply_markup=share_keyboard(movie_key, lang, query.from_user.id),
+            reply_markup=share_keyboard(movie_key, film_tili, query.from_user.id),
         ))
 
     if not natijalar:
