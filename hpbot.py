@@ -566,6 +566,13 @@ def register(dp, bot, app, cfg):
     chat_acts = {}                      # uid -> oxirgi reaksiya/tahrir/o'chirish vaqti
     chat_cids = {}                      # (uid, cid) -> xabar; qayta yuborishda takror yo'q
     chat_cid_of = {}                    # xabar id -> (uid, cid); ilova o'z xabarini taniydi
+    # "Yozmoqda" va "onlayn" - bazaga yozilmaydi, faqat xotirada.
+    CHAT_ONLINE = 35                    # so'nggi 35 soniyada so'rov yuborgan - onlayn
+    CHAT_TYPING = 6                     # "yozmoqda" belgisi 6 soniya yashaydi
+    chat_seen = {}                      # xona -> {uid: vaqt}
+    chat_typing = {}                    # xona -> {uid: (tugash vaqti, ism, fakultet)}
+    chat_ban_cache = {}                 # uid -> until (None - butunlay); birinchi so'rovda yuklanadi
+    chat_ban_loaded = []
 
     def chat_tag(messages):
         for m in messages:
@@ -589,6 +596,32 @@ def register(dp, bot, app, cfg):
             return max(1, math.ceil(CHAT_WINDOW - (now - sent[0])))
         sent.append(now)
         return None
+
+    def chat_live(target, uid):
+        """Xonadagi onlaynlar soni va hozir yozayotganlar (o'zidan tashqari)."""
+        now = time.monotonic()
+        seen = chat_seen.setdefault(target, {})
+        seen[uid] = now
+        for k in [k for k, t in seen.items() if now - t > CHAT_ONLINE]:
+            del seen[k]
+        typing = chat_typing.get(target, {})
+        for k in [k for k, v in typing.items() if v[0] < now]:
+            del typing[k]
+        return {"online": len(seen),
+                "typing": [{"uid": k, "name": v[1], "house": v[2]} for k, v in typing.items() if k != uid]}
+
+    async def chat_banned(uid):
+        """Blok muddati (None - butunlay) yoki False - bloklanmagan."""
+        if not chat_ban_loaded:
+            chat_ban_cache.update(await hpcup.chat_bans())
+            chat_ban_loaded.append(True)
+        if uid not in chat_ban_cache:
+            return False
+        until = chat_ban_cache[uid]
+        if until and until < hpcup._utc_iso(hpcup.now_tk()):
+            del chat_ban_cache[uid]
+            return False
+        return until
 
     def chat_int(value):
         try:
@@ -614,6 +647,8 @@ def register(dp, bot, app, cfg):
         uid = user["id"]
         stats = await hpcup.user_stats(uid, (await hpcup.current_season())["id"])
         house = stats.get("house")
+        admin = uid in (_cfg.get("admin_ids") or ())
+        banned = await chat_banned(uid)
         
         if request.method == "GET":
             if request.query.get("counts"):
@@ -641,7 +676,10 @@ def register(dp, bot, app, cfg):
                         pass
                     messages = await hpcup.get_chat_messages(target, 100, since=since, viewer=uid)
                 rev = max([m["rev"] for m in messages] + [since])
-                return cors(web.json_response({"ok": True, "messages": chat_tag(messages), "rev": rev}))
+                result = {"ok": True, "messages": chat_tag(messages), "rev": rev,
+                          "banned": await chat_banned(uid)}
+                result.update(chat_live(target, uid))
+                return cors(web.json_response(result))
             if before is not None:
                 messages = await hpcup.get_chat_messages(target, 50, before=before, viewer=uid)
                 return cors(web.json_response(
@@ -663,16 +701,19 @@ def register(dp, bot, app, cfg):
             # takror kelsa ham ilova uni id bo'yicha taniydi, yo'qolmaydi.
             rev = await hpcup.chat_max_rev(target)
             read, unread = await hpcup.chat_read_state(target, uid)
+            result = {"ok": True, "rev": rev, "read": read, "unread": unread,
+                      "admin": admin, "banned": banned}
+            if admin:
+                result["bans"] = [{"uid": k, "until": v} for k, v in chat_ban_cache.items()]
+            result.update(chat_live(target, uid))
             if unread and request.query.get("unread"):
                 # O'qilmagan xabar bor - chat birinchi o'qilmagan xabardan ochiladi.
                 messages, more, more_new = await hpcup.get_chat_around(target, read, uid)
-                return cors(web.json_response(
-                    {"ok": True, "messages": chat_tag(messages), "more": more, "more_new": more_new,
-                     "rev": rev, "read": read, "unread": unread}))
-            messages = await hpcup.get_chat_messages(target, 50, viewer=uid)
-            return cors(web.json_response(
-                {"ok": True, "messages": chat_tag(messages), "more": len(messages) == 50, "rev": rev,
-                 "read": read, "unread": unread}))
+                result.update({"messages": chat_tag(messages), "more": more, "more_new": more_new})
+            else:
+                messages = await hpcup.get_chat_messages(target, 50, viewer=uid)
+                result.update({"messages": chat_tag(messages), "more": len(messages) == 50})
+            return cors(web.json_response(result))
             
         elif request.method == "POST":
             if not body:
@@ -684,12 +725,36 @@ def register(dp, bot, app, cfg):
                 return cors(web.json_response({"error": "no_house"}, status=403))
 
             action = body.get("action") or "send"
+            if action == "typing":
+                if banned is False:
+                    name = user.get("first_name") or "Sehrgar"
+                    chat_typing.setdefault(target, {})[uid] = (
+                        time.monotonic() + CHAT_TYPING, name, house)
+                    chat_wake(target)
+                return cors(web.json_response({"ok": True}))
+            if action in ("ban", "unban"):
+                who = chat_int(body.get("uid"))
+                admins = _cfg.get("admin_ids") or ()
+                if not admin or who is None or who == uid or who in admins:
+                    return cors(web.json_response({"error": "forbidden"}, status=403))
+                if action == "ban":
+                    hours = chat_int(body.get("hours"))
+                    chat_ban_cache[who] = await hpcup.chat_ban(who, uid, hours if hours and hours > 0 else None)
+                else:
+                    await hpcup.chat_unban(who)
+                    chat_ban_cache.pop(who, None)
+                for room_key in list(chat_events):
+                    chat_wake(room_key)
+                return cors(web.json_response(
+                    {"ok": True, "bans": [{"uid": k, "until": v} for k, v in chat_ban_cache.items()]}))
             if action == "read":
                 msg_id = chat_int(body.get("id"))
                 if msg_id is None:
                     return cors(web.json_response({"error": "invalid id"}, status=400))
                 await hpcup.mark_chat_read(target, uid, msg_id)
                 return cors(web.json_response({"ok": True}))
+            if banned is not False and action in ("send", "edit", "react"):
+                return cors(web.json_response({"error": "banned", "until": banned}, status=403))
             if action in ("edit", "delete", "react"):
                 msg_id = chat_int(body.get("id"))
                 if msg_id is None:
@@ -710,7 +775,7 @@ def register(dp, bot, app, cfg):
                     if isinstance(message, str):
                         return cors(web.json_response({"error": message}, status=403))
                 else:
-                    message = await hpcup.delete_chat_message(target, uid, msg_id)
+                    message = await hpcup.delete_chat_message(target, uid, msg_id, admin=admin)
                     if message:
                         chat_wake(target)
                         return cors(web.json_response({"ok": True, "id": msg_id}))
@@ -738,6 +803,7 @@ def register(dp, bot, app, cfg):
                 pass
                 
             message = await hpcup.post_chat_message(target, uid, text, chat_int(body.get("reply_to")))
+            chat_typing.get(target, {}).pop(uid, None)
             # Yozgan odam chatni ko'rib turibdi - o'z xabarigacha hammasi o'qilgan.
             await hpcup.mark_chat_read(target, uid, message["id"])
             if cid:

@@ -137,6 +137,14 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_house_id ON chat_messages(house, id);
 
+-- Chatda bloklanganlar (admin qo'yadi). until NULL - butunlay.
+CREATE TABLE IF NOT EXISTS chat_bans (
+    user_id   INTEGER PRIMARY KEY,
+    banned_by INTEGER,
+    banned_at TEXT NOT NULL,
+    until     TEXT
+);
+
 -- Har odam har xonada qaysi xabargacha o'qigani.
 CREATE TABLE IF NOT EXISTS chat_reads (
     user_id INTEGER NOT NULL,
@@ -1840,6 +1848,47 @@ async def get_chat_around(house, read_id, viewer, before=15, after=100):
             more, more_new = len(old) > before, len(new) > after
             rows = list(reversed(old[:before])) + new[:after]
             return _chat_reactions(conn, [_chat_row(r) for r in rows], viewer), more, more_new
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_bans():
+    """{user_id: until} - amaldagi bloklar (until None - butunlay). Muddati o'tganlar o'chiriladi."""
+    def _do():
+        conn = _connect()
+        try:
+            conn.execute("DELETE FROM chat_bans WHERE until IS NOT NULL AND until < ?",
+                         (_utc_iso(now_tk()),))
+            conn.commit()
+            return {r["user_id"]: r["until"] for r in conn.execute("SELECT user_id, until FROM chat_bans")}
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_ban(user_id, by, hours=None):
+    """Bloklaydi va muddatini qaytaradi (None - butunlay)."""
+    def _do():
+        conn = _connect()
+        try:
+            until = _utc_iso(now_tk() + timedelta(hours=hours)) if hours else None
+            conn.execute(
+                "INSERT OR REPLACE INTO chat_bans (user_id, banned_by, banned_at, until) VALUES (?,?,?,?)",
+                (int(user_id), int(by), _utc_iso(now_tk()), until))
+            conn.commit()
+            return until
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_unban(user_id):
+    def _do():
+        conn = _connect()
+        try:
+            conn.execute("DELETE FROM chat_bans WHERE user_id=?", (int(user_id),))
+            conn.commit()
         finally:
             conn.close()
     return await asyncio.to_thread(_do)

@@ -1615,6 +1615,7 @@ async def main():
             "channel_id": CHANNEL_ID,
             "verify_init_data": verify_init_data,
             "cors": _cors,
+            "admin_ids": ADMIN_IDS,
         })
         asyncio.create_task(hpbot.season_watcher(bot))
     except Exception as cup_error:
