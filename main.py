@@ -131,6 +131,10 @@ TEXTS = {
         "try_other": "Boshqa nom bilan urinib ko'ring",
         "btn_watch": "Tomosha qilish",
         "btn_search": "Qidirish",
+        "ref_new": (emoji.tag("dostlar") + " <b>Yangi do'st qo'shildi!</b>\n\n"
+                    "Siz ulashgan havola orqali yana bir kishi kolleksiyaga "
+                    "qo'shildi.\n\nTaklif qilgan do'stlaringiz: <b>%d</b>"),
+        "btn_share_more": "Yana ulashish",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Garri Potter Kolleksiyasiga xush kelibsiz!</b>\n\n"
             "Garri Potter olamidagi barcha filmlarni yuqori sifatda, "
@@ -153,6 +157,10 @@ TEXTS = {
         "try_other": "Попробуйте другое название",
         "btn_watch": "Смотреть",
         "btn_search": "Поиск",
+        "ref_new": (emoji.tag("dostlar") + " <b>Новый друг присоединился!</b>\n\n"
+                    "По вашей ссылке к коллекции присоединился ещё один "
+                    "человек.\n\nПриглашённых друзей: <b>%d</b>"),
+        "btn_share_more": "Поделиться ещё",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Добро пожаловать в коллекцию «Гарри Поттер»!</b>\n\n"
             "Смотрите все фильмы вселенной Гарри Поттера в высоком качестве, "
@@ -175,6 +183,10 @@ TEXTS = {
         "try_other": "Try another title",
         "btn_watch": "Watch",
         "btn_search": "Search",
+        "ref_new": (emoji.tag("dostlar") + " <b>A new friend joined!</b>\n\n"
+                    "One more person joined the collection through the link "
+                    "you shared.\n\nFriends invited: <b>%d</b>"),
+        "btn_share_more": "Share more",
         "catalog": (
             emoji.tag("kolleksiya") + " <b>Welcome to the Harry Potter Collection!</b>\n\n"
             "Watch every film from the Harry Potter universe in high quality, "
@@ -317,8 +329,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
         
     raw = (command.args or "").strip()
     user_id = message.from_user.id
-    # Referal va manba hozircha faqat ajratiladi - ular keyingi bosqichda
-    # ishlatiladi. Havola formati esa allaqachon ularni qo'llab-quvvatlaydi.
+    # Manba (`-s`) hozircha faqat ajratiladi - u keyingi bosqichda ishlatiladi.
     payload, inviter_id, source = parse_payload(raw)
 
     is_new = True
@@ -337,6 +348,16 @@ async def start_cmd(message: types.Message, command: CommandObject):
             await hpcup.touch_user(message.from_user.id, message.from_user.first_name, message.from_user.username)
         except Exception:
             pass
+
+    # Referal, 1-bosqich: faqat YANGI odam kimgadir biriktiriladi. Botdan
+    # avval foydalangan odam hech kimga ball keltirmaydi. Ball bu yerda
+    # emas - obuna tasdiqlanganda beriladi (notify_inviter).
+    if inviter_id and is_new:
+        try:
+            if await hpcup.remember_inviter(user_id, inviter_id):
+                await log_user_action(message.from_user, "invited_%d" % inviter_id)
+        except Exception as e:
+            logging.error("Taklif qilganni yozishda xato: %s", e)
     
     lang = await user_lang(user_id)
 
@@ -373,6 +394,8 @@ async def continue_flow(user, chat_id, payload, lang):
         await handle_payload(user, chat_id, payload)
     else:
         await send_welcome(chat_id, lang)
+    # Film yoki katalog yuborilgandan KEYIN - yangi odam kutib qolmasin.
+    await notify_inviter(user)
 
 
 @dp.callback_query(F.data.startswith("lang:"))
@@ -514,9 +537,39 @@ async def after_subscribe(user, chat_id, payload, prompt_message_id=None):
         # yo'qolib ketardi: obunadan keyin faqat katalog ko'rsatilardi va
         # izlab kelingan film yuborilmasdi.
         await handle_payload(user, chat_id, payload)
-        return
+    else:
+        await send_welcome(chat_id, lang)
+    await notify_inviter(user)
 
-    await send_welcome(chat_id, lang)
+
+async def notify_inviter(user):
+    """Referal, 2-bosqich: obuna tasdiqlandi - taklif qilganga ball va xabar.
+
+    Bir necha joydan chaqiriladi (obuna uch yo'l bilan aniqlanadi), lekin
+    ball bir marta beriladi - buni baza kafolatlaydi. Hech qanday xato
+    yangi odamning oqimini to'xtatmasligi kerak.
+    """
+    try:
+        inviter_id, refs = await hpcup.award_referral(user.id)
+    except Exception as e:
+        logging.error("Referal balini berishda xato (%s): %s", user.id, e)
+        return
+    if not inviter_id:
+        return
+    await log_user_action(user, "ref_awarded")
+    lang = await user_lang(inviter_id) or DEFAULT_LANG
+    t = T(lang)
+    try:
+        # Tugma yangi ulashishga undaydi: chat tanlatadi va o'sha yerda
+        # film qidiruvi ochiladi - aylanma shu bilan davom etadi.
+        await send_html(inviter_id, t["ref_new"] % refs,
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                            InlineKeyboardButton(
+                                text=t["btn_share_more"], switch_inline_query="",
+                                icon_custom_emoji_id=emoji.icon("dostlar"))]]))
+    except Exception as e:
+        # Taklif qilgan botni bloklagan bo'lishi mumkin - ball baribir yozildi.
+        logging.info("Taklif qilganga xabar bormadi (%s): %s", inviter_id, e)
 
 
 async def send_welcome(chat_id, lang=DEFAULT_LANG):
@@ -832,6 +885,10 @@ async def channel_status_changed(event: types.ChatMemberUpdated):
                 # Bot bilan suhbat boshlanmagan bo'lsa yozib bo'lmaydi -
                 # bunda "Tasdiqlash" tugmasi zaxira yo'l bo'lib qoladi.
                 logging.error("Obunadan keyin davom ettirishda xato: %s", e)
+        else:
+            # Kutilayotgan ish yo'q (masalan, xotira yangilangan), lekin
+            # odam kimdir taklif qilgan yangi foydalanuvchi bo'lishi mumkin.
+            await notify_inviter(event.from_user)
 
 
 ALLOWED_ORIGIN = "https://abdoollox.github.io"

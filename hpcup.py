@@ -273,6 +273,16 @@ def _migrate(conn, users_json):
     # barcha xabarlar va filmlar shu tilda boradi.
     if "lang" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN lang TEXT")
+    # Referal: kim taklif qilgan (bir marta yoziladi), ball qachon berilgan
+    # (NULL - hali berilmagan) va shu odam nechta do'st keltirgan.
+    if "invited_by" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN invited_by INTEGER")
+    if "invited_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN invited_at TEXT")
+    if "ref_awarded_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN ref_awarded_at TEXT")
+    if "refs" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN refs INTEGER NOT NULL DEFAULT 0")
 
     # 1) Eski `points.house` dan foydalanuvchilarni tiklaymiz. Ustun
     #    tushirilgandan keyin bu ma'lumot yo'qoladi, shuning uchun avval.
@@ -510,6 +520,85 @@ def _get_house(user_id):
 async def get_house(user_id):
     """Foydalanuvchi fakulteti yoki None. Fakultet umrbod — o'zgarmaydi."""
     return await asyncio.to_thread(_get_house, user_id)
+
+
+# ---------------------------------------------------------------- referal
+# Ikki bosqich (Marvel botidagidek):
+#   1. Havola bosilganda - faqat KIM taklif qilgani yoziladi, ball yo'q.
+#   2. Do'st kanalga obuna bo'lganda - taklif qilganga +1.
+# Havolani bosib, obuna bo'lmay ketganlar sanalmaydi - ball qadrsizlanmasin.
+
+def _remember_inviter(user_id, inviter_id):
+    user_id, inviter_id = int(user_id), int(inviter_id)
+    if user_id == inviter_id:                 # o'zini o'zi taklif qila olmaydi
+        return False
+    conn = _connect()
+    try:
+        # Taklif qilgan bazada bo'lishi SHART - aks holda istalgan raqam
+        # bilan qalbaki havola yasab, begona id ga ball yig'ish mumkin edi.
+        if not conn.execute("SELECT 1 FROM users WHERE user_id=?",
+                            (inviter_id,)).fetchone():
+            return False
+        _touch_user(conn, user_id)
+        # Birinchi taklif qilgan yutadi: invited_by faqat bo'sh bo'lsa yoziladi.
+        cur = conn.execute(
+            "UPDATE users SET invited_by=?, invited_at=? "
+            "WHERE user_id=? AND invited_by IS NULL AND ref_awarded_at IS NULL",
+            (inviter_id, _utc_iso(now_tk()), user_id))
+        conn.commit()
+        return cur.rowcount == 1
+    finally:
+        conn.close()
+
+
+async def remember_inviter(user_id, inviter_id):
+    """Yangi odamni taklif qilganga biriktiradi. Yozildimi - True/False."""
+    return await asyncio.to_thread(_remember_inviter, user_id, inviter_id)
+
+
+def _award_referral(user_id):
+    conn = _connect()
+    try:
+        # Bitta UPDATE - ikki so'rov bir vaqtda kelsa ham ball bir marta
+        # beriladi (SQLite yozishni navbat bilan bajaradi).
+        cur = conn.execute(
+            "UPDATE users SET ref_awarded_at=? "
+            "WHERE user_id=? AND invited_by IS NOT NULL AND ref_awarded_at IS NULL",
+            (_utc_iso(now_tk()), int(user_id)))
+        if cur.rowcount != 1:
+            conn.rollback()
+            return None, 0
+        inviter_id = conn.execute("SELECT invited_by FROM users WHERE user_id=?",
+                                  (int(user_id),)).fetchone()["invited_by"]
+        conn.execute("UPDATE users SET refs = refs + 1 WHERE user_id=?",
+                     (inviter_id,))
+        refs = conn.execute("SELECT refs FROM users WHERE user_id=?",
+                            (inviter_id,)).fetchone()["refs"]
+        conn.commit()
+        return inviter_id, refs
+    finally:
+        conn.close()
+
+
+async def award_referral(user_id):
+    """Obuna tasdiqlanganda chaqiriladi. Qaytaradi: (taklif qilgan id,
+    uning yangi bali) yoki (None, 0) - ball berilmadi yoki allaqachon berilgan."""
+    return await asyncio.to_thread(_award_referral, user_id)
+
+
+def _referral_count(user_id):
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT refs FROM users WHERE user_id=?",
+                           (int(user_id),)).fetchone()
+        return int(row["refs"]) if row else 0
+    finally:
+        conn.close()
+
+
+async def referral_count(user_id):
+    """Shu odam nechta do'st keltirgan."""
+    return await asyncio.to_thread(_referral_count, user_id)
 
 
 def _resort_until(conn):
