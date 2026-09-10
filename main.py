@@ -578,11 +578,12 @@ KARTA = {
 }
 
 
-def share_caption(movie_key, film, lang, sharer_id=None):
+def share_caption(movie_key, film, lang, sharer_id=None, boshqa_tillar=True):
     """Ulashiladigan karta matni (Marvel botidagi karta tartibida).
 
-    Yuborilgan film ostida ham AYNAN SHU matn turadi (send_film) - odam
-    ikki xil ko'rinish ko'rmasin.
+    Yuborilgan film ostida ham shu matn turadi (send_film), faqat "yana
+    🇷🇺 🇬🇧" qismisiz (boshqa_tillar=False): film allaqachon olingan, u yerda
+    boshqa tillar kerak emas (foydalanuvchi so'ragan, 2026-09-10).
 
     Oxirgi qatordagi havola - ulashayotgan odamning havolasi. Odam matnni
     nusxalab tarqatsa ham ball unga tushadi.
@@ -610,7 +611,7 @@ def share_caption(movie_key, film, lang, sharer_id=None):
     til = "%s %s: %s %s" % (emoji.tag("til"), k["til"], BAYROQ[lang], TIL_NOMI[lang])
     boshqa = [BAYROQ[l] for l in catalog.LANGS
               if l != lang and catalog.is_ready(movie_key, l)]
-    if boshqa:
+    if boshqa and boshqa_tillar:
         til += "  ·  %s %s" % (k["boshqa"], " ".join(boshqa))
     lines.append(til)
     reyting = catalog.IMDB.get(movie_key)
@@ -632,7 +633,8 @@ async def send_film(chat_id, movie_key, lang, vk_url=None):
     Custom emoji rad etilsa (Premium tugagan va h.k.) - oddiy belgilar bilan
     qayta yuboriladi: film yetkazish HECH QACHON shu sababdan to'xtamasin.
     """
-    matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id)
+    matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id,
+                         boshqa_tillar=False)
     kw = dict(chat_id=chat_id, from_chat_id=DB_CHANNEL_ID,
               message_id=catalog.FILMS[movie_key][lang]["message_id"],
               parse_mode="HTML",
