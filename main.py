@@ -1061,24 +1061,45 @@ def wide_url(movie_key, lang):
     return "%s?v=%s" % (url, versiya) if versiya else url
 
 
+WIDE_URINISH = 3          # tarmoq uzilsa har rasm uchun nechta urinish
+
+
 async def refresh_wides():
-    topildi = {}
-    vaqt = aiohttp.ClientTimeout(total=20)
+    """Qaysi rasmlar borligini yangilaydi.
+
+    Serverning GitHub bilan aloqasi beqaror - bitta so'rov yo'lda uzilishi
+    mumkin (sinovda 24 tadan bittasi birinchi urinishda tushib qoldi).
+    Shuning uchun:
+      - har rasm uchun bir necha urinish;
+      - rasm FAQAT aniq 404 bo'lsa ro'yxatdan chiqariladi. Tarmoq xatosida
+        oldingi holat saqlanadi - vaqtinchalik uzilish avval topilgan
+        rasmni o'chirib yubormasin.
+    """
+    yangi = dict(wide_versions)       # eski holatdan boshlaymiz
+    vaqt = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=vaqt) as s:
         async def bitta(k, l):
-            try:
-                async with s.head(wide_path(k, l)) as r:
-                    if r.status == 200:
-                        belgi = (r.headers.get("ETag") or
-                                 r.headers.get("Last-Modified") or "1")
-                        topildi[(k, l)] = hashlib.md5(belgi.encode()).hexdigest()[:8]
-            except Exception:
-                pass
+            for urinish in range(WIDE_URINISH):
+                try:
+                    async with s.head(wide_path(k, l)) as r:
+                        if r.status == 200:
+                            belgi = (r.headers.get("ETag") or
+                                     r.headers.get("Last-Modified") or "1")
+                            yangi[(k, l)] = hashlib.md5(belgi.encode()).hexdigest()[:8]
+                            return
+                        if r.status == 404:
+                            yangi.pop((k, l), None)      # aniq yo'q
+                            return
+                        # 5xx va boshqalar - qayta urinamiz
+                except Exception:
+                    pass
+                await asyncio.sleep(1 + urinish)
+            # Hech bir urinish javob bermadi - eski holat o'z joyida qoladi.
         await asyncio.gather(*(bitta(k, l) for k in catalog.FILMS
                                for l in catalog.LANGS))
     wide_versions.clear()
-    wide_versions.update(topildi)
-    logging.info("Karta rasmlari: %d / %d", len(topildi),
+    wide_versions.update(yangi)
+    logging.info("Karta rasmlari: %d / %d", len(yangi),
                  len(catalog.FILMS) * len(catalog.LANGS))
 
 
