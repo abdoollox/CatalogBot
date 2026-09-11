@@ -58,7 +58,45 @@ COLUMNS = (
     ("offer_ply_b", "INTEGER NOT NULL DEFAULT -2"),
     ("result", "TEXT"),
     ("finished_at", "TEXT"),
+    ("white_rating", "INTEGER"),      # o'yin oldidagi reyting
+    ("black_rating", "INTEGER"),
+    ("white_delta", "INTEGER"),       # o'yin natijasida o'zgarish
+    ("black_delta", "INTEGER"),
+    ("ended_ts", "REAL"),             # tugagan payt (aniq) - tarix tartibi uchun
 )
+
+# Reyting (Elo): hamma 1200 dan boshlaydi; birinchi 20 o'yinda tezroq o'zgaradi.
+# Faqat jonli o'yinlar (ikkala tomon yurgan va tugagan) - bot bilan o'yin kirmaydi.
+RATING_START = 1200
+K_NEW, K_NEW_GAMES, K_STD = 40, 20, 24
+BOT_LEVELS = ("novice", "easy", "med", "hard", "master")
+# Unvonlar - shaxmat donalari: hamma Piyodadan boshlaydi (1200), keyin
+# Ot -> Fil -> Ruh -> Farzin -> Shoh. Piyoda ham oxirida farzinga aylanadi.
+TITLES = ((1850, "king"), (1700, "queen"), (1550, "rook"), (1400, "bishop"), (1250, "knight"), (0, "pawn"))
+
+RATING_SCHEMA = """
+CREATE TABLE IF NOT EXISTS chess_ratings (
+    user_id    INTEGER PRIMARY KEY,
+    rating     INTEGER NOT NULL DEFAULT 1200,
+    games      INTEGER NOT NULL DEFAULT 0,
+    wins       INTEGER NOT NULL DEFAULT 0,
+    draws      INTEGER NOT NULL DEFAULT 0,
+    losses     INTEGER NOT NULL DEFAULT 0,
+    best       INTEGER NOT NULL DEFAULT 1200,
+    updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_chess_rating ON chess_ratings(rating);
+-- Botlar ustidan natijalar (faqat bezak - ilova aytadi, ball/reyting bermaydi).
+CREATE TABLE IF NOT EXISTS chess_bot_results (
+    user_id    INTEGER NOT NULL,
+    level      TEXT NOT NULL,
+    wins       INTEGER NOT NULL DEFAULT 0,
+    draws      INTEGER NOT NULL DEFAULT 0,
+    losses     INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT,
+    PRIMARY KEY (user_id, level)
+);
+"""
 
 _locks = {}         # o'yin -> asyncio.Lock; bir o'yinga ikki yurish bir vaqtda tushmasin
 _events = {}        # o'yin -> asyncio.Event; kutib turgan so'rovlarni uyg'otadi
@@ -68,6 +106,8 @@ _created = {}       # uid -> oxirgi o'yin ochish vaqtlari
 _fresh = set()      # hozirgina tugagan o'yinlar - ball faqat shularga beriladi
 _hooks = {}         # "changed": o'yin boshlandi/tugadi -> chatdagi taklif kartasi yangilanadi
 _seeks = {}         # uid -> tasodifiy raqib qidirayotgan (xotirada)
+_seen_any = {}      # uid -> shaxmat bo'limida so'nggi ko'ringan vaqt (jadvaldagi "onlayn")
+_bot_posted = {}    # uid -> oxirgi bot natijasi vaqti (tez-tez yuborib bo'lmaydi)
 SEEK_TTL = 35       # shuncha soniya so'rov yubormagan qidiruvchi navbatdan chiqadi
 
 
@@ -85,6 +125,18 @@ def migrate():
             "WHERE v=1 AND status IN ('waiting','active')").rowcount
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chess_white ON chess_games(white_uid, status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_chess_black ON chess_games(black_uid, status)")
+        fresh = not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='chess_ratings'").fetchone()
+        conn.executescript(RATING_SCHEMA)
+        if fresh:
+            # Reyting paydo bo'lishidan oldin o'ynalgan jonli o'yinlar ham hisobga kiradi.
+            done = conn.execute(
+                "SELECT * FROM chess_games WHERE v=2 AND status='finished' AND result IS NOT NULL "
+                "ORDER BY finished_at, created_at").fetchall()
+            for r in done:
+                _rate(conn, r)
+            if done:
+                logging.info("Shaxmat reytingi: %d ta o'tgan o'yin hisoblandi", len(done))
         conn.commit()
         if old:
             logging.info("Shaxmat: %d ta eski tugamagan o'yin bekor qilindi", old)
@@ -158,12 +210,51 @@ def _finish(conn, row, winner, reason, now, aborted=False):
     cur = conn.execute(
         "UPDATE chess_games SET status=?, result=?, winner_uid=?, win_reason=?, "
         "white_ms=?, black_ms=?, turn_started=NULL, draw_offer=NULL, "
-        "finished_at=?, rev=rev+1 WHERE id=? AND rev=?",
+        "finished_at=?, ended_ts=?, rev=rev+1 WHERE id=? AND rev=?",
         (status, result, winner_uid, reason, w, b,
-         hpcup._utc_iso(hpcup.now_tk()), row["id"], row["rev"]))
+         hpcup._utc_iso(hpcup.now_tk()), now, row["id"], row["rev"]))
     if cur.rowcount and not aborted:
         _fresh.add(row["id"])
+        _rate(conn, _row(conn, row["id"]))
     return _row(conn, row["id"])
+
+
+def _rating_row(conn, uid):
+    r = conn.execute("SELECT * FROM chess_ratings WHERE user_id=?", (uid,)).fetchone()
+    if r:
+        return dict(r)
+    return {"user_id": uid, "rating": RATING_START, "games": 0, "wins": 0, "draws": 0,
+            "losses": 0, "best": RATING_START}
+
+
+def _rate(conn, row):
+    """Tugagan jonli o'yin uchun ikkala o'yinchining reytingi (Elo)."""
+    if row["white_delta"] is not None or not row["black_uid"] or row["result"] not in ("1-0", "0-1", "1/2-1/2"):
+        return
+    w, b = _rating_row(conn, row["white_uid"]), _rating_row(conn, row["black_uid"])
+    sw = {"1-0": 1.0, "0-1": 0.0}.get(row["result"], 0.5)
+    ew = 1 / (1 + 10 ** ((b["rating"] - w["rating"]) / 400.0))
+    dw = int(round((K_NEW if w["games"] < K_NEW_GAMES else K_STD) * (sw - ew)))
+    db = int(round((K_NEW if b["games"] < K_NEW_GAMES else K_STD) * ((1 - sw) - (1 - ew))))
+    stamp = hpcup._utc_iso(hpcup.now_tk())
+    for p, d, score in ((w, dw, sw), (b, db, 1 - sw)):
+        new = p["rating"] + d
+        conn.execute(
+            "INSERT INTO chess_ratings (user_id, rating, games, wins, draws, losses, best, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET rating=excluded.rating, "
+            "games=excluded.games, wins=excluded.wins, draws=excluded.draws, losses=excluded.losses, "
+            "best=excluded.best, updated_at=excluded.updated_at",
+            (p["user_id"], new, p["games"] + 1, p["wins"] + (score == 1), p["draws"] + (score == 0.5),
+             p["losses"] + (score == 0), max(p["best"], new), stamp))
+    conn.execute("UPDATE chess_games SET white_rating=?, black_rating=?, white_delta=?, black_delta=? WHERE id=?",
+                 (w["rating"], b["rating"], dw, db, row["id"]))
+
+
+def title_of(rating):
+    for floor, name in TITLES:
+        if rating >= floor:
+            return name
+    return "pawn"
 
 
 def _settle(conn, row, now):
@@ -265,6 +356,9 @@ def _view(conn, row, uid, now):
         view["first_move_left"] = max(0, int((row["turn_started"] + FIRST_MOVE - now) * 1000))
     if row["status"] == "finished" and color:
         view["award"] = _award_info(conn, row, uid)
+    if row["status"] == "finished" and row["white_delta"] is not None:
+        view["rating"] = {"w": {"r": row["white_rating"], "d": row["white_delta"]},
+                          "b": {"r": row["black_rating"], "d": row["black_delta"]}}
     return view
 
 
@@ -524,8 +618,16 @@ def _mine(uid):
             "SELECT COUNT(*) FROM points WHERE user_id=? AND season_id=? "
             "AND source_type IN ('chess_win','chess_draw')", (uid, season["id"])).fetchone()[0]
         conn.commit()
-        return ({"games": [_view(conn, r, uid, now) for r in rows],
-                 "season": {"used": used, "limit": hpcup.CHESS_MAX_PER_SEASON}}, changed)
+        r = _rating_row(conn, uid)
+        rank = conn.execute("SELECT COUNT(*) FROM chess_ratings WHERE games>0 AND rating>?",
+                            (r["rating"],)).fetchone()[0] + 1 if r["games"] else None
+        return ({"games": [_view(conn, x, uid, now) for x in rows],
+                 "season": {"used": used, "limit": hpcup.CHESS_MAX_PER_SEASON},
+                 "rating": {"rating": r["rating"], "games": r["games"], "wins": r["wins"], "draws": r["draws"],
+                            "losses": r["losses"], "best": r["best"], "rank": rank, "title": title_of(r["rating"])},
+                 "bots": {b["level"]: {"w": b["wins"], "d": b["draws"], "l": b["losses"]}
+                          for b in conn.execute("SELECT * FROM chess_bot_results WHERE user_id=?", (uid,))}},
+                changed)
     finally:
         conn.close()
 
@@ -652,6 +754,90 @@ def seek_cancel(uid):
     if e and e.get("game"):
         return e["game"]          # juftlik allaqachon topilgan - o'yin baribir boshlangan
     return None
+
+
+def _profile(uid, viewer):
+    conn = hpcup._connect()
+    try:
+        u = conn.execute("SELECT first_name, house FROM users WHERE user_id=?", (uid,)).fetchone()
+        r = _rating_row(conn, uid)
+        rank = None
+        if r["games"]:
+            rank = conn.execute("SELECT COUNT(*) FROM chess_ratings WHERE games>0 AND rating>?",
+                                (r["rating"],)).fetchone()[0] + 1
+        rows = conn.execute(
+            "SELECT g.*, uw.first_name AS wn, uw.house AS wh, ub.first_name AS bn, ub.house AS bh "
+            "FROM chess_games g LEFT JOIN users uw ON uw.user_id=g.white_uid "
+            "LEFT JOIN users ub ON ub.user_id=g.black_uid "
+            "WHERE g.v=2 AND g.status='finished' AND (g.white_uid=? OR g.black_uid=?) "
+            "ORDER BY g.finished_at DESC, COALESCE(g.ended_ts, 0) DESC LIMIT 40", (uid, uid)).fetchall()
+        history = []
+        for g in rows:
+            me = "w" if g["white_uid"] == uid else "b"
+            opp = "b" if me == "w" else "w"
+            res = "draw" if g["result"] == "1/2-1/2" else ("win" if g["result"] == ("1-0" if me == "w" else "0-1") else "loss")
+            before, delta = g[("white" if me == "w" else "black") + "_rating"], g[("white" if me == "w" else "black") + "_delta"]
+            history.append({
+                "id": g["id"], "color": me, "result": res, "reason": g["win_reason"],
+                "opp": {"uid": g[opp == "w" and "white_uid" or "black_uid"],
+                        "name": g[opp + "n"] or "Sehrgar", "house": g[opp + "h"]},
+                "base": g["base"], "inc": g["inc"], "delta": delta,
+                "rating": (before + delta) if before is not None and delta is not None else None,
+                "plies": len(_moves(g)), "time": g["finished_at"]})
+        series = [h["rating"] for h in reversed(history) if h["rating"] is not None][-30:]
+        out = {"uid": uid, "name": (u and u["first_name"]) or "Sehrgar", "house": u and u["house"],
+               "rating": r["rating"], "games": r["games"], "wins": r["wins"], "draws": r["draws"],
+               "losses": r["losses"], "best": r["best"], "rank": rank, "title": title_of(r["rating"]),
+               "history": history if uid == viewer else history[:10], "series": series}
+        if uid == viewer:
+            out["bots"] = {row["level"]: {"w": row["wins"], "d": row["draws"], "l": row["losses"]}
+                           for row in conn.execute("SELECT * FROM chess_bot_results WHERE user_id=?", (uid,))}
+        return out, []
+    finally:
+        conn.close()
+
+
+def _leaderboard(house, viewer):
+    conn = hpcup._connect()
+    try:
+        where, args = "r.games>0", []
+        if house:
+            where += " AND u.house=?"
+            args.append(house)
+        rows = conn.execute(
+            "SELECT r.*, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM chess_ratings r "
+            "LEFT JOIN users u ON u.user_id=r.user_id WHERE " + where +
+            " ORDER BY r.rating DESC, r.games DESC LIMIT 50", args).fetchall()
+        top = [{"uid": x["user_id"], "name": x["name"], "house": x["house"], "rating": x["rating"],
+                "games": x["games"], "wins": x["wins"], "title": title_of(x["rating"]),
+                "online": time.monotonic() - _seen_any.get(x["user_id"], -1e9) < ONLINE}
+               for x in rows]
+        me = None
+        mr = _rating_row(conn, viewer)
+        if mr["games"]:
+            mh = conn.execute("SELECT house FROM users WHERE user_id=?", (viewer,)).fetchone()
+            if not house or (mh and mh["house"] == house):
+                pos = conn.execute(
+                    "SELECT COUNT(*) FROM chess_ratings r LEFT JOIN users u ON u.user_id=r.user_id "
+                    "WHERE " + where + " AND r.rating>?", args + [mr["rating"]]).fetchone()[0] + 1
+                me = {"rank": pos, "rating": mr["rating"], "games": mr["games"], "title": title_of(mr["rating"])}
+        return {"top": top, "me": me}, []
+    finally:
+        conn.close()
+
+
+def _bot_result(uid, level, result):
+    conn = hpcup._connect()
+    try:
+        col = {"win": "wins", "draw": "draws", "loss": "losses"}[result]
+        conn.execute(
+            "INSERT INTO chess_bot_results (user_id, level, %s, updated_at) VALUES (?,?,1,?) "
+            "ON CONFLICT(user_id, level) DO UPDATE SET %s=%s+1, updated_at=excluded.updated_at" % (col, col, col),
+            (uid, level, hpcup._utc_iso(hpcup.now_tk())))
+        conn.commit()
+        return {"ok": True}, []
+    finally:
+        conn.close()
 
 
 def _brief(gid):
@@ -836,6 +1022,34 @@ def register(app, cfg):
         uid = int(user["id"])
         name = user.get("first_name")
         what = request.match_info["what"]
+        _seen_any[uid] = time.monotonic()
+
+        if what == "profile":
+            try:
+                who = int(request.query.get("uid") or uid)
+            except ValueError:
+                who = uid
+            res = await _run("profile:%d" % who, _profile, who, uid)
+            res["ok"] = True
+            return reply(res)
+
+        if what == "top":
+            house = request.query.get("house") or None
+            if house and house not in hpcup.HOUSES:
+                house = None
+            res = await _run("top", _leaderboard, house, uid)
+            res["ok"] = True
+            return reply(res)
+
+        if what == "botresult":
+            level, result = body.get("level"), body.get("result")
+            if level not in BOT_LEVELS or result not in ("win", "draw", "loss"):
+                return reply({"ok": False, "error": "bad"}, 400)
+            now = time.monotonic()
+            if now - _bot_posted.get(uid, -1e9) < 10:
+                return reply({"ok": False, "error": "slow"}, 429)
+            _bot_posted[uid] = now
+            return reply(await _run("bot:%d" % uid, _bot_result, uid, level, result))
 
         if what == "create":
             sent = _created.setdefault(uid, deque())
@@ -946,6 +1160,6 @@ def register(app, cfg):
 
     migrate()
     _hooks["changed"] = cfg.get("chess_changed")
-    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine|share|seek)}", handler)
+    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine|share|seek|profile|top|botresult)}", handler)
     asyncio.ensure_future(_watcher())
     logging.info("Sehrgar shaxmati: server hakam ulandi")
