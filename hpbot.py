@@ -781,9 +781,9 @@ def register(dp, bot, app, cfg):
                     return cors(web.json_response({"error": "invalid id"}, status=400))
                 await hpcup.dm_block(uid, who, action == "block")
                 return cors(web.json_response({"ok": True, "settings": await hpcup.dm_settings(uid)}))
-            if target.startswith("dm:") and action in ("send", "edit", "react", "typing"):
+            if target.startswith("dm:") and action in ("send", "edit", "react", "typing", "chess"):
                 dm_peer = hpcup._dm_peer(target, uid)
-                if action == "send" and not await hpcup.chat_user(dm_peer):
+                if action in ("send", "chess") and not await hpcup.chat_user(dm_peer):
                     return cors(web.json_response({"error": "no_user"}, status=404))
                 state = await hpcup.dm_state(uid, dm_peer, target)
                 if state != "ok":
@@ -819,7 +819,7 @@ def register(dp, bot, app, cfg):
                     return cors(web.json_response({"error": "invalid id"}, status=400))
                 await hpcup.mark_chat_read(target, uid, msg_id)
                 return cors(web.json_response({"ok": True}))
-            if banned is not False and action in ("send", "edit", "react"):
+            if banned is not False and action in ("send", "edit", "react", "chess"):
                 return cors(web.json_response({"error": "banned", "until": banned}, status=403))
             if action in ("edit", "delete", "react"):
                 msg_id = chat_int(body.get("id"))
@@ -850,6 +850,27 @@ def register(dp, bot, app, cfg):
                 chat_wake(target)
                 return cors(web.json_response({"ok": True, "message": message}))
                 
+            if action == "chess":
+                # Shaxmatga chaqirish: kutilayotgan o'yin + chatda karta (holati jonli).
+                retry = chat_slow(chat_sent, uid, CHAT_LIMIT)
+                if retry:
+                    return cors(web.json_response({"error": "slow", "retry": retry}, status=429))
+                try:
+                    base, inc = int(body.get("base") or 300), int(body.get("inc") or 0)
+                except (TypeError, ValueError):
+                    base, inc = 300, 0
+                game = await hpchess.create_game(uid, user.get("first_name"), base, inc)
+                if not game.get("ok"):
+                    return cors(web.json_response(game, status=409))
+                gid = game["game_id"]
+                # Eski ilova kartani bilmaydi - unga oddiy matn ko'rinadi.
+                text = "♟️ Sehrgar shaxmati: jangga chaqiraman! (%d daq) Kod: %s" % (
+                    game["game"]["base"] // 60, gid)
+                message = await hpcup.post_chat_message(target, uid, text, None, chess=gid)
+                await hpcup.mark_chat_read(target, uid, message["id"])
+                chat_wake(target)
+                return cors(web.json_response({"ok": True, "message": message, "game": game["game"]}))
+
             text = (body.get("text") or "").strip()
             if not text or len(text) > 1000:
                 return cors(web.json_response({"error": "invalid message"}, status=400))
@@ -887,7 +908,12 @@ def register(dp, bot, app, cfg):
 
     app.router.add_route("*", "/api/chat", api_chat)
 
-    # Shaxmat: jonli o'yinlarda hakam - server (hpchess.py).
+    # Shaxmat: jonli o'yinlarda hakam - server (hpchess.py). O'yin boshlansa
+    # yoki tugasa, chatdagi taklif kartasi hamma uchun jonli yangilanadi.
+    async def chess_changed(game_id):
+        for room_key in await hpcup.chat_bump_chess(game_id):
+            chat_wake(room_key)
+    _cfg["chess_changed"] = chess_changed
     hpchess.register(app, _cfg)
 
     logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",

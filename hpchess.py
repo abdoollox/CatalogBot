@@ -66,6 +66,9 @@ _timers = {}        # o'yin -> call_later; vaqt tugashi / birinchi yurish muddat
 _seen = {}          # (o'yin, uid) -> vaqt; raqib aloqadami
 _created = {}       # uid -> oxirgi o'yin ochish vaqtlari
 _fresh = set()      # hozirgina tugagan o'yinlar - ball faqat shularga beriladi
+_hooks = {}         # "changed": o'yin boshlandi/tugadi -> chatdagi taklif kartasi yangilanadi
+_seeks = {}         # uid -> tasodifiy raqib qidirayotgan (xotirada)
+SEEK_TTL = 35       # shuncha soniya so'rov yubormagan qidiruvchi navbatdan chiqadi
 
 
 # ---------------------------------------------------------------- baza
@@ -527,6 +530,130 @@ def _mine(uid):
         conn.close()
 
 
+def _match(white, black, names, base, inc):
+    """Qidiruvda uchrashgan ikki kishi uchun darhol boshlangan o'yin."""
+    now = time.time()
+    conn = hpcup._connect()
+    try:
+        changed = []
+        for uid in (white, black):
+            hpcup._touch_user(conn, uid, names.get(uid))
+            active, closed = _active_of(conn, uid, now)
+            changed += closed
+            if active:
+                conn.commit()
+                return {"ok": False, "error": "has_active", "uid": uid}, changed
+        for uid in (white, black):
+            changed += _cancel_waiting(conn, uid, now)
+        stamp = hpcup._utc_iso(hpcup.now_tk())
+        for _ in range(5):
+            gid = secrets.token_hex(4)
+            try:
+                conn.execute(
+                    "INSERT INTO chess_games (id, white_uid, black_uid, fen, turn, status, "
+                    "white_time, black_time, last_move_at, created_at, v, moves, base, inc, "
+                    "white_ms, black_ms, turn_started, rev) "
+                    "VALUES (?,?,?,?,'w','active',?,?,?,?,2,'',?,?,?,?,?,1)",
+                    (gid, white, black, chess.STARTING_FEN, base, base, stamp, stamp, base, inc,
+                     base * 1000, base * 1000, now))
+                break
+            except sqlite3.IntegrityError:
+                continue
+        conn.commit()
+        return {"ok": True, "game_id": gid}, changed + [_row(conn, gid)]
+    finally:
+        conn.close()
+
+
+def _active_id(uid):
+    conn = hpcup._connect()
+    try:
+        active, changed = _active_of(conn, uid, time.time())
+        conn.commit()
+        return (active["id"] if active else None), changed
+    finally:
+        conn.close()
+
+
+def _seek_purge():
+    now = time.monotonic()
+    for uid in [k for k, v in _seeks.items() if now - v["seen"] > SEEK_TTL and not v.get("game")]:
+        _seeks.pop(uid, None)
+
+
+def seek_counts(skip=None):
+    """Har vaqt nazorati bo'yicha hozir qidirayotganlar soni ("300+0": 2)."""
+    _seek_purge()
+    out = {}
+    for uid, v in _seeks.items():
+        if uid != skip and not v.get("game"):
+            k = "%d+%d" % v["tc"]
+            out[k] = out.get(k, 0) + 1
+    return out
+
+
+async def seek(uid, name, base, inc, wait):
+    """Tasodifiy raqib: shu vaqtni tanlagan boshqa qidiruvchi bo'lsa - darhol
+    o'yin, bo'lmasa navbatda kutadi (so'rov 25 soniyagacha ushlab turiladi)."""
+    e = _seeks.get(uid)
+    if e and e.get("game"):
+        _seeks.pop(uid, None)
+        return {"ok": True, "game_id": e["game"]}
+    if not e:
+        # Tugallanmagan o'yini bor odam navbatga turmaydi - avval o'shani tugatsin.
+        active = await _run("mine:%d" % uid, _active_id, uid)
+        if active:
+            return {"ok": False, "error": "has_active", "game_id": active}
+    _seek_purge()
+    if not e:
+        e = _seeks[uid] = {"ev": asyncio.Event(), "tc": (base, inc)}
+    e.update(tc=(base, inc), name=name, seen=time.monotonic())
+    partner = None
+    for k, v in _seeks.items():
+        if k != uid and not v.get("game") and not v.get("busy") and v["tc"] == (base, inc):
+            partner = k
+            break
+    if partner is not None and not e.get("busy"):
+        pe = _seeks[partner]
+        pe["busy"] = e["busy"] = True
+        white, black = (uid, partner) if secrets.randbelow(2) else (partner, uid)
+        try:
+            res, changed = await asyncio.to_thread(
+                _match, white, black, {uid: name, partner: pe.get("name")}, base, inc)
+        finally:
+            pe.pop("busy", None)
+            e.pop("busy", None)
+        await _after(changed)
+        if res.get("ok"):
+            pe["game"] = res["game_id"]
+            pe["ev"].set()
+            _seeks.pop(uid, None)
+            return {"ok": True, "game_id": res["game_id"]}
+        # Kimdadir tugallanmagan o'yin chiqib qoldi - u navbatdan chiqadi.
+        _seeks.pop(res.get("uid"), None)
+        if res.get("uid") == uid:
+            return {"ok": False, "error": "has_active"}
+    if wait:
+        try:
+            await asyncio.wait_for(e["ev"].wait(), POLL_WAIT)
+        except asyncio.TimeoutError:
+            pass
+        e2 = _seeks.get(uid)
+        if e2 and e2.get("game"):
+            _seeks.pop(uid, None)
+            return {"ok": True, "game_id": e2["game"]}
+        if e2:
+            e2["seen"] = time.monotonic()
+    return {"ok": True, "searching": True, "counts": seek_counts(uid)}
+
+
+def seek_cancel(uid):
+    e = _seeks.pop(uid, None)
+    if e and e.get("game"):
+        return e["game"]          # juftlik allaqachon topilgan - o'yin baribir boshlangan
+    return None
+
+
 def _brief(gid):
     conn = hpcup._connect()
     try:
@@ -540,6 +667,13 @@ def _brief(gid):
                 "base": row["base"], "inc": row["inc"]}
     finally:
         conn.close()
+
+
+async def create_game(uid, name, base, inc):
+    """Kutilayotgan o'yin (do'st yoki chatdagi taklif uchun)."""
+    base = base if base in BASES else 300
+    inc = min(max(int(inc or 0), 0), MAX_INC)
+    return await _run("create:%d" % uid, _create, uid, name, base, inc)
 
 
 async def brief(gid):
@@ -606,6 +740,12 @@ async def _after(changed):
             # _view da): keyinroq, masalan yangi mavsumda, qayta berilmaydi.
             _fresh.discard(row["id"])
             await asyncio.to_thread(_award, row)
+        hook = _hooks.get("changed")
+        if hook and (row["status"] in ("finished", "aborted") or (row["status"] == "active" and not row["moves"])):
+            try:
+                await hook(row["id"])
+            except Exception as e:
+                logging.error("Shaxmat kartasini yangilashda xato (%s): %s", row["id"], e)
 
 
 async def _run(gid, fn, *args):
@@ -722,6 +862,25 @@ def register(app, cfg):
         if what == "mine":
             res = await _run("mine:%d" % uid, _mine, uid)
             res["ok"] = True
+            res["seeking"] = seek_counts(uid)
+            return reply(res)
+
+        if what == "seek":
+            if body.get("cancel"):
+                gid = seek_cancel(uid)
+                return reply({"ok": True, "game_id": gid} if gid else {"ok": True})
+            if request.method != "POST":
+                return reply({"ok": True, "counts": seek_counts(uid)})
+            try:
+                base, inc = int(body.get("base") or 300), int(body.get("inc") or 0)
+            except (TypeError, ValueError):
+                base, inc = 300, 0
+            if base not in BASES:
+                base = 300
+            inc = min(max(inc, 0), MAX_INC)
+            res = await seek(uid, name, base, inc, bool(body.get("wait")))
+            if res.get("game_id"):
+                seen(res["game_id"], uid)
             return reply(res)
 
         gid = game_id(body.get("game_id") or request.query.get("game_id"))
@@ -786,6 +945,7 @@ def register(app, cfg):
         return reply({"error": "not_found"}, 404)
 
     migrate()
-    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine|share)}", handler)
+    _hooks["changed"] = cfg.get("chess_changed")
+    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine|share|seek)}", handler)
     asyncio.ensure_future(_watcher())
     logging.info("Sehrgar shaxmati: server hakam ulandi")

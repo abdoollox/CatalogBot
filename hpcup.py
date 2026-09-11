@@ -343,6 +343,16 @@ def _migrate(conn, users_json):
     if "rev" not in chat_cols:
         conn.execute("ALTER TABLE chat_messages ADD COLUMN rev INTEGER")
         conn.execute("UPDATE chat_messages SET rev = id")
+    # Shaxmat taklifi kartasi: xabar shu o'yinga bog'lanadi (hpchess.py).
+    if "chess" not in chat_cols:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN chess TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_chess ON chat_messages(chess)")
+    # Karta vaqt nazoratini ko'rsatadi - ustunlar hpchess.migrate dan oldin ham bo'lsin.
+    chess_cols = [r[1] for r in conn.execute("PRAGMA table_info(chess_games)")]
+    if "base" not in chess_cols:
+        conn.execute("ALTER TABLE chess_games ADD COLUMN base INTEGER NOT NULL DEFAULT 300")
+    if "inc" not in chess_cols:
+        conn.execute("ALTER TABLE chess_games ADD COLUMN inc INTEGER NOT NULL DEFAULT 0")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_rev ON chat_messages(rev)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_house_rev ON chat_messages(house, rev)")
 
@@ -1690,11 +1700,16 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
 _CHAT_SELECT = (
     "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, "
     "c.message, c.created_at, c.reply_to, c.edited_at, c.deleted, c.rev, "
-    "r.user_id AS r_uid, COALESCE(ru.first_name, 'Sehrgar') AS r_name, ru.house AS r_house, r.message AS r_text, r.deleted AS r_deleted "
+    "r.user_id AS r_uid, COALESCE(ru.first_name, 'Sehrgar') AS r_name, ru.house AS r_house, r.message AS r_text, r.deleted AS r_deleted, "
+    "c.chess, g.status AS g_status, g.base AS g_base, g.inc AS g_inc, g.white_uid AS g_w, g.black_uid AS g_b, "
+    "g.winner_uid AS g_win, COALESCE(gw.first_name, 'Sehrgar') AS g_wn, COALESCE(gb.first_name, 'Sehrgar') AS g_bn "
     "FROM chat_messages c "
     "LEFT JOIN users u ON u.user_id = c.user_id "
     "LEFT JOIN chat_messages r ON r.id = c.reply_to "
-    "LEFT JOIN users ru ON ru.user_id = r.user_id ")
+    "LEFT JOIN users ru ON ru.user_id = r.user_id "
+    "LEFT JOIN chess_games g ON g.id = c.chess "
+    "LEFT JOIN users gw ON gw.user_id = g.white_uid "
+    "LEFT JOIN users gb ON gb.user_id = g.black_uid ")
 
 _NEXT_REV = "(SELECT COALESCE(MAX(rev), 0) + 1 FROM chat_messages)"
 
@@ -1716,6 +1731,12 @@ def _chat_row(r):
     }
     if r["edited_at"]:
         m["edited"] = True
+    if r["chess"] and r["g_status"]:
+        # Shaxmat taklifi: ilova matn o'rniga karta chizadi (holati jonli yangilanadi).
+        m["chess"] = {"id": r["chess"], "status": r["g_status"], "base": r["g_base"], "inc": r["g_inc"],
+                      "white": {"uid": r["g_w"], "name": r["g_wn"]},
+                      "black": {"uid": r["g_b"], "name": r["g_bn"]} if r["g_b"] else None,
+                      "winner": r["g_win"]}
     if r["reply_to"]:
         if r["r_uid"] is None or r["r_deleted"]:
             m["reply"] = {"id": r["reply_to"], "deleted": True}
@@ -2071,7 +2092,7 @@ async def chat_max_rev(house):
     return await asyncio.to_thread(_do)
 
 
-async def post_chat_message(house, user_id, message, reply_to=None):
+async def post_chat_message(house, user_id, message, reply_to=None, chess=None):
     """Xabarni saqlaydi va uni ro'yxatdagi ko'rinishida qaytaradi.
 
     reply_to boshqa xonadagi yoki o'chirilgan xabarga ishora qilsa - e'tiborsiz qoldiriladi.
@@ -2087,9 +2108,9 @@ async def post_chat_message(house, user_id, message, reply_to=None):
                 target = int(reply_to) if ok else None
             stamp = _utc_iso(now_tk())
             cur = conn.execute(
-                "INSERT INTO chat_messages (house, user_id, message, created_at, reply_to, rev) "
-                "VALUES (?,?,?,?,?," + _NEXT_REV + ")",
-                (house, int(user_id), message.strip(), stamp, target)
+                "INSERT INTO chat_messages (house, user_id, message, created_at, reply_to, chess, rev) "
+                "VALUES (?,?,?,?,?,?," + _NEXT_REV + ")",
+                (house, int(user_id), message.strip(), stamp, target, chess)
             )
             conn.commit()
             return _chat_one(conn, cur.lastrowid, user_id)
@@ -2112,6 +2133,8 @@ async def edit_chat_message(house, user_id, msg_id, text):
             row = _own_live_message(conn, house, msg_id)
             if not row or row["user_id"] != int(user_id):
                 return "not_found"
+            if conn.execute("SELECT chess FROM chat_messages WHERE id=?", (row["id"],)).fetchone()[0]:
+                return "not_editable"       # shaxmat kartasi tahrirlanmaydi
             made = _parse_iso(row["created_at"])
             if made and (now_tk() - made).total_seconds() > CHAT_EDIT_HOURS * 3600:
                 return "too_old"
@@ -2120,6 +2143,24 @@ async def edit_chat_message(house, user_id, msg_id, text):
                 (text.strip(), _utc_iso(now_tk()), row["id"]))
             conn.commit()
             return _chat_one(conn, row["id"], user_id)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_bump_chess(game_id):
+    """Shaxmat o'yini holati o'zgardi - unga bog'langan kartalar jonli yangilansin.
+    Qaysi xonalar o'zgargani qaytadi (ularni kutib turganlar uyg'otiladi)."""
+    def _do():
+        conn = _connect()
+        try:
+            rooms = [r[0] for r in conn.execute(
+                "SELECT DISTINCT house FROM chat_messages WHERE chess=? AND deleted=0", (str(game_id),))]
+            if rooms:
+                conn.execute("UPDATE chat_messages SET rev=" + _NEXT_REV + " WHERE chess=? AND deleted=0",
+                             (str(game_id),))
+                conn.commit()
+            return rooms
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
