@@ -7,6 +7,7 @@ main.py dan faqat `register(dp, bot, app, cfg)` chaqiriladi.
 """
 
 import os
+import json
 import random
 import asyncio
 import logging
@@ -323,9 +324,13 @@ async def api_leaderboard(request):
     hall = await hpcup.hall(stats.get("house"), user["id"], season["id"])
     feed = await hpcup.feed(limit=50)
 
+    hpcup.presence_mark(user["id"], stats.get("house"))
+
     me = {
         "house": stats["house"],
         "points": stats["points"],
+        "by": stats["by"],
+        "caps": stats["caps"],
         "max_points": stats["max_points"],
         "is_active": stats["is_active"],
         "to_active": stats["to_active"],
@@ -342,7 +347,8 @@ async def api_leaderboard(request):
         me["gap"] = gap
 
     resp = {
-        "season": {"id": season["id"], "ends_at": season["ends_at"]},
+        "season": {"id": season["id"], "ends_at": season["ends_at"],
+                   "prev_winner": await hpcup.last_winner()},
         "houses": table,
         "me": me,
     }
@@ -375,6 +381,54 @@ async def api_referrals(request):
     board = await hpcup.referral_board(user["id"], lang)
     board["ok"] = True
     return cors(web.json_response(board))
+
+
+async def api_cup_house(request):
+    """Fakultet sahifasi: istalgan fakultet a'zolari va ballari manbalar bo'yicha."""
+    web = _web()
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+
+    user = _cfg["verify_init_data"](_init_data_from(request))
+    if not user:
+        return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    house = request.query.get("house")
+    if house not in hpcup.HOUSES:
+        return cors(web.json_response({"ok": False, "error": "bad_house"}, status=400))
+    board = await hpcup.house_board(house, user["id"])
+    board["ok"] = True
+    return cors(web.json_response(board))
+
+
+async def api_presence(request):
+    """Ilova ochiq - "shu yerdaman" belgisi. {"off": 1} - ilova yopildi."""
+    web = _web()
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+
+    # Ilova text/plain yuboradi (brauzer oldindan ruxsat so'rovi yubormasin),
+    # shuning uchun request.json() emas - matnni o'zimiz o'qiymiz.
+    body = None
+    if request.method == "POST":
+        try:
+            body = json.loads(await request.text())
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            body = None
+
+    user = _cfg["verify_init_data"](_init_data_from(request, body))
+    if not user:
+        return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    if body and body.get("off"):
+        hpcup.presence_leave(user["id"])
+    else:
+        hpcup.presence_mark(user["id"], await hpcup.get_house(user["id"]))
+    return cors(web.json_response({"ok": True}))
 
 
 async def profile_extra(user_id):
@@ -554,6 +608,8 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/tasks/submit", api_submit_task)
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
     app.router.add_route("*", "/api/referrals", api_referrals)
+    app.router.add_route("*", "/api/cup/house", api_cup_house)
+    app.router.add_route("*", "/api/presence", api_presence)
 
     # Chat "jonli": ilova "shu id dan keyingi xabar bormi?" deb so'raydi va
     # yangi xabar bo'lmasa javob CHAT_WAIT soniyagacha ushlab turiladi -
@@ -567,11 +623,9 @@ def register(dp, bot, app, cfg):
     chat_acts = {}                      # uid -> oxirgi reaksiya/tahrir/o'chirish vaqti
     chat_cids = {}                      # (uid, cid) -> xabar; qayta yuborishda takror yo'q
     chat_cid_of = {}                    # xabar id -> (uid, cid); ilova o'z xabarini taniydi
-    # "Yozmoqda" va "onlayn" - bazaga yozilmaydi, faqat xotirada.
-    CHAT_ONLINE = 35                    # so'nggi 35 soniyada so'rov yuborgan - onlayn
+    # "Yozmoqda" - bazaga yozilmaydi, faqat xotirada. "Onlayn" esa chatga
+    # emas, ILOVAGA kirganlikka qarab (hpcup.presence_*, /api/presence).
     CHAT_TYPING = 6                     # "yozmoqda" belgisi 6 soniya yashaydi
-    chat_seen = {}                      # xona -> {uid: vaqt}
-    chat_seen_any = {}                  # uid -> vaqt (istalgan xonada) - a'zolar ro'yxatidagi "onlayn"
     chat_typing = {}                    # xona -> {uid: (tugash vaqti, ism, fakultet)}
     chat_ban_cache = {}                 # uid -> until (None - butunlay); birinchi so'rovda yuklanadi
     chat_ban_loaded = []
@@ -600,24 +654,20 @@ def register(dp, bot, app, cfg):
         return None
 
     def chat_live(target, uid):
-        """Xonadagi onlaynlar soni va hozir yozayotganlar (o'zidan tashqari)."""
+        """Xona a'zolaridan ilovada turganlar soni va hozir yozayotganlar (o'zidan tashqari)."""
         now = time.monotonic()
-        seen = chat_seen.setdefault(target, {})
-        seen[uid] = now
-        chat_seen_any[uid] = now
-        for k in [k for k, t in seen.items() if now - t > CHAT_ONLINE]:
-            del seen[k]
         typing = chat_typing.get(target, {})
         for k in [k for k, v in typing.items() if v[0] < now]:
             del typing[k]
-        live = {"online": len(seen),
+        online = hpcup.presence_count(None if target == "global" or target.startswith("dm:") else target)
+        live = {"online": max(1, online),
                 "typing": [{"uid": k, "name": v[1], "house": v[2]} for k, v in typing.items() if k != uid]}
         if target.startswith("dm:"):
             live["peer_online"] = chat_is_online(hpcup._dm_peer(target, uid))
         return live
 
     def chat_is_online(who):
-        return who is not None and time.monotonic() - chat_seen_any.get(who, -1e9) < CHAT_ONLINE
+        return hpcup.presence_online(who)
 
     def chat_target(room, uid, house):
         """Ilova aytgan xona -> bazadagi nomi. "dm:<odam>" - ikki kishilik suhbat."""
@@ -671,7 +721,7 @@ def register(dp, bot, app, cfg):
         banned = await chat_banned(uid)
         
         if request.method == "GET":
-            chat_seen_any[uid] = time.monotonic()
+            hpcup.presence_mark(uid, house)
             if request.query.get("counts"):
                 rooms = {"global": "global"}
                 if house:

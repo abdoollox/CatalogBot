@@ -106,7 +106,6 @@ _created = {}       # uid -> oxirgi o'yin ochish vaqtlari
 _fresh = set()      # hozirgina tugagan o'yinlar - ball faqat shularga beriladi
 _hooks = {}         # "changed": o'yin boshlandi/tugadi -> chatdagi taklif kartasi yangilanadi
 _seeks = {}         # uid -> tasodifiy raqib qidirayotgan (xotirada)
-_seen_any = {}      # uid -> shaxmat bo'limida so'nggi ko'ringan vaqt (jadvaldagi "onlayn")
 _bot_posted = {}    # uid -> oxirgi bot natijasi vaqti (tez-tez yuborib bo'lmaydi)
 SEEK_TTL = 35       # shuncha soniya so'rov yubormagan qidiruvchi navbatdan chiqadi
 
@@ -810,7 +809,7 @@ def _leaderboard(house, viewer):
             " ORDER BY r.rating DESC, r.games DESC LIMIT 50", args).fetchall()
         top = [{"uid": x["user_id"], "name": x["name"], "house": x["house"], "rating": x["rating"],
                 "games": x["games"], "wins": x["wins"], "title": title_of(x["rating"]),
-                "online": time.monotonic() - _seen_any.get(x["user_id"], -1e9) < ONLINE}
+                "online": hpcup.presence_online(x["user_id"])}
                for x in rows]
         me = None
         mr = _rating_row(conn, viewer)
@@ -1022,7 +1021,7 @@ def register(app, cfg):
         uid = int(user["id"])
         name = user.get("first_name")
         what = request.match_info["what"]
-        _seen_any[uid] = time.monotonic()
+        hpcup.presence_mark(uid)          # ilovada - onlayn (jadvaldagi belgi)
 
         if what == "profile":
             try:

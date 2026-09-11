@@ -18,6 +18,7 @@ import json
 import random
 import sqlite3
 import asyncio
+import time
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -58,6 +59,21 @@ MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON)   # = 400
 
 ACTIVE_MIN_POINTS = 30    # foydalanuvchi "faol" hisoblanishi uchun kerak ball
+
+# Ball manbalari - ilovadagi "ballar qayerdan keldi" bo'limi uchun guruhlar.
+# Kalitlar ilovadagi CUP_SRC bilan bir xil.
+SOURCE_GROUP = {
+    "film_open": "film", "film_quiz": "exam", "daily": "daily",
+    "chess_win": "chess", "chess_draw": "chess", "referral": "friends",
+}
+SOURCE_KEYS = ("film", "exam", "daily", "chess", "friends")
+# Mavsumda har manbadan olish mumkin bo'lgan eng ko'p ball (do'stlar - cheksiz)
+SOURCE_CAPS = {
+    "film": PTS_FILM_OPEN * FILM_PARTS,
+    "exam": PTS_FILM_QUIZ * FILM_PARTS * QUIZ_PER_FILM,
+    "daily": PTS_DAILY * DAILY_PER_WEEK,
+    "chess": PTS_CHESS_WIN * CHESS_MAX_PER_SEASON,
+}
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")
 BADGE_CODES = ("all_films", "flawless_exam", "perfect_week", "streak_7")
@@ -959,6 +975,20 @@ async def current_season():
     return await asyncio.to_thread(_current_season)
 
 
+async def last_winner():
+    """O'tgan (yopilgan) mavsum g'olibi yoki None."""
+    def _do():
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT winner_house FROM seasons WHERE status='closed' "
+                "ORDER BY id DESC LIMIT 1").fetchone()
+            return row["winner_house"] if row else None
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
 # ---------------------------------------------------------------- ball
 
 def _award(user_id, source_type, source_ref, pts):
@@ -1058,10 +1088,37 @@ ORDER BY total_points DESC
 """
 
 
+def _empty_by():
+    return {k: 0 for k in SOURCE_KEYS}
+
+
+def _by_source(conn, season_id, key_sql, where_sql, args):
+    """{kalit: {manba: ball}} - kalit fakultet yoki odam bo'yicha."""
+    out = {}
+    for r in conn.execute(
+            "SELECT " + key_sql + " AS k, p.source_type AS st, SUM(p.points) AS pts "
+            "FROM points p JOIN users u ON u.user_id = p.user_id "
+            "WHERE p.season_id = ? AND " + where_sql + " GROUP BY 1, 2",
+            [season_id] + list(args)):
+        group = SOURCE_GROUP.get(r["st"])
+        if group:
+            by = out.setdefault(r["k"], _empty_by())
+            by[group] += r["pts"] or 0
+    return out
+
+
 def _leaderboard(season_id):
     conn = _connect()
     try:
         rows = conn.execute(_ACTIVE_SQL, (season_id, ACTIVE_MIN_POINTS)).fetchall()
+        # Fakultet jami ballari qayerdan kelgan - faqat hisobga kirgan (faol)
+        # a'zolar ballari, shunda qismlar yig'indisi jami ballga teng bo'ladi.
+        by_house = _by_source(
+            conn, season_id, "u.house",
+            "u.house IS NOT NULL AND p.user_id IN ("
+            "  SELECT user_id FROM points WHERE season_id = ? "
+            "  GROUP BY user_id HAVING SUM(points) >= ?)",
+            (season_id, ACTIVE_MIN_POINTS))
         seen = {}
         out = []
         for r in rows:
@@ -1072,6 +1129,7 @@ def _leaderboard(season_id):
                 "active_members": active,
                 "avg_points": round(r["avg_points"], 1),
                 "qualified": True,
+                "by": by_house.get(r["house"], _empty_by()),
             }
             out.append(item)
             seen[r["house"]] = True
@@ -1079,7 +1137,7 @@ def _leaderboard(season_id):
         for h in HOUSES:
             if h not in seen:
                 out.append({"house": h, "total_points": 0, "active_members": 0,
-                            "avg_points": 0.0, "qualified": True})
+                            "avg_points": 0.0, "qualified": True, "by": _empty_by()})
         return out
     finally:
         conn.close()
@@ -1179,6 +1237,7 @@ def _hall(conn, house, user_id, season_id):
         (season_id, house)).fetchall()
 
     active_count = sum(1 for r in rows if r["pts"] >= ACTIVE_MIN_POINTS)
+    by_user = _by_source(conn, season_id, "p.user_id", "u.house = ?", (house,))
     members = []
     for r in rows:
         raw_name = (r["name"] or "Sehrgar").strip()
@@ -1189,14 +1248,69 @@ def _hall(conn, house, user_id, season_id):
             "name": first_word[:20],
             "points": r["pts"],
             "me": (r["user_id"] == int(user_id)),
-            "active": r["pts"] >= ACTIVE_MIN_POINTS
+            "active": r["pts"] >= ACTIVE_MIN_POINTS,
+            "by": by_user.get(r["user_id"], _empty_by()),
         })
 
     return {
+        "house": house,
         "total": total,
         "active": active_count,
         "members": members
     }
+
+
+async def house_board(house, user_id):
+    """Istalgan fakultet zali (fakultet sahifasi uchun): a'zolar va manbalar."""
+    def _do():
+        conn = _connect()
+        try:
+            season = _ensure_season(conn)
+            board = _hall(conn, house, user_id, season["id"])
+            for m in board["members"]:
+                m.pop("username", None)     # boshqa fakultetlarga kerak emas
+            return board
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+# ---------------------------------------------------------------- onlayn
+# Ilova ochiq turgan har odam bir necha soniyada "shu yerdaman" deb yuboradi
+# (/api/presence). Bazaga yozilmaydi - faqat xotirada. Chatdagi va shaxmat
+# jadvalidagi "onlayn" belgisi shunga qaraydi: odam chatga kirmagan bo'lsa ham
+# ilovada bo'lsa - onlayn.
+PRESENCE_TTL = 35          # so'nggi shuncha soniyada ko'ringan - onlayn
+_presence = {}             # uid -> (monotonic vaqt, fakultet)
+
+
+def presence_mark(user_id, house=None):
+    """house berilmasa (shaxmat so'rovi) - avval ma'lum bo'lgani saqlanadi."""
+    uid = int(user_id)
+    if house is None and uid in _presence:
+        house = _presence[uid][1]
+    _presence[uid] = (time.monotonic(), house)
+
+
+def presence_leave(user_id):
+    _presence.pop(int(user_id), None)
+
+
+def presence_online(user_id):
+    if user_id is None:
+        return False
+    seen = _presence.get(int(user_id))
+    return bool(seen) and time.monotonic() - seen[0] < PRESENCE_TTL
+
+
+def presence_count(house=None):
+    """Hozir ilovada turganlar soni (house berilsa - shu fakultetdan)."""
+    now = time.monotonic()
+    for k in [k for k, v in _presence.items() if now - v[0] >= PRESENCE_TTL]:
+        del _presence[k]
+    if house is None:
+        return len(_presence)
+    return sum(1 for v in _presence.values() if v[1] == house)
 
 
 async def hall(house, user_id, season_id):
@@ -1277,9 +1391,14 @@ def _user_stats(user_id, season_id):
             "SELECT DISTINCT code FROM badges WHERE user_id=?",
             (int(user_id),))]
 
+        by = _by_source(conn, season_id, "p.user_id", "p.user_id = ?",
+                        (int(user_id),)).get(int(user_id), _empty_by())
+
         return {
             "house": house,
             "points": pts,
+            "by": by,
+            "caps": SOURCE_CAPS,
             "max_points": MAX_POINTS,
             "is_active": is_active,
             "to_active": to_active,
