@@ -20,6 +20,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 import hpcup
+import hpchess
 
 # main.py tomonidan to'ldiriladi
 _cfg = {
@@ -886,107 +887,8 @@ def register(dp, bot, app, cfg):
 
     app.router.add_route("*", "/api/chat", api_chat)
 
-    async def api_chess_create(request):
-        web = _web()
-        cors = _cfg["cors"]
-        if request.method == "OPTIONS": return cors(web.Response(status=204))
-        try: body = await request.json() if request.method == "POST" else None
-        except Exception: body = None
-        user = _cfg["verify_init_data"](_init_data_from(request, body))
-        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
-        uid = user["id"]
-        time_control = int((body and body.get("time_control")) or 300)
-        game_id = await hpcup.chess_create_game(uid, time_control)
-        return cors(web.json_response({"ok": True, "game_id": game_id}))
-
-    async def api_chess_join(request):
-        web = _web()
-        cors = _cfg["cors"]
-        if request.method == "OPTIONS": return cors(web.Response(status=204))
-        try: body = await request.json() if request.method == "POST" else None
-        except Exception: body = None
-        user = _cfg["verify_init_data"](_init_data_from(request, body))
-        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
-        uid = user["id"]
-        game_id = (body and body.get("game_id")) or ""
-        res = await hpcup.chess_join_game(game_id, uid)
-        return cors(web.json_response(res))
-
-    async def api_chess_state(request):
-        web = _web()
-        cors = _cfg["cors"]
-        if request.method == "OPTIONS": return cors(web.Response(status=204))
-        user = _cfg["verify_init_data"](_init_data_from(request, None))
-        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
-        game_id = request.query.get("game_id", "")
-        game = await hpcup.chess_get_game(game_id)
-        if not game: return cors(web.json_response({"error": "not_found"}, status=404))
-        return cors(web.json_response({"ok": True, "game": game}))
-
-    async def api_chess_move(request):
-        web = _web()
-        cors = _cfg["cors"]
-        if request.method == "OPTIONS": return cors(web.Response(status=204))
-        try: body = await request.json() if request.method == "POST" else None
-        except Exception: body = None
-        user = _cfg["verify_init_data"](_init_data_from(request, body))
-        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
-        uid = user["id"]
-        game_id = body.get("game_id")
-        fen = body.get("fen")
-        turn = body.get("turn")
-        white_time = int(body.get("white_time", 300))
-        black_time = int(body.get("black_time", 300))
-        await hpcup.chess_make_move(game_id, uid, fen, turn, white_time, black_time)
-        return cors(web.json_response({"ok": True}))
-
-    async def api_chess_finish(request):
-        web = _web()
-        cors = _cfg["cors"]
-        if request.method == "OPTIONS": return cors(web.Response(status=204))
-        try: body = await request.json() if request.method == "POST" else None
-        except Exception: body = None
-        user = _cfg["verify_init_data"](_init_data_from(request, body))
-        if not user: return cors(web.json_response({"error": "unauthorized"}, status=403))
-        uid = user["id"]
-        body = body or {}
-        game_id = body.get("game_id")
-        winner_uid = body.get("winner_uid")
-        reason = body.get("reason", "checkmate")
-
-        # Bot bilan o'yin: server o'yinni ko'rmaydi, ball ham bermaydi.
-        # (Ilgari bu yerda ball berishga urinilardi, lekin baza cheklovi uni
-        # rad etar va xato jimgina yo'qolardi - ya'ni hech qachon ishlamagan.)
-        if not game_id:
-            return cors(web.json_response({"ok": True, "rated": False, "points": 0}))
-
-        res = await hpcup.chess_finish_game(game_id, uid, winner_uid, reason)
-        if not res.get("ok"):
-            return cors(web.json_response({"ok": False, "rated": False,
-                                           "points": 0,
-                                           "error": res.get("error")}))
-
-        natija = res["result"]
-        if natija == "loss":
-            return cors(web.json_response({"ok": True, "rated": True,
-                                           "result": natija, "points": 0}))
-
-        berildi = await hpcup.award_chess(uid, game_id, natija)
-        return cors(web.json_response({
-            "ok": True,
-            "rated": True,
-            "result": natija,
-            "points": berildi.get("points", 0),
-            "limit_reached": berildi.get("error") == "limit",
-            "used": berildi.get("used"),
-            "limit": berildi.get("limit"),
-        }))
-
-    app.router.add_route("*", "/api/chess/create", api_chess_create)
-    app.router.add_route("*", "/api/chess/join", api_chess_join)
-    app.router.add_route("*", "/api/chess/state", api_chess_state)
-    app.router.add_route("*", "/api/chess/move", api_chess_move)
-    app.router.add_route("*", "/api/chess/finish", api_chess_finish)
+    # Shaxmat: jonli o'yinlarda hakam - server (hpchess.py).
+    hpchess.register(app, _cfg)
 
     logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",
                  "yoqilgan" if ANNOUNCE else "o'chirilgan")
