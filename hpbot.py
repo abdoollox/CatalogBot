@@ -682,7 +682,8 @@ def register(dp, bot, app, cfg):
                 dms = await hpcup.chat_dm_list(uid)
                 for d in dms:
                     d["peer"]["online"] = chat_is_online(d["peer"]["uid"])
-                return cors(web.json_response({"ok": True, "dms": dms}))
+                return cors(web.json_response(
+                    {"ok": True, "dms": dms, "settings": await hpcup.dm_settings(uid)}))
             if request.query.get("members"):
                 which = request.query.get("members")
                 if which != "global" and not house:
@@ -748,6 +749,7 @@ def register(dp, bot, app, cfg):
                 result["bans"] = [{"uid": k, "until": v} for k, v in chat_ban_cache.items()]
             if peer:
                 result["peer"] = peer
+                result["dm_state"] = await hpcup.dm_state(uid, peer["uid"], target)
             result.update(chat_live(target, uid))
             if unread and request.query.get("unread"):
                 # O'qilmagan xabar bor - chat birinchi o'qilmagan xabardan ochiladi.
@@ -766,11 +768,28 @@ def register(dp, bot, app, cfg):
             target = chat_target(room, uid, house)
             if not target:
                 return cors(web.json_response({"error": "no_house"}, status=403))
-            if target.startswith("dm:") and (body.get("action") or "send") == "send":
-                if not await hpcup.chat_user(hpcup._dm_peer(target, uid)):
-                    return cors(web.json_response({"error": "no_user"}, status=404))
-
             action = body.get("action") or "send"
+            if action == "dm_privacy":
+                if body.get("value") not in hpcup.DM_PRIVACY:
+                    return cors(web.json_response({"error": "invalid value"}, status=400))
+                await hpcup.set_dm_privacy(uid, body["value"])
+                return cors(web.json_response({"ok": True, "settings": await hpcup.dm_settings(uid)}))
+            if action in ("block", "unblock"):
+                who = chat_int(body.get("uid"))
+                if not who or who == uid:
+                    return cors(web.json_response({"error": "invalid id"}, status=400))
+                await hpcup.dm_block(uid, who, action == "block")
+                return cors(web.json_response({"ok": True, "settings": await hpcup.dm_settings(uid)}))
+            if target.startswith("dm:") and action in ("send", "edit", "react", "typing"):
+                dm_peer = hpcup._dm_peer(target, uid)
+                if action == "send" and not await hpcup.chat_user(dm_peer):
+                    return cors(web.json_response({"error": "no_user"}, status=404))
+                state = await hpcup.dm_state(uid, dm_peer, target)
+                if state != "ok":
+                    if action == "typing":
+                        return cors(web.json_response({"ok": True}))
+                    return cors(web.json_response({"error": "dm_" + state}, status=403))
+
             if action == "typing":
                 if banned is False:
                     name = user.get("first_name") or "Sehrgar"

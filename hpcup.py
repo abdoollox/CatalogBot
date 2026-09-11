@@ -145,6 +145,14 @@ CREATE TABLE IF NOT EXISTS chat_bans (
     until     TEXT
 );
 
+-- Shaxsiy xabar bloklari: user_id - blocked_id ga "menga yozma" degan.
+CREATE TABLE IF NOT EXISTS chat_blocks (
+    user_id    INTEGER NOT NULL,
+    blocked_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, blocked_id)
+);
+
 -- Har odam har xonada qaysi xabargacha o'qigani.
 CREATE TABLE IF NOT EXISTS chat_reads (
     user_id INTEGER NOT NULL,
@@ -318,6 +326,9 @@ def _migrate(conn, users_json):
         conn.execute("ALTER TABLE users ADD COLUMN source TEXT")
     if "source_at" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN source_at TEXT")
+    # Kim shaxsiy xabar yoza oladi: NULL/'all' - hamma, 'house' - fakultetdoshlar, 'none' - hech kim.
+    if "dm_privacy" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN dm_privacy TEXT")
 
     # Chat: javob, tahrir, o'chirish. `rev` - o'zgarish raqami: yangi xabar,
     # tahrir, o'chirish va reaksiya uni oshiradi; ilova "shu raqamdan keyin
@@ -1967,6 +1978,83 @@ async def chat_dm_list(user_id):
                     "unread": _read_state(conn, r["room"], uid)[1],
                 })
             return out
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+DM_PRIVACY = ("all", "house", "none")
+
+
+async def dm_state(sender, peer, room):
+    """sender peer ga shu shaxsiy suhbatda yoza oladimi:
+    "ok"; "blocked_by_me" - sender uni bloklagan; "closed" - peer bloklagan yoki
+    uning sozlamasi ruxsat bermaydi. peer shu suhbatda o'zi yozgan bo'lsa - sozlama
+    to'siq emas (o'zi boshlagan suhbatga javob olsin), blok esa baribir to'siq."""
+    def _do():
+        conn = _connect()
+        try:
+            s, p = int(sender), int(peer)
+            if conn.execute("SELECT 1 FROM chat_blocks WHERE user_id=? AND blocked_id=?", (s, p)).fetchone():
+                return "blocked_by_me"
+            if conn.execute("SELECT 1 FROM chat_blocks WHERE user_id=? AND blocked_id=?", (p, s)).fetchone():
+                return "closed"
+            row = conn.execute("SELECT dm_privacy, house FROM users WHERE user_id=?", (p,)).fetchone()
+            privacy = (row["dm_privacy"] if row else None) or "all"
+            if privacy == "all":
+                return "ok"
+            if privacy == "house":
+                mine = conn.execute("SELECT house FROM users WHERE user_id=?", (s,)).fetchone()
+                if mine and row and mine["house"] and mine["house"] == row["house"]:
+                    return "ok"
+            if conn.execute("SELECT 1 FROM chat_messages WHERE house=? AND user_id=? LIMIT 1",
+                            (room, p)).fetchone():
+                return "ok"
+            return "closed"
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def dm_settings(user_id):
+    """{"privacy": ..., "blocked": [{uid, name, house}]}"""
+    def _do():
+        conn = _connect()
+        try:
+            row = conn.execute("SELECT dm_privacy FROM users WHERE user_id=?", (int(user_id),)).fetchone()
+            blocked = conn.execute(
+                "SELECT b.blocked_id AS uid, COALESCE(u.first_name, 'Sehrgar') AS name, u.house "
+                "FROM chat_blocks b LEFT JOIN users u ON u.user_id=b.blocked_id "
+                "WHERE b.user_id=? ORDER BY b.created_at DESC", (int(user_id),)).fetchall()
+            return {"privacy": (row["dm_privacy"] if row else None) or "all",
+                    "blocked": [{"uid": r["uid"], "name": r["name"], "house": r["house"]} for r in blocked]}
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def set_dm_privacy(user_id, value):
+    def _do():
+        conn = _connect()
+        try:
+            conn.execute("UPDATE users SET dm_privacy=? WHERE user_id=?", (value, int(user_id)))
+            conn.commit()
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def dm_block(user_id, other, on=True):
+    def _do():
+        conn = _connect()
+        try:
+            if on:
+                conn.execute("INSERT OR IGNORE INTO chat_blocks (user_id, blocked_id, created_at) VALUES (?,?,?)",
+                             (int(user_id), int(other), _utc_iso(now_tk())))
+            else:
+                conn.execute("DELETE FROM chat_blocks WHERE user_id=? AND blocked_id=?",
+                             (int(user_id), int(other)))
+            conn.commit()
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
