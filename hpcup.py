@@ -975,6 +975,63 @@ async def current_season():
     return await asyncio.to_thread(_current_season)
 
 
+_history_cache = {}        # yopilgan mavsum id -> tarix yozuvi (endi o'zgarmaydi)
+
+
+def _season_entry(conn, row, number):
+    """Bitta mavsum: yakuniy jadval, g'olib va haftaning eng ko'p ball to'plagan sehrgari."""
+    table = _leaderboard(row["id"])
+    table.sort(key=lambda x: (-(x["total_points"] or 0), HOUSES.index(x["house"])))
+    top = conn.execute(
+        "SELECT p.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house, "
+        "SUM(p.points) AS pts, MIN(p.id) AS first_id "
+        "FROM points p JOIN users u ON u.user_id = p.user_id "
+        "WHERE p.season_id = ? AND u.house IS NOT NULL "
+        "GROUP BY p.user_id ORDER BY pts DESC, first_id ASC LIMIT 1",
+        (row["id"],)).fetchone()
+    best = None
+    if top:
+        raw = (top["name"] or "Sehrgar").strip()
+        best = {"name": (raw.split()[0] if raw else "Sehrgar")[:20],
+                "house": top["house"], "points": top["pts"]}
+    return {
+        "id": row["id"], "number": number,
+        "starts_at": row["starts_at"], "ends_at": row["ends_at"],
+        "status": row["status"], "winner": row["winner_house"],
+        "houses": [{"house": x["house"], "total_points": x["total_points"],
+                    "active_members": x["active_members"], "by": x["by"]} for x in table],
+        "best": best,
+    }
+
+
+def _cup_history():
+    conn = _connect()
+    try:
+        _ensure_season(conn)
+        rows = conn.execute("SELECT * FROM seasons ORDER BY starts_at, id").fetchall()
+        seasons = []
+        wins = {h: 0 for h in HOUSES}
+        for number, row in enumerate(rows, 1):
+            if row["status"] == "closed":
+                entry = _history_cache.get(row["id"])
+                if entry is None:
+                    entry = _history_cache[row["id"]] = _season_entry(conn, row, number)
+                if row["winner_house"] in wins:
+                    wins[row["winner_house"]] += 1
+            else:
+                entry = _season_entry(conn, row, number)
+            seasons.append(entry)
+        seasons.reverse()               # yangisi tepada
+        return {"seasons": seasons, "wins": wins}
+    finally:
+        conn.close()
+
+
+async def cup_history():
+    """Barcha haftalar: g'olib, yakuniy ballar, haftaning sehrgari + kuboklar soni."""
+    return await asyncio.to_thread(_cup_history)
+
+
 async def last_winner():
     """O'tgan (yopilgan) mavsum g'olibi yoki None."""
     def _do():
@@ -1607,9 +1664,11 @@ def _earned_badges(conn, season_id):
 
 def _finalize(conn, season_id):
     """Mavsumni yopadi: g'olib + nishonlar. Natijani qaytaradi."""
+    # Ball to'plamagan fakultet g'olib bo'lmaydi: hech kim hisobga kirmagan
+    # haftada ro'yxat nollar bilan to'ladi va birinchisi "g'olib" chiqib qolardi.
     winner = None
     for item in _leaderboard(season_id):
-        if item["qualified"]:
+        if item["qualified"] and item["total_points"] > 0:
             winner = item["house"]
             break
 
@@ -1622,6 +1681,7 @@ def _finalize(conn, season_id):
 
     conn.execute("UPDATE seasons SET status='closed', winner_house=? WHERE id=?",
                  (winner, season_id))
+    _history_cache.pop(season_id, None)
     conn.commit()
     return {"closed_id": season_id, "winner_house": winner,
             "badges": badges, "table": _leaderboard(season_id)}

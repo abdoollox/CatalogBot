@@ -402,6 +402,22 @@ async def api_cup_house(request):
     return cors(web.json_response(board))
 
 
+async def api_cup_history(request):
+    """Kubok tarixi: barcha haftalar va har fakultet nechta kubok olgani."""
+    web = _web()
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+
+    user = _cfg["verify_init_data"](_init_data_from(request))
+    if not user:
+        return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    history = await hpcup.cup_history()
+    history["ok"] = True
+    return cors(web.json_response(history))
+
+
 async def api_presence(request):
     """Ilova ochiq - "shu yerdaman" belgisi. {"off": 1} - ilova yopildi."""
     web = _web()
@@ -609,6 +625,7 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/leaderboard", api_leaderboard)
     app.router.add_route("*", "/api/referrals", api_referrals)
     app.router.add_route("*", "/api/cup/house", api_cup_house)
+    app.router.add_route("*", "/api/cup/history", api_cup_history)
     app.router.add_route("*", "/api/presence", api_presence)
 
     # Chat "jonli": ilova "shu id dan keyingi xabar bormi?" deb so'raydi va
