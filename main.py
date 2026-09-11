@@ -29,6 +29,7 @@ import catalog
 import emoji
 import hpcup
 import hpbot
+import hpchess
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -760,6 +761,12 @@ async def inline_search(query: types.InlineQuery):
     t = T(lang)
     raw = (query.query or "").strip()
 
+    # "chess_<kod>" - ilovadan do'stni shaxmatga chaqirish kartasi.
+    m = CHESS_QUERY.match(raw.lower())
+    if m:
+        await answer_chess(query, lang, m.group(1))
+        return
+
     # "taklif" - film emas, butun kolleksiyaning reklama kartasi.
     if raw.lower() in PROMO_QUERIES:
         await answer_promo(query, lang)
@@ -1358,11 +1365,18 @@ def preview_options(movie_key, lang):
 
 PROMO_QUERIES = {"taklif", "invite", "пригласить"}
 PROMO_FILE = os.getenv("PROMO_FILE", "/data/promo.json")
-promo_state = {}          # til -> {"etag": ..., "id": file_id}
+promo_state = {}          # til -> {"etag": ..., "id": file_id}; shaxmat: "chess_<til>"
 
 
 def promo_path(lang):
     return "%s/promo_%s.jpg" % (IMG_URL, lang)
+
+
+def card_images():
+    """(promo_state kaliti, rasm manzili): reklama va shaxmat taklifi kartalari."""
+    for lang in catalog.LANGS:
+        yield lang, promo_path(lang)
+        yield "chess_" + lang, "%s/chess_%s.jpg" % (IMG_URL, lang)
 
 
 async def load_promo():
@@ -1378,9 +1392,9 @@ async def ensure_promo():
     changed = False
     vaqt = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=vaqt) as s:
-        for lang in catalog.LANGS:
+        for lang, path in card_images():
             try:
-                async with s.head(promo_path(lang)) as r:
+                async with s.head(path) as r:
                     if r.status != 200:
                         continue
                     belgi = r.headers.get("ETag") or r.headers.get("Last-Modified") or "1"
@@ -1392,7 +1406,7 @@ async def ensure_promo():
                 continue
             try:
                 msg = await bot.send_photo(DB_CHANNEL_ID,
-                                           "%s?v=%s" % (promo_path(lang), etag),
+                                           "%s?v=%s" % (path, etag),
                                            disable_notification=True)
                 promo_state[lang] = {"etag": etag, "id": msg.photo[-1].file_id}
                 changed = True
@@ -1451,6 +1465,125 @@ async def answer_promo(query, lang):
         await query.answer([card], cache_time=0, is_personal=True)
     except Exception as e:
         logging.error("Reklama kartasida xato: %s", e)
+
+
+# --- SHAXMAT TAKLIF KARTASI ---
+# Ilovada "Do'stni jangga chaqirish" bosilganda do'stga rasmli karta boradi:
+# kim chaqiryapti, vaqt, ball va o'yinni ochadigan tugma. Ikki yo'l bor:
+#   1) tayyor karta (savePreparedInlineMessage + WebApp.shareMessage, Bot API
+#      8.0) - Telegram darhol chat tanlatadi, karta o'zi jo'natiladi;
+#   2) eski mijozlarda - inline "chess_<kod>" (film kartasi kabi).
+# Tugma o'yinni to'g'ridan-to'g'ri ochadi (t.me/<bot>/catalog?startapp=...).
+# Rasm: CatalogWebApp/img/chess_<til>.jpg (tools/chessgen.py).
+
+CHESS_QUERY = re.compile(r"^chess_([0-9a-f]{8})$")
+CHESS_T = {
+    "uz": {"title": "Sehrgar shaxmati", "call": "<b>%s</b> sizni jangga chaqirmoqda!",
+           "time": "Blits · %s", "min": "%d daqiqa", "plus": " + %d soniya",
+           "pts": "G'alaba — fakultetingizga +%d ball",
+           "tap": "Pastdagi tugmani bosing — o'yin darhol ochiladi.",
+           "code": "Kod", "btn": "O'yinga kirish", "desc": "Do'stingizni shaxmat jangiga chaqiring"},
+    "ru": {"title": "Волшебные шахматы", "call": "<b>%s</b> вызывает вас на поединок!",
+           "time": "Блиц · %s", "min": "%d мин", "plus": " + %d сек",
+           "pts": "Победа — +%d очков вашему факультету",
+           "tap": "Нажмите кнопку ниже — игра откроется сразу.",
+           "code": "Код", "btn": "Войти в игру", "desc": "Вызовите друга на шахматный поединок"},
+    "en": {"title": "Wizard's chess", "call": "<b>%s</b> challenges you to a duel!",
+           "time": "Blitz · %s", "min": "%d min", "plus": " + %d sec",
+           "pts": "Win — +%d points for your house",
+           "tap": "Tap the button below — the game opens right away.",
+           "code": "Code", "btn": "Join the game", "desc": "Challenge your friend to a chess duel"},
+}
+
+
+def chess_link(code):
+    return "https://t.me/%s/catalog?startapp=chess_%s" % (BOT_USERNAME, code)
+
+
+def chess_caption(lang, info):
+    c = CHESS_T.get(lang, CHESS_T[DEFAULT_LANG])
+    vaqt = c["min"] % (info["base"] // 60) + (c["plus"] % info["inc"] if info["inc"] else "")
+    return "\n".join([
+        "♟️ <b>%s</b>" % c["title"],
+        "— — — — — — — — — —",
+        "%s %s" % (emoji.tag("dostlar"), c["call"] % html.escape(info["name"] or "")),
+        "%s %s" % (emoji.tag("vaqt"), c["time"] % vaqt),
+        "%s %s" % (emoji.tag("yulduz"), c["pts"] % hpcup.PTS_CHESS_WIN),
+        "",
+        c["tap"],
+        "%s: <code>%s</code>" % (c["code"], info["id"]),
+    ])
+
+
+def chess_button(lang, code):
+    c = CHESS_T.get(lang, CHESS_T[DEFAULT_LANG])
+    return InlineKeyboardButton(text=c["btn"], url=chess_link(code),
+                                icon_custom_emoji_id=emoji.icon("tomosha"))
+
+
+async def chess_lang(user_id, lang):
+    if lang in catalog.LANGS:
+        return lang
+    return await user_lang(user_id) or DEFAULT_LANG
+
+
+async def answer_chess(query, lang, code):
+    info = await hpchess.brief(code)
+    if not info or info["status"] != "waiting":
+        # Boshlangan / tugagan o'yinga taklif yuborishning ma'nosi yo'q.
+        await query.answer([], cache_time=0, is_personal=True)
+        return
+    c = CHESS_T.get(lang, CHESS_T[DEFAULT_LANG])
+    cap = chess_caption(lang, info)
+    kb = InlineKeyboardMarkup(inline_keyboard=[[chess_button(lang, code)]])
+    file_id = (promo_state.get("chess_" + lang) or {}).get("id")
+    if file_id:
+        card = types.InlineQueryResultCachedPhoto(
+            id="chess_" + code, photo_file_id=file_id, title=c["title"],
+            description=c["desc"], caption=cap, parse_mode="HTML", reply_markup=kb)
+    else:
+        url = "%s/chess_%s.jpg" % (IMG_URL, lang)
+        card = types.InlineQueryResultPhoto(
+            id="chess_" + code, photo_url=url, thumbnail_url=url,
+            photo_width=1280, photo_height=720, title=c["title"],
+            description=c["desc"], caption=cap, parse_mode="HTML", reply_markup=kb)
+    try:
+        await query.answer([card], cache_time=0, is_personal=True)
+    except Exception as e:
+        logging.error("Shaxmat kartasida xato: %s", e)
+
+
+async def prepare_chess_share(user_id, code, lang, info):
+    """Tayyor karta id si (WebApp.shareMessage uchun). aiogram 3.4 bu usulni
+    bilmaydi - Bot API ga to'g'ridan-to'g'ri murojaat qilinadi."""
+    lang = await chess_lang(user_id, lang)
+    c = CHESS_T.get(lang, CHESS_T[DEFAULT_LANG])
+    result = {
+        "type": "photo", "id": "chess_" + code,
+        "caption": chess_caption(lang, info), "parse_mode": "HTML",
+        "reply_markup": {"inline_keyboard": [[{
+            "text": c["btn"], "url": chess_link(code),
+            "icon_custom_emoji_id": emoji.icon("tomosha")}]]},
+    }
+    file_id = (promo_state.get("chess_" + lang) or {}).get("id")
+    if file_id:
+        result["photo_file_id"] = file_id
+    else:
+        url = "%s/chess_%s.jpg" % (IMG_URL, lang)
+        result.update(photo_url=url, thumbnail_url=url, photo_width=1280, photo_height=720)
+    if not result["reply_markup"]["inline_keyboard"][0][0]["icon_custom_emoji_id"]:
+        del result["reply_markup"]["inline_keyboard"][0][0]["icon_custom_emoji_id"]
+    payload = {"user_id": int(user_id), "result": result,
+               "allow_user_chats": True, "allow_group_chats": True}
+    vaqt = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=vaqt) as s:
+        async with s.post("https://api.telegram.org/bot%s/savePreparedInlineMessage" % TOKEN,
+                          json=payload) as r:
+            data = await r.json()
+    if not data.get("ok"):
+        logging.error("savePreparedInlineMessage: %s", data.get("description"))
+        return None
+    return data["result"]["id"]
 
 
 def sq_url(movie_key, lang):
@@ -1616,6 +1749,7 @@ async def main():
             "verify_init_data": verify_init_data,
             "cors": _cors,
             "admin_ids": ADMIN_IDS,
+            "chess_share": prepare_chess_share,
         })
         asyncio.create_task(hpbot.season_watcher(bot))
     except Exception as cup_error:

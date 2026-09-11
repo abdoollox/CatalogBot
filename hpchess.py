@@ -516,9 +516,35 @@ def _mine(uid):
             "SELECT * FROM chess_games WHERE v=2 AND status IN ('active','waiting') "
             "AND (white_uid=? OR black_uid=?) ORDER BY status='active' DESC, created_at DESC",
             (uid, uid)).fetchall()
-        return [_view(conn, r, uid, now) for r in rows], changed
+        season = hpcup._ensure_season(conn)
+        used = conn.execute(
+            "SELECT COUNT(*) FROM points WHERE user_id=? AND season_id=? "
+            "AND source_type IN ('chess_win','chess_draw')", (uid, season["id"])).fetchone()[0]
+        conn.commit()
+        return ({"games": [_view(conn, r, uid, now) for r in rows],
+                 "season": {"used": used, "limit": hpcup.CHESS_MAX_PER_SEASON}}, changed)
     finally:
         conn.close()
+
+
+def _brief(gid):
+    conn = hpcup._connect()
+    try:
+        row = conn.execute(
+            "SELECT g.id, g.status, g.base, g.inc, g.v, COALESCE(u.first_name, 'Sehrgar') AS name "
+            "FROM chess_games g LEFT JOIN users u ON u.user_id = g.white_uid WHERE g.id=?",
+            (str(gid or ""),)).fetchone()
+        if not row or row["v"] != 2:
+            return None
+        return {"id": row["id"], "status": row["status"], "name": row["name"],
+                "base": row["base"], "inc": row["inc"]}
+    finally:
+        conn.close()
+
+
+async def brief(gid):
+    """Taklif kartasi uchun: kim chaqiryapti, vaqt nazorati, holati."""
+    return await asyncio.to_thread(_brief, gid)
 
 
 def _sweep():
@@ -639,6 +665,21 @@ def register(app, cfg):
     def game_id(value):
         return str(value or "").strip().lower()[:16]
 
+    async def share_card(uid, gid, lang):
+        """Do'stga yuboriladigan tayyor karta (Telegram "Ulashish" oynasi uchun).
+        Bot tomoni (main.py) bo'lmasa yoki xato bo'lsa - None: ilova inline yo'lga o'tadi."""
+        maker = cfg.get("chess_share")
+        if not maker:
+            return None
+        info = await brief(gid)
+        if not info or info["status"] != "waiting":
+            return None
+        try:
+            return await maker(uid, gid, lang, info)
+        except Exception as e:
+            logging.error("Shaxmat kartasi tayyorlanmadi (%s): %s", gid, e)
+            return None
+
     def seen(gid, uid):
         _seen[(gid, uid)] = time.monotonic()
         if len(_seen) > 2000:
@@ -673,18 +714,24 @@ def register(app, cfg):
                 base = 300
             inc = min(max(inc, 0), MAX_INC)
             res = await _run("create:%d" % uid, _create, uid, name, base, inc)
-            if res.get("game_id"):
+            if res.get("ok"):
                 seen(res["game_id"], uid)
+                res["share_id"] = await share_card(uid, res["game_id"], body.get("lang"))
             return reply(res)
 
         if what == "mine":
-            games = await _run("mine:%d" % uid, _mine, uid)
-            return reply({"ok": True, "games": games})
+            res = await _run("mine:%d" % uid, _mine, uid)
+            res["ok"] = True
+            return reply(res)
 
         gid = game_id(body.get("game_id") or request.query.get("game_id"))
         if not gid:
             return reply({"ok": False, "error": "not_found"}, 404)
         seen(gid, uid)
+
+        if what == "share":
+            share_id = await share_card(uid, gid, body.get("lang"))
+            return reply({"ok": bool(share_id), "id": share_id})
 
         if what == "join":
             return reply(await _run(gid, _join, gid, uid, name))
@@ -739,6 +786,6 @@ def register(app, cfg):
         return reply({"error": "not_found"}, 404)
 
     migrate()
-    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine)}", handler)
+    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine|share)}", handler)
     asyncio.ensure_future(_watcher())
     logging.info("Sehrgar shaxmati: server hakam ulandi")
