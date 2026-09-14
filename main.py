@@ -37,7 +37,7 @@ from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiohttp import web
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
@@ -344,13 +344,31 @@ def movie_delivery_keyboard(movie_key, lang="uz", vk_url=None):
     return builder.as_markup()
     
 
+# Telegram ba'zan javobsiz osilib qoladi (standart kutish 60 soniya). Odam
+# shuncha kutmaydi - ilovani yopib ketadi. Qisqa kutib, yana bir urinamiz.
+SUB_CHECK_TIMEOUT = 6
+SUB_CHECK_TRIES = 2
+
+
 async def is_subscribed(user_id):
-    try:
-        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
-        return member.status in ["member", "administrator", "creator"]
-    except Exception as e:
-        logging.error(f"Kanalga a'zolikni tekshirishda xato: {e}")
-        return False
+    """True - a'zo, False - a'zo emas, None - Telegram javob bermadi.
+
+    None ni "a'zo emas" deb hisoblamang (`if not ...` emas, `is False`):
+    tarmoq uzilgani uchun a'zo odamni filmsiz qoldirmaymiz.
+    """
+    for urinish in range(1, SUB_CHECK_TRIES + 1):
+        try:
+            member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id,
+                                               request_timeout=SUB_CHECK_TIMEOUT)
+            return member.status in ["member", "administrator", "creator"]
+        except TelegramNetworkError as e:
+            logging.warning("A'zolikni tekshirib bo'lmadi (%s, %s-urinish): %s",
+                            user_id, urinish, e)
+        except Exception as e:
+            logging.error(f"Kanalga a'zolikni tekshirishda xato: {e}")
+            return False
+    logging.error("A'zolik noma'lum, film beriladi: %s", user_id)
+    return None
 
 @dp.message(CommandStart())    
 async def start_cmd(message: types.Message, command: CommandObject):
@@ -424,7 +442,7 @@ async def start_cmd(message: types.Message, command: CommandObject):
 
 async def continue_flow(user, chat_id, payload, lang):
     """Til ma'lum bo'lgandan keyingi yo'l: obuna -> film yoki katalog."""
-    if not await is_subscribed(user.id):
+    if await is_subscribed(user.id) is False:
         taklif = await send_html(chat_id, T(lang)["subscribe"],
                                  reply_markup=check_sub_keyboard(lang))
         # Nima uchun kelganini eslab qolamiz: a'zo bo'lgan zahoti davom etamiz.
@@ -635,7 +653,7 @@ async def check_sub_handler(callback: types.CallbackQuery):
     """Zaxira yo'l. Odatda `chat_member` hodisasi buni oldindan bajaradi;
     bu tugma hodisa kechikkan yoki yetib kelmagan holat uchun qoladi."""
     lang = await user_lang(callback.from_user.id) or DEFAULT_LANG
-    if not await is_subscribed(callback.from_user.id):
+    if await is_subscribed(callback.from_user.id) is False:
         await callback.answer(T(lang)["not_subscribed"], show_alert=True)
         return
 
@@ -909,7 +927,7 @@ async def inline_pick(message: types.Message):
     user_id = message.from_user.id
     lang = await user_lang(user_id) or DEFAULT_LANG
 
-    if not await is_subscribed(user_id):
+    if await is_subscribed(user_id) is False:
         taklif = await send_html(user_id, T(lang)["subscribe"],
                                  reply_markup=check_sub_keyboard(lang))
         remember_pending(user_id, payload, taklif.message_id)
@@ -1656,7 +1674,7 @@ async def api_send(request):
     if not catalog.is_ready(movie_key, lang):
         return _cors(web.json_response({"ok": False, "error": "not_ready"}))
 
-    if not await is_subscribed(user.id):
+    if await is_subscribed(user.id) is False:
         # WebApp buni ko'rib, foydalanuvchini botga yo'naltiradi
         return _cors(web.json_response({"ok": False, "error": "not_subscribed"}))
 
