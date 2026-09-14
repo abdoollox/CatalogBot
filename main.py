@@ -300,18 +300,18 @@ def webapp_keyboard(lang=DEFAULT_LANG):
 
 LOCALES = {
     "uz": {
-        "collection_btn": "Filmlar kolleksiyasi",
-        "share_btn": "Do'stlarga ulashish",
+        "collection_btn": "Kolleksiya",
+        "share_btn": "Ulashish",
         "share_text": "🎬 Menga bu filmlar kolleksiyasi yoqdi. Siz ham foydalanib ko'ring!"
     },
     "ru": {
-        "collection_btn": "Коллекция фильмов",
-        "share_btn": "Поделиться с друзьями",
+        "collection_btn": "Коллекция",
+        "share_btn": "Поделиться",
         "share_text": "🎬 Мне понравилась эта коллекция фильмов. Попробуйте и вы!"
     },
     "en": {
-        "collection_btn": "Movie Collection",
-        "share_btn": "Share with friends",
+        "collection_btn": "Collection",
+        "share_btn": "Share",
         "share_text": "🎬 I really liked this movie collection. Check it out!"
     }
 }
@@ -332,20 +332,20 @@ def movie_delivery_keyboard(movie_key, lang="uz", vk_url=None):
             text="4K formatda ko'rish", url=vk_url,
             icon_custom_emoji_id=emoji.icon("sifat")))
 
+    builder.row(
+        # Bo'sh qator: chat tanlatmaydi, qidiruv shu chatda boshlanadi.
+        InlineKeyboardButton(
+            text=t["btn_search"], switch_inline_query_current_chat="",
+            icon_custom_emoji_id=emoji.icon("qidiruv")),
+        # Chat tanlatadi va o'sha chatga shu filmning kartasi tushadi.
+        InlineKeyboardButton(
+            text=loc["share_btn"], switch_inline_query="%s_%s" % (movie_key, lang),
+            icon_custom_emoji_id=emoji.icon("dostlar")))
+
     builder.row(InlineKeyboardButton(
         text=loc["collection_btn"],
         web_app=WebAppInfo(url=webapp_url(lang)),
         icon_custom_emoji_id=emoji.icon("kolleksiya")))
-
-    builder.row(
-        # Chat tanlatadi va o'sha chatga shu filmning kartasi tushadi.
-        InlineKeyboardButton(
-            text=loc["share_btn"], switch_inline_query="%s_%s" % (movie_key, lang),
-            icon_custom_emoji_id=emoji.icon("dostlar")),
-        # Bo'sh qator: chat tanlatmaydi, qidiruv shu chatda boshlanadi.
-        InlineKeyboardButton(
-            text=t["btn_search"], switch_inline_query_current_chat="",
-            icon_custom_emoji_id=emoji.icon("qidiruv")))
 
     return builder.as_markup()
     
