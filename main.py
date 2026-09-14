@@ -66,7 +66,12 @@ MOVIES_DB = catalog.FILMS
 
 
 # --- MIJOZ HARAKATLARINI BAZAGA YOZISH ---
-async def log_user_action(user: types.User, payload: str):
+async def log_user_action(user: types.User, payload: str, sheet_payload: str = None):
+    """Harakatni users_db.json va Google Sheets'ga yozadi.
+
+    sheet_payload - faqat jadvalda ko'rinadigan nom (masalan `web_hp1_uz`).
+    Bazadagi kalit o'zgarmaydi: remind_hp2.py va migrate.py `hp1_uz` ni o'qiydi.
+    """
     async with db_lock:
         try:
             async with aiofiles.open(USERS_FILE, "r", encoding="utf-8") as f:
@@ -96,7 +101,8 @@ async def log_user_action(user: types.User, payload: str):
         async with aiofiles.open(USERS_FILE, "w", encoding="utf-8") as f:
             await f.write(json.dumps(db, indent=4, ensure_ascii=False))
 
-    await sheets.append_click(user.id, db[user_id]["nickname"], db[user_id]["username"], payload, now)
+    await sheets.append_click(user.id, db[user_id]["nickname"], db[user_id]["username"],
+                              sheet_payload or payload, now)
 
 
 async def send_html(chat_id, text, **kw):
@@ -551,8 +557,10 @@ async def handle_payload(user, chat_id, payload):
             await bot.send_message(chat_id, T(lang)["soon"])
             return
 
-        # Xavfsiz tizim: Mijoz harakatini qayd etish
-        await log_user_action(user, payload_clean)
+        # Xavfsiz tizim: Mijoz harakatini qayd etish. Jadvalda film qayerdan
+        # olingani ko'rinadi: WebApp zaxira havolasi (`web_`) yoki bot.
+        origin = "web" if payload.startswith(WEB_PREFIX) else "bot"
+        await log_user_action(user, payload_clean, "%s_%s" % (origin, payload_clean))
 
         vk_url = movie_data.get("vk_url") if lang == "uz" else None
 
@@ -1185,6 +1193,8 @@ REF_PREFIX = "ref"
 REF_SEP = "-r"
 SRC_PREFIX = "src_"
 WATCH_PREFIX = "watch_"
+# WebApp API ishlamaganda botga havola orqali o'tadi: `web_hp3_uz`.
+WEB_PREFIX = "web_"
 
 
 def parse_ref(payload):
@@ -1264,8 +1274,9 @@ def film_va_til(payload):
     topishda u ahamiyatsiz, shuning uchun shu yerda olib tashlanadi.
     """
     body = (payload or "").strip()
-    if body.startswith(WATCH_PREFIX):
-        body = body[len(WATCH_PREFIX):]
+    for prefix in (WATCH_PREFIX, WEB_PREFIX):
+        if body.startswith(prefix):
+            body = body[len(prefix):]
     parts = body.split("_")
     if len(parts) != 2:
         return None, None
@@ -1687,7 +1698,7 @@ async def api_send(request):
         logging.error("API orqali yuborishda xato (%s): %s", movie_key, e)
         return _cors(web.json_response({"ok": False, "error": "send_failed"}))
 
-    await log_user_action(user, "%s_%s" % (movie_key, lang))
+    await log_user_action(user, "%s_%s" % (movie_key, lang), "web_%s_%s" % (movie_key, lang))
     remember_send(user.id, sent.message_id, movie_key, lang)
 
     # Xogvarts kubogi: kino ochilgani uchun ball. Film allaqachon yuborilgan,
