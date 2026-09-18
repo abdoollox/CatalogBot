@@ -30,6 +30,7 @@ import emoji
 import hpcup
 import hpbot
 import hpchess
+import hpleave
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -980,8 +981,12 @@ async def channel_status_changed(event: types.ChatMemberUpdated):
     is_in = new in ("member", "administrator", "creator")
     if was_in and not is_in:
         await log_user_action(event.from_user, "left")
+        # Nega ketganini so'raymiz (bir necha daqiqadan keyin, navbat bilan).
+        await hpleave.on_left(event.from_user)
     elif is_in and not was_in:
         await log_user_action(event.from_user, "subscribed")
+        # So'rovdan keyin qaytgan bo'lsa - o'lchov uchun belgilab qo'yamiz.
+        await hpleave.mark_returned(event.from_user.id)
 
         # Kutayotgan odam bo'lsa - oqimni O'ZIMIZ davom ettiramiz.
         # "Tasdiqlash" tugmasini bosish shart emas.
@@ -1783,6 +1788,21 @@ async def main():
         asyncio.create_task(hpbot.season_watcher(bot))
     except Exception as cup_error:
         logging.error("Xogvarts kubogi ishga tushmadi: %s", cup_error)
+
+    # --- Chiqib ketish so'rovi ---
+    # Alohida try: bu ishlamay qolsa ham bot kino tarqatishda davom etsin.
+    # hpleave handlerlari ENG OXIRIDA ro'yxatdan o'tadi - ularning ichida
+    # matnni ushlaydigan handler bor, u boshqalardan oldin turmasligi kerak.
+    try:
+        await hpleave.init()
+        hpleave.register(dp, bot, {
+            "is_subscribed": is_subscribed,
+            "user_lang": user_lang,
+            "channel_url": CHANNEL_URL,
+            "admin_ids": ADMIN_IDS,
+        })
+    except Exception as leave_error:
+        logging.error("Chiqish so'rovi ishga tushmadi: %s", leave_error)
 
     # Karta rasmlari kubokka bog'liq emas - u ishlamasa ham ishga tushsin.
     await load_promo()
