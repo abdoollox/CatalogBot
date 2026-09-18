@@ -339,25 +339,34 @@ async def mark_returned(user_id):
         logging.error("Qaytganini belgilashda xato (%s): %s", user_id, e)
 
 
-def _stats(days):
+def _stats(days, skip_ids=()):
+    """Hisobot raqamlari.
+
+    skip_ids - adminlar: ular /sabaltest bilan sinab ko'rganda yozilgan
+    yozuvlar haqiqiy raqamlarni buzmasligi kerak.
+    """
     conn = hpcup._connect()
     try:
         chegara = hpcup._utc_iso(hpcup.now_tk() - hpcup.timedelta(days=days))
+        # SQL ichiga ro'yxatni qo'yish uchun o'rinbosarlar yasaladi.
+        holder = ",".join("?" * len(skip_ids))
+        filtr = (" AND user_id NOT IN (%s)" % holder) if skip_ids else ""
+        arg = (chegara,) + tuple(int(x) for x in skip_ids)
         umumiy = conn.execute(
             "SELECT COUNT(*) AS ketgan,"
             " SUM(asked_at IS NOT NULL) AS soralgan,"
             " SUM(reason IS NOT NULL) AS javob,"
             " SUM(returned_at IS NOT NULL) AS qaytgan"
-            " FROM leave_survey WHERE left_at > ?", (chegara,)).fetchone()
+            " FROM leave_survey WHERE left_at > ?" + filtr, arg).fetchone()
         sabablar = conn.execute(
             "SELECT reason, COUNT(*) AS n,"
             " SUM(returned_at IS NOT NULL) AS qaytgan"
-            " FROM leave_survey WHERE left_at > ? AND reason IS NOT NULL"
-            " GROUP BY reason ORDER BY n DESC", (chegara,)).fetchall()
+            " FROM leave_survey WHERE left_at > ? AND reason IS NOT NULL" + filtr +
+            " GROUP BY reason ORDER BY n DESC", arg).fetchall()
         izohlar = conn.execute(
             "SELECT reason, comment FROM leave_survey"
-            " WHERE comment IS NOT NULL AND left_at > ?"
-            " ORDER BY id DESC LIMIT 10", (chegara,)).fetchall()
+            " WHERE comment IS NOT NULL AND left_at > ?" + filtr +
+            " ORDER BY id DESC LIMIT 10", arg).fetchall()
         return dict(umumiy), [dict(r) for r in sabablar], [dict(r) for r in izohlar]
     finally:
         conn.close()
@@ -425,7 +434,7 @@ async def _worker():
 
 async def on_left(user):
     """main.py chaqiradi: odam kanaldan chiqdi."""
-    if user.is_bot or user.id in _cfg.get("admin_ids", ()):
+    if user.is_bot:
         return
     try:
         row_id, sorash_mumkin = await log_leave(user.id)
@@ -525,7 +534,8 @@ def register(dp, bot, cfg):
             days = 30
         days = max(1, min(days, 365))
 
-        umumiy, sabablar, izohlar = await asyncio.to_thread(_stats, days)
+        umumiy, sabablar, izohlar = await asyncio.to_thread(
+            _stats, days, tuple(_cfg.get("admin_ids", ())))
         ketgan = umumiy["ketgan"] or 0
         soralgan = umumiy["soralgan"] or 0
         javob = umumiy["javob"] or 0
@@ -553,3 +563,19 @@ def register(dp, bot, cfg):
                 qator.append("• <i>%s</i>: %s" % (r["reason"], matn[:200]))
 
         await message.answer("\n".join(qator), parse_mode="HTML")
+
+    @dp.message(F.text.startswith("/sabaltest"),
+                F.from_user.id.in_(_cfg.get("admin_ids", set())))
+    async def _selftest(message: types.Message):
+        """So'rovni o'zingizga yuboradi - ko'rib tekshirish uchun.
+
+        Kanal egasi o'z kanalini tark eta olmaydi, ya'ni haqiqiy chiqish
+        bilan sinab ko'rishning iloji yo'q. Shuning uchun alohida buyruq.
+        Bu yozuvlar /sabablar hisobotiga kirmaydi (adminlar chiqarilgan).
+        """
+        uid = message.from_user.id
+        row_id, _ = await log_leave(uid)
+        await asyncio.to_thread(_mark_asked, row_id)
+        lang = _lang(await _cfg["user_lang"](uid) or DEFAULT_LANG)
+        await bot.send_message(uid, ASK_TEXT[lang], parse_mode="HTML",
+                               reply_markup=_ask_keyboard(row_id, lang))
