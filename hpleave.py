@@ -31,9 +31,10 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 # --- O'LCHAMLAR ---
-# Darrov so'ramaymiz: odamlarning bir qismi adashib chiqib, o'zi qaytadi.
-# Ularga "nega ketdingiz?" deb yozsak ahmoqona bo'ladi.
-ASK_DELAY = 300            # 5 daqiqa kutamiz
+# Foydalanuvchi talabi (2026-09-18): so'rov chiqib ketgan ZAHOTI borsin.
+# Kechiktirish yo'q. Adashib chiqqanlardan himoya sifatida yuborishdan
+# oldin a'zolik yana bir marta tekshiriladi (_ask).
+ASK_DELAY = 0              # darrov
 ASK_COOLDOWN_DAYS = 30     # bir odam oyiga bir martadan ko'p so'ralmaydi
 COMMENT_TTL = 3600         # yozma javobni shuncha soniya kutamiz (1 soat)
 SEND_PAUSE = 0.06          # ~16 xabar/sekund — Telegram chekloviga tushmaslik
@@ -69,7 +70,7 @@ BUTTONS = {
         "many_posts":      "🔕 Xabarlar juda ko'p edi",
         "got_film":        "🎬 Kerakli filmni topib oldim",
         "bot_broken":      "🐌 Bot sekin / xato ishladi",
-        "not_interesting": "🎭 Kontent qiziq emas edi",
+        "not_interesting": "🎭 Boshqa mavzular qiziqroq edi",
         "accident":        "🤷 Tasodifan chiqib ketibman",
         "other":           "✍️ Boshqa sabab",
         "back":            "🪄 Kanalga qaytish",
@@ -78,7 +79,7 @@ BUTTONS = {
         "many_posts":      "🔕 Слишком много сообщений",
         "got_film":        "🎬 Нашёл нужный фильм",
         "bot_broken":      "🐌 Бот работал медленно / с ошибкой",
-        "not_interesting": "🎭 Контент неинтересен",
+        "not_interesting": "🎭 Другие темы интереснее",
         "accident":        "🤷 Вышел случайно",
         "other":           "✍️ Другая причина",
         "back":            "🪄 Вернуться в канал",
@@ -87,7 +88,7 @@ BUTTONS = {
         "many_posts":      "🔕 Too many posts",
         "got_film":        "🎬 I found the film I needed",
         "bot_broken":      "🐌 The bot was slow or buggy",
-        "not_interesting": "🎭 The content wasn't interesting",
+        "not_interesting": "🎭 Other topics interest me more",
         "accident":        "🤷 I left by accident",
         "other":           "✍️ Another reason",
         "back":            "🪄 Come back to the channel",
@@ -136,10 +137,10 @@ REPLY = {
             "o'qiymiz va tuzatamiz. Xohlamasangiz, javob bermasangiz ham "
             "bo'ladi."),
         "not_interesting": (
-            "🎭 <b>To'g'ri gap uchun rahmat.</b>\n\n"
-            "Nimasi qiziq emas edi yoki nimani ko'rishni xohlardingiz? "
-            "Bir-ikki og'iz yozib yuborsangiz — keyingi safar shuni "
-            "hisobga olamiz."),
+            "🎭 <b>Tushunarli.</b>\n\n"
+            "Qaysi mavzular qiziqroq edi yoki bizda nimani ko'rishni "
+            "xohlardingiz? Bir-ikki og'iz yozib yuborsangiz — keyingi "
+            "safar shuni hisobga olamiz."),
         "accident": (
             "🤷 <b>Xayriyat!</b>\n\n"
             "Unda hammasi joyida. Pastdagi tugma bilan bir bosishda "
@@ -173,8 +174,8 @@ REPLY = {
             "Что именно не сработало? Напишите пару слов прямо сюда — "
             "прочитаем и починим. Можно и не отвечать."),
         "not_interesting": (
-            "🎭 <b>Спасибо за честность.</b>\n\n"
-            "Что именно было неинтересно или что вы хотели бы видеть? "
+            "🎭 <b>Понятно.</b>\n\n"
+            "Какие темы вам интереснее или что вы хотели бы видеть у нас? "
             "Пара строк — и мы учтём это в следующий раз."),
         "accident": (
             "🤷 <b>Тогда всё в порядке!</b>\n\n"
@@ -207,9 +208,9 @@ REPLY = {
             "What exactly went wrong? Write a line here and we'll read it "
             "and fix it. No need to reply if you'd rather not."),
         "not_interesting": (
-            "🎭 <b>Thanks for being honest.</b>\n\n"
-            "What wasn't interesting, or what would you like to see? "
-            "A line or two and we'll take it into account."),
+            "🎭 <b>Got it.</b>\n\n"
+            "Which topics interest you more, or what would you like to "
+            "see from us? A line or two and we'll take it into account."),
         "accident": (
             "🤷 <b>No harm done!</b>\n\n"
             "The button below brings you back in one tap. Your collection "
