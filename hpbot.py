@@ -686,10 +686,16 @@ def register(dp, bot, app, cfg):
     def chat_is_online(who):
         return hpcup.presence_online(who)
 
-    def chat_target(room, uid, house):
-        """Ilova aytgan xona -> bazadagi nomi. "dm:<odam>" - ikki kishilik suhbat."""
+    def chat_target(room, uid, house, admin=False):
+        """Ilova aytgan xona -> bazadagi nomi. "dm:<odam>" - ikki kishilik suhbat.
+        "h:<fakultet>" - istalgan fakultet xonasi (faqat admin uchun)."""
         if room == "global":
             return "global"
+        if room and room.startswith("h:"):
+            other = room[2:]
+            if other in hpcup.HOUSES and (admin or other == house):
+                return other
+            return None
         if room and room.startswith("dm:"):
             peer = chat_int(room[3:])
             if not peer or peer == uid:
@@ -743,6 +749,9 @@ def register(dp, bot, app, cfg):
                 rooms = {"global": "global"}
                 if house:
                     rooms["house"] = house
+                if admin:
+                    for h in hpcup.HOUSES:
+                        rooms["h:" + h] = h
                 counts = await hpcup.chat_unread_counts(uid, rooms)
                 counts["dm"] = sum(d["unread"] for d in await hpcup.chat_dm_list(uid))
                 return cors(web.json_response({"ok": True, "counts": counts}))
@@ -754,15 +763,16 @@ def register(dp, bot, app, cfg):
                     {"ok": True, "dms": dms, "settings": await hpcup.dm_settings(uid)}))
             if request.query.get("members"):
                 which = request.query.get("members")
-                if which != "global" and not house:
+                whose = None if which == "global" else chat_target(which, uid, house, admin) if which.startswith("h:") else house
+                if which != "global" and not whose:
                     return cors(web.json_response({"error": "no_house"}, status=403))
                 season = await hpcup.current_season()
-                members = await hpcup.chat_members(None if which == "global" else house, season["id"])
+                members = await hpcup.chat_members(whose, season["id"])
                 for m in members:
                     m["online"] = chat_is_online(m["uid"])
                 return cors(web.json_response({"ok": True, "members": members}))
             room = request.query.get("room", "house")
-            target = chat_target(room, uid, house)
+            target = chat_target(room, uid, house, admin)
             if not target:
                 return cors(web.json_response({"error": "no_house"}, status=403))
             peer = None
@@ -833,7 +843,7 @@ def register(dp, bot, app, cfg):
                 return cors(web.json_response({"error": "invalid json"}, status=400))
                 
             room = body.get("room", "house")
-            target = chat_target(room, uid, house)
+            target = chat_target(room, uid, house, admin)
             if not target:
                 return cors(web.json_response({"error": "no_house"}, status=403))
             action = body.get("action") or "send"
