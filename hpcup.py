@@ -1884,7 +1884,7 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
 _CHAT_SELECT = (
     "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, "
     "c.message, c.created_at, c.reply_to, c.edited_at, c.deleted, c.rev, c.kind, "
-    "r.user_id AS r_uid, COALESCE(ru.first_name, 'Sehrgar') AS r_name, ru.house AS r_house, r.message AS r_text, r.deleted AS r_deleted, "
+    "r.user_id AS r_uid, COALESCE(ru.first_name, 'Sehrgar') AS r_name, ru.house AS r_house, r.message AS r_text, r.deleted AS r_deleted, r.kind AS r_kind, "
     "c.chess, g.status AS g_status, g.base AS g_base, g.inc AS g_inc, g.white_uid AS g_w, g.black_uid AS g_b, "
     "g.winner_uid AS g_win, COALESCE(gw.first_name, 'Sehrgar') AS g_wn, COALESCE(gb.first_name, 'Sehrgar') AS g_bn "
     "FROM chat_messages c "
@@ -1929,6 +1929,8 @@ def _chat_row(r):
         else:
             m["reply"] = {"id": r["reply_to"], "uid": r["r_uid"], "name": r["r_name"],
                           "house": r["r_house"], "text": (r["r_text"] or "")[:120]}
+            if r["r_kind"]:
+                m["reply"]["kind"] = r["r_kind"]
     return m
 
 
