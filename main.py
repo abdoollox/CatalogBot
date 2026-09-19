@@ -1164,6 +1164,11 @@ async def handle_house(request):
             return _cors(web.json_response(
                 {"ok": False, "error": "house_locked",
                  "cup": await _cup_block(user["id"])}, status=409))
+        if accepted.get("changed"):
+            try:
+                await hpbot.welcome_join(user["id"], value)
+            except Exception as e:
+                logging.error("Xush kelibsiz xabarida xato: %s", e)
     else:
         if user.get("first_name"):
             try:

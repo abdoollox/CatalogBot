@@ -470,6 +470,14 @@ async def profile_extra(user_id):
 
 # ---------------------------------------------------------- ro'yxatdan o'tkazish
 
+async def welcome_join(user_id, house):
+    """Yangi saralangan o'quvchi - fakultet chatida xush kelibsiz kartasi."""
+    message = await hpcup.post_join(house, user_id)
+    if message and _cfg.get("chat_wake"):
+        _cfg["chat_wake"](house)
+    return message
+
+
 def register(dp, bot, app, cfg):
     """main.py shu funksiyani chaqiradi."""
     _cfg.update(cfg)
@@ -658,6 +666,8 @@ def register(dp, bot, app, cfg):
         ev = chat_events.pop(target, None)
         if ev:
             ev.set()
+
+    _cfg["chat_wake"] = chat_wake
 
     def chat_slow(store, uid, limit):
         """Cheklovdan oshsa - necha soniya kutish kerakligi, aks holda None."""

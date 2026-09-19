@@ -363,6 +363,9 @@ def _migrate(conn, users_json):
     if "chess" not in chat_cols:
         conn.execute("ALTER TABLE chat_messages ADD COLUMN chess TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_chess ON chat_messages(chess)")
+    # Maxsus xabar turi: "join" - yangi saralangan o'quvchiga xush kelibsiz.
+    if "kind" not in chat_cols:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN kind TEXT")
     # Karta vaqt nazoratini ko'rsatadi - ustunlar hpchess.migrate dan oldin ham bo'lsin.
     chess_cols = [r[1] for r in conn.execute("PRAGMA table_info(chess_games)")]
     if "base" not in chess_cols:
@@ -877,7 +880,8 @@ def _set_house(user_id, house, first_name=None):
         _touch_user(conn, user_id, first_name)
         row = conn.execute("SELECT house FROM users WHERE user_id=?",
                            (int(user_id),)).fetchone()
-        if row and row["house"]:
+        old = row["house"] if row else None
+        if old:
             # Fakultet allaqachon bor. Faqat muhlat ichida almashtiriladi.
             until = _resort_until(conn)
             end = _parse_iso(until) if until else None
@@ -891,13 +895,14 @@ def _set_house(user_id, house, first_name=None):
             conn.execute("UPDATE users SET house=?, sorted_at=? WHERE user_id=?",
                          (house, _utc_iso(now_tk()), int(user_id)))
         conn.commit()
-        return True
+        return {"changed": old != house}
     finally:
         conn.close()
 
 
 async def set_house(user_id, house, first_name=None):
-    """Fakultetni yozadi. Umrbod: qayta yozish faqat muhlat ichida."""
+    """Fakultetni yozadi. Umrbod: qayta yozish faqat muhlat ichida.
+    Rad etilsa - False, aks holda {"changed": fakultet o'zgardimi}."""
     return await asyncio.to_thread(_set_house, user_id, house, first_name)
 
 
@@ -1878,7 +1883,7 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
 
 _CHAT_SELECT = (
     "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, "
-    "c.message, c.created_at, c.reply_to, c.edited_at, c.deleted, c.rev, "
+    "c.message, c.created_at, c.reply_to, c.edited_at, c.deleted, c.rev, c.kind, "
     "r.user_id AS r_uid, COALESCE(ru.first_name, 'Sehrgar') AS r_name, ru.house AS r_house, r.message AS r_text, r.deleted AS r_deleted, "
     "c.chess, g.status AS g_status, g.base AS g_base, g.inc AS g_inc, g.white_uid AS g_w, g.black_uid AS g_b, "
     "g.winner_uid AS g_win, COALESCE(gw.first_name, 'Sehrgar') AS g_wn, COALESCE(gb.first_name, 'Sehrgar') AS g_bn "
@@ -1910,6 +1915,8 @@ def _chat_row(r):
     }
     if r["edited_at"]:
         m["edited"] = True
+    if r["kind"]:
+        m["kind"] = r["kind"]
     if r["chess"] and r["g_status"]:
         # Shaxmat taklifi: ilova matn o'rniga karta chizadi (holati jonli yangilanadi).
         m["chess"] = {"id": r["chess"], "status": r["g_status"], "base": r["g_base"], "inc": r["g_inc"],
@@ -2298,6 +2305,29 @@ async def post_chat_message(house, user_id, message, reply_to=None, chess=None):
     return await asyncio.to_thread(_do)
 
 
+JOIN_TEXT = "🎩 Saralash qalpog'i meni shu fakultetga yubordi!"
+
+
+async def post_join(house, user_id):
+    """Fakultet chatiga "xush kelibsiz" xabari (bir odamga bir fakultetda bir marta).
+    Ilova uni karta qilib chizadi; eski ilova JOIN_TEXT ni oddiy xabar sifatida ko'radi."""
+    def _do():
+        conn = _connect()
+        try:
+            if conn.execute("SELECT 1 FROM chat_messages WHERE house=? AND user_id=? AND kind='join'",
+                            (house, int(user_id))).fetchone():
+                return None
+            cur = conn.execute(
+                "INSERT INTO chat_messages (house, user_id, message, created_at, kind, rev) "
+                "VALUES (?,?,?,?,'join'," + _NEXT_REV + ")",
+                (house, int(user_id), JOIN_TEXT, _utc_iso(now_tk())))
+            conn.commit()
+            return _chat_one(conn, cur.lastrowid, user_id)
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
 def _own_live_message(conn, house, msg_id):
     return conn.execute(
         "SELECT id, user_id, created_at FROM chat_messages WHERE id=? AND house=? AND deleted=0",
@@ -2312,8 +2342,9 @@ async def edit_chat_message(house, user_id, msg_id, text):
             row = _own_live_message(conn, house, msg_id)
             if not row or row["user_id"] != int(user_id):
                 return "not_found"
-            if conn.execute("SELECT chess FROM chat_messages WHERE id=?", (row["id"],)).fetchone()[0]:
-                return "not_editable"       # shaxmat kartasi tahrirlanmaydi
+            special = conn.execute("SELECT chess, kind FROM chat_messages WHERE id=?", (row["id"],)).fetchone()
+            if special[0] or special[1]:
+                return "not_editable"       # shaxmat kartasi va xush kelibsiz tahrirlanmaydi
             made = _parse_iso(row["created_at"])
             if made and (now_tk() - made).total_seconds() > CHAT_EDIT_HOURS * 3600:
                 return "too_old"
