@@ -65,8 +65,32 @@ async def append_click(user_id, nickname, username, payload, timestamp):
 # Sheets'dan 20 ming qatorni olish 10-15 soniya turadi, panel esa shuncha
 # kutib turmasligi kerak.
 CACHE_SECONDS = 120
+CACHE_FILE = os.getenv("SHEETS_CACHE", "data/logs_cache.csv")
 _cache = {"at": 0.0, "csv": None}
 _read_lock = asyncio.Lock()
+
+
+def _load_disk():
+    """Oldingi nusxa. Bot qayta ishga tushganda panel darhol ishlasin."""
+    try:
+        with open(CACHE_FILE, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        logging.warning("Kesh faylini o'qib bo'lmadi: %s", e)
+        return None
+
+
+def _save_disk(text):
+    # Avval vaqtinchalik faylga: yozish yarmida uzilsa eski nusxa buzilmasin.
+    try:
+        tmp = CACHE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, CACHE_FILE)
+    except Exception as e:
+        logging.warning("Kesh faylini yozib bo'lmadi: %s", e)
 
 
 def _to_csv(rows):
@@ -88,6 +112,7 @@ async def _refresh():
             rows = await asyncio.to_thread(_ws.get_all_values)
             _cache["csv"] = _to_csv(rows)
             _cache["at"] = time.time()
+            await asyncio.to_thread(_save_disk, _cache["csv"])
         except Exception as e:
             logging.error("Sheetsni o'qishda xato: %s", e)
             _ws = None   # ulanish uzilgan bo'lishi mumkin - keyingi safar qaytadan
@@ -97,7 +122,12 @@ async def _refresh():
 async def read_csv():
     """Logs varag'ining CSV nusxasi (matn) yoki None."""
     if _cache["csv"] is None:
-        return await _refresh()
+        disk = await asyncio.to_thread(_load_disk)
+        if disk:
+            _cache["csv"] = disk
+            _cache["at"] = 0.0       # eskirgan: quyida fonda yangilanadi
+    if _cache["csv"] is None:
+        return await _refresh()      # birinchi ishga tushish - kutishdan boshqa chora yo'q
     if time.time() - _cache["at"] > CACHE_SECONDS and not _read_lock.locked():
         asyncio.create_task(_refresh())   # fonda yangilaymiz, javobni kuttirmaymiz
     return _cache["csv"]

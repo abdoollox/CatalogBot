@@ -376,9 +376,9 @@ def _stats(days, skip_ids=()):
 def panel_rows(skip_ids=()):
     """Kuzatuv paneli uchun so'rov yozuvlari.
 
-    user_id faqat YOZMA IZOH qoldirganlarda qaytariladi: admin izohga javob
-    bera olishi kerak, qolganlari uchun esa kim ketgani emas, nechtasi va nega
-    ketgani muhim. Panel bu raqamni loglardagi ism bilan solishtiradi.
+    user_id ham beriladi: panel uni loglardagi ism bilan solishtiradi, shunda
+    admin javob bergan odamga yozib, muammosini hal qila oladi. Bu manzil
+    kalit bilan yopiq va faqat admin uchun.
     Adminlarning /sabaltest yozuvlari (skip_ids) chiqarib tashlanadi.
     """
     conn = hpcup._connect()
@@ -400,8 +400,7 @@ def panel_rows(skip_ids=()):
                 "comment": comment,
                 "back": bool(r["returned_at"]),
             }
-            if comment:
-                item["uid"] = str(r["user_id"])
+            item["uid"] = str(r["user_id"])
             out.append(item)
         return out
     finally:
