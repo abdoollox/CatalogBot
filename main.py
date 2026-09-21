@@ -1118,6 +1118,27 @@ async def api_loglar(request):
     return _cors(resp)
 
 
+async def api_sabablar(request):
+    """Kuzatuv paneli: kanalni tark etganlar so'rovi (hp.db, leave_survey)."""
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+
+    got = request.headers.get("X-Dash-Token", "")
+    if not DASH_TOKEN or not hmac.compare_digest(got, DASH_TOKEN):
+        return _cors(web.json_response({"ok": False, "error": "bad_token"}, status=403))
+
+    try:
+        rows = await asyncio.to_thread(hpleave.panel_rows, tuple(ADMIN_IDS))
+    except Exception as e:
+        logging.error("Sabablarni o'qishda xato: %s", e)
+        return _cors(web.json_response({"ok": False, "error": "baza"}, status=503))
+
+    resp = web.json_response({"ok": True, "rows": rows,
+                              "labels": hpleave.BUTTONS["uz"]})
+    resp.enable_compression()
+    return _cors(resp)
+
+
 async def _cup_block(user_id):
     """Kubok ma'lumotlari. Kubok ishlamasa ham profil javob bersin."""
     try:
@@ -1803,6 +1824,7 @@ async def main():
     app.router.add_route('*', '/api/send', api_send)
     app.router.add_route('*', '/api/undo', api_undo)
     app.router.add_route('*', '/api/loglar', api_loglar)
+    app.router.add_route('*', '/api/sabablar', api_sabablar)
 
     # --- Xogvarts kubogi ---
     # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -
