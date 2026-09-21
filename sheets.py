@@ -65,7 +65,10 @@ async def append_click(user_id, nickname, username, payload, timestamp):
 # Sheets'dan 20 ming qatorni olish 10-15 soniya turadi, panel esa shuncha
 # kutib turmasligi kerak.
 CACHE_SECONDS = 120
-CACHE_FILE = os.getenv("SHEETS_CACHE", "data/logs_cache.csv")
+# MUTLAQ yo'l va aynan /data: docker-compose faqat shu papkani hostga ulaydi
+# (./data:/data). Nisbiy "data/..." konteynerning ICHIDAGI nusxaga yozilardi va
+# konteyner qayta qurilganda yo'qolardi - hp.db ham shu sababdan /data/hp.db.
+CACHE_FILE = os.getenv("SHEETS_CACHE", "/data/logs_cache.csv")
 _cache = {"at": 0.0, "csv": None}
 _read_lock = asyncio.Lock()
 
