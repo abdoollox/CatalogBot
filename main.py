@@ -17,6 +17,8 @@ logging.basicConfig(level=logging.INFO, force=True)
 # va haqiqiy xabarlarni ko'mib tashlaydi. Faqat ogohlantirish/xatolar qolsin.
 logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
+import csv
+import io
 import json
 import html
 import aiofiles
@@ -51,6 +53,9 @@ BOT_USERNAME = "garripotterkinobot"
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",")
              if x.isdigit()}
 DB_CHANNEL_ID = -1003641399832
+# Kuzatuv paneli (dashboard) shu kalit bilan loglarni o'qiydi. Kalit .env da
+# turadi; bo'sh bo'lsa panel manzili butunlay yopiq qoladi.
+DASH_TOKEN = os.getenv("DASH_TOKEN", "")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -1052,7 +1057,7 @@ def _cors(resp):
     # sarlavhaga qo'yiladi: query string nginx access log'iga tushadi va
     # foydalanuvchi ma'lumoti bilan imzo o'sha yerda qolib ketardi.
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Telegram-Init-Data"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Telegram-Init-Data, X-Dash-Token"
     resp.headers["Access-Control-Max-Age"] = "86400"
     return resp
 
@@ -1090,6 +1095,31 @@ def verify_init_data(init_data):
         return None
 
     return user if user.get("id") else None
+
+
+async def api_loglar(request):
+    """Kuzatuv paneli uchun: Logs varag'ining nusxasi (CSV).
+
+    Kalit sarlavhada keladi, URL'da emas: query string nginx access log'iga
+    tushadi va kalit o'sha yerda qolib ketardi.
+    """
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+
+    got = request.headers.get("X-Dash-Token", "")
+    if not DASH_TOKEN or not hmac.compare_digest(got, DASH_TOKEN):
+        return _cors(web.json_response({"ok": False, "error": "bad_token"}, status=403))
+
+    rows = await sheets.read_all()
+    if rows is None:
+        return _cors(web.json_response({"ok": False, "error": "sheets_yoq"}, status=503))
+
+    buf = io.StringIO()
+    csv.writer(buf).writerows(rows)
+    resp = web.Response(text=buf.getvalue(), content_type="text/csv", charset="utf-8")
+    # 20 mingdan ortiq qator ~1.3 MB; siqilganda ~10 baravar kichik bo'ladi.
+    resp.enable_compression()
+    return _cors(resp)
 
 
 async def _cup_block(user_id):
@@ -1776,6 +1806,7 @@ async def main():
     app.router.add_route('*', '/api/profile', handle_house)
     app.router.add_route('*', '/api/send', api_send)
     app.router.add_route('*', '/api/undo', api_undo)
+    app.router.add_route('*', '/api/loglar', api_loglar)
 
     # --- Xogvarts kubogi ---
     # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -

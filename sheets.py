@@ -52,3 +52,39 @@ async def append_click(user_id, nickname, username, payload, timestamp):
         )
     except Exception as e:
         logging.error(f"Sheetsga yozishda xato: {e}")
+
+
+# --- KUZATUV PANELI UCHUN O'QISH ---
+# Panel (dashboard) butun jadvalni bir marta oladi va o'zi hisoblaydi.
+# Sheets'dan 20 mingdan ortiq qatorni olish bir necha soniya turadi, shuning
+# uchun natija keshlanadi: panel har ochilganda Google'ni bezovta qilmaydi.
+CACHE_SECONDS = 120
+_cache = {"at": 0.0, "rows": None}
+_read_lock = asyncio.Lock()
+
+
+async def read_all(force=False):
+    """Logs varag'idagi barcha qatorlar (ro'yxatlar ro'yxati) yoki None."""
+    global _ws
+    now = time.time()
+    if not force and _cache["rows"] is not None and now - _cache["at"] < CACHE_SECONDS:
+        return _cache["rows"]
+
+    async with _read_lock:
+        # Qulfni kutayotganda boshqa so'rov yangilagan bo'lishi mumkin.
+        if not force and _cache["rows"] is not None and time.time() - _cache["at"] < CACHE_SECONDS:
+            return _cache["rows"]
+        if not _ws and _configured():
+            await asyncio.to_thread(_connect)
+        if not _ws:
+            return _cache["rows"]
+        try:
+            rows = await asyncio.to_thread(_ws.get_all_values)
+            _cache["rows"] = rows
+            _cache["at"] = time.time()
+            return rows
+        except Exception as e:
+            logging.error("Sheetsni o'qishda xato: %s", e)
+            # Ulanish uzilgan bo'lishi mumkin - keyingi safar qayta ulanamiz.
+            _ws = None
+            return _cache["rows"]   # eski nusxa yo'qdan yaxshi
