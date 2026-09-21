@@ -374,28 +374,36 @@ def _stats(days, skip_ids=()):
 
 
 def panel_rows(skip_ids=()):
-    """Kuzatuv paneli uchun so'rov yozuvlari — SHAXS MA'LUMOTISIZ.
+    """Kuzatuv paneli uchun so'rov yozuvlari.
 
-    user_id ataylab qaytarilmaydi: panelda kim chiqib ketgani ko'rsatilmaydi,
-    faqat sabablar va izohlar sanaladi. Adminlarning /sabaltest yozuvlari
-    (skip_ids) haqiqiy raqamlarni buzmasligi uchun chiqarib tashlanadi.
+    user_id faqat YOZMA IZOH qoldirganlarda qaytariladi: admin izohga javob
+    bera olishi kerak, qolganlari uchun esa kim ketgani emas, nechtasi va nega
+    ketgani muhim. Panel bu raqamni loglardagi ism bilan solishtiradi.
+    Adminlarning /sabaltest yozuvlari (skip_ids) chiqarib tashlanadi.
     """
     conn = hpcup._connect()
     try:
         holder = ",".join("?" * len(skip_ids))
         filtr = (" WHERE user_id NOT IN (%s)" % holder) if skip_ids else ""
         rows = conn.execute(
-            "SELECT left_at, asked_at, reason, comment, returned_at"
+            "SELECT user_id, left_at, asked_at, reason, comment, returned_at"
             " FROM leave_survey" + filtr + " ORDER BY id",
             tuple(int(x) for x in skip_ids)).fetchall()
-        return [{
-            "t": r["left_at"],
-            "asked": bool(r["asked_at"]),
-            "reason": r["reason"],
+        out = []
+        for r in rows:
             # Uzun izohlar javobni shishirmasin — panelda baribir qisqartiriladi.
-            "comment": (r["comment"] or "")[:500] or None,
-            "back": bool(r["returned_at"]),
-        } for r in rows]
+            comment = (r["comment"] or "")[:500] or None
+            item = {
+                "t": r["left_at"],
+                "asked": bool(r["asked_at"]),
+                "reason": r["reason"],
+                "comment": comment,
+                "back": bool(r["returned_at"]),
+            }
+            if comment:
+                item["uid"] = str(r["user_id"])
+            out.append(item)
+        return out
     finally:
         conn.close()
 
