@@ -17,8 +17,6 @@ logging.basicConfig(level=logging.INFO, force=True)
 # va haqiqiy xabarlarni ko'mib tashlaydi. Faqat ogohlantirish/xatolar qolsin.
 logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
-import csv
-import io
 import json
 import html
 import aiofiles
@@ -1110,13 +1108,11 @@ async def api_loglar(request):
     if not DASH_TOKEN or not hmac.compare_digest(got, DASH_TOKEN):
         return _cors(web.json_response({"ok": False, "error": "bad_token"}, status=403))
 
-    rows = await sheets.read_all()
-    if rows is None:
+    text = await sheets.read_csv()
+    if text is None:
         return _cors(web.json_response({"ok": False, "error": "sheets_yoq"}, status=503))
 
-    buf = io.StringIO()
-    csv.writer(buf).writerows(rows)
-    resp = web.Response(text=buf.getvalue(), content_type="text/csv", charset="utf-8")
+    resp = web.Response(text=text, content_type="text/csv", charset="utf-8")
     # 20 mingdan ortiq qator ~1.3 MB; siqilganda ~10 baravar kichik bo'ladi.
     resp.enable_compression()
     return _cors(resp)
@@ -1843,6 +1839,9 @@ async def main():
     # Karta rasmlari kubokka bog'liq emas - u ishlamasa ham ishga tushsin.
     await load_promo()
     asyncio.create_task(wide_watcher())
+    # Panel keshini oldindan to'ldiramiz: birinchi so'rov 15 soniya kutmasin.
+    if DASH_TOKEN:
+        asyncio.create_task(sheets.read_csv())
 
     runner = web.AppRunner(app)
     await runner.setup()

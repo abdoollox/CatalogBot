@@ -55,36 +55,49 @@ async def append_click(user_id, nickname, username, payload, timestamp):
 
 
 # --- KUZATUV PANELI UCHUN O'QISH ---
-# Panel (dashboard) butun jadvalni bir marta oladi va o'zi hisoblaydi.
-# Sheets'dan 20 mingdan ortiq qatorni olish bir necha soniya turadi, shuning
-# uchun natija keshlanadi: panel har ochilganda Google'ni bezovta qilmaydi.
+# Panel (dashboard) butun jadvalni bir marta oladi va hisoblashni o'zi bajaradi.
+#
+# Kesh MATN ko'rinishida saqlanadi, qatorlar ro'yxati emas: 20 mingdan ortiq
+# qator ro'yxat bo'lib ~25 MB joy egallaydi, tayyor CSV esa ~2 MB. Konteyner
+# xotirasi 384 MB bilan chegaralangan, shuning uchun bu farq muhim.
+#
+# Muddati o'tgan keshda eski nusxa DARHOL beriladi va yangisi fonda olinadi:
+# Sheets'dan 20 ming qatorni olish 10-15 soniya turadi, panel esa shuncha
+# kutib turmasligi kerak.
 CACHE_SECONDS = 120
-_cache = {"at": 0.0, "rows": None}
+_cache = {"at": 0.0, "csv": None}
 _read_lock = asyncio.Lock()
 
 
-async def read_all(force=False):
-    """Logs varag'idagi barcha qatorlar (ro'yxatlar ro'yxati) yoki None."""
-    global _ws
-    now = time.time()
-    if not force and _cache["rows"] is not None and now - _cache["at"] < CACHE_SECONDS:
-        return _cache["rows"]
+def _to_csv(rows):
+    import csv, io
+    buf = io.StringIO()
+    csv.writer(buf).writerows(rows)
+    return buf.getvalue()
 
+
+async def _refresh():
+    """Jadvalni o'qib keshga yozadi. Xato bo'lsa eski nusxa qoladi."""
+    global _ws
     async with _read_lock:
-        # Qulfni kutayotganda boshqa so'rov yangilagan bo'lishi mumkin.
-        if not force and _cache["rows"] is not None and time.time() - _cache["at"] < CACHE_SECONDS:
-            return _cache["rows"]
         if not _ws and _configured():
             await asyncio.to_thread(_connect)
         if not _ws:
-            return _cache["rows"]
+            return _cache["csv"]
         try:
             rows = await asyncio.to_thread(_ws.get_all_values)
-            _cache["rows"] = rows
+            _cache["csv"] = _to_csv(rows)
             _cache["at"] = time.time()
-            return rows
         except Exception as e:
             logging.error("Sheetsni o'qishda xato: %s", e)
-            # Ulanish uzilgan bo'lishi mumkin - keyingi safar qayta ulanamiz.
-            _ws = None
-            return _cache["rows"]   # eski nusxa yo'qdan yaxshi
+            _ws = None   # ulanish uzilgan bo'lishi mumkin - keyingi safar qaytadan
+        return _cache["csv"]
+
+
+async def read_csv():
+    """Logs varag'ining CSV nusxasi (matn) yoki None."""
+    if _cache["csv"] is None:
+        return await _refresh()
+    if time.time() - _cache["at"] > CACHE_SECONDS and not _read_lock.locked():
+        asyncio.create_task(_refresh())   # fonda yangilaymiz, javobni kuttirmaymiz
+    return _cache["csv"]
