@@ -64,7 +64,7 @@ async def append_click(user_id, nickname, username, payload, timestamp):
 # Muddati o'tgan keshda eski nusxa DARHOL beriladi va yangisi fonda olinadi:
 # Sheets'dan 20 ming qatorni olish 10-15 soniya turadi, panel esa shuncha
 # kutib turmasligi kerak.
-CACHE_SECONDS = 120
+CACHE_SECONDS = 300
 # MUTLAQ yo'l va aynan /data: docker-compose faqat shu papkani hostga ulaydi
 # (./data:/data). Nisbiy "data/..." konteynerning ICHIDAGI nusxaga yozilardi va
 # konteyner qayta qurilganda yo'qolardi - hp.db ham shu sababdan /data/hp.db.
@@ -103,6 +103,22 @@ def _to_csv(rows):
     return buf.getvalue()
 
 
+def _xotirani_qaytar():
+    """Bo'shatilgan xotirani tizimga qaytaradi.
+
+    get_all_values() 20 mingdan ortiq qatorni Python ro'yxati qilib yasaydi -
+    bir necha o'n MB. Ro'yxat darhol bo'shatiladi, lekin glibc bo'sh joyni
+    o'zida ushlab qoladi va jarayonning RSS'i har yangilanishda o'sib boradi.
+    Konteyner 384 MB bilan chegaralangan, shuning uchun har safar qaytarib
+    beramiz. Ishlamasa (musl yoki boshqa libc) jim o'tamiz - bu optimallashtirish,
+    ishning shartisi emas."""
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
+
 async def _refresh():
     """Jadvalni o'qib keshga yozadi. Xato bo'lsa eski nusxa qoladi."""
     global _ws
@@ -112,10 +128,18 @@ async def _refresh():
         if not _ws:
             return _cache["csv"]
         try:
-            rows = await asyncio.to_thread(_ws.get_all_values)
-            _cache["csv"] = _to_csv(rows)
+            # CSV ga aylantirish ham oqimda: 20 ming qator asosiy siklni
+            # yuzlab millisekundga bloklardi va o'sha payt ILOVA javoblari ham
+            # navbatda kutardi.
+            def _ol():
+                rows = _ws.get_all_values()
+                matn = _to_csv(rows)
+                del rows
+                return matn
+            _cache["csv"] = await asyncio.to_thread(_ol)
             _cache["at"] = time.time()
             await asyncio.to_thread(_save_disk, _cache["csv"])
+            await asyncio.to_thread(_xotirani_qaytar)
         except Exception as e:
             logging.error("Sheetsni o'qishda xato: %s", e)
             _ws = None   # ulanish uzilgan bo'lishi mumkin - keyingi safar qaytadan
