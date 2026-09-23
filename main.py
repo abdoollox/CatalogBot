@@ -1042,6 +1042,14 @@ VALID_HOUSES = {"gryffindor", "slytherin", "ravenclaw", "hufflepuff"}
 VALID_WOODS = {"oak", "yew", "cherry", "holly", "aspen", "walnut"}
 VALID_CORES = {"phoenix", "dragon", "unicorn"}
 VALID_FLEX = {"rigid", "springy", "supple", "yielding"}
+# Onboarding qadamlari - asardagi yo'l tartibida. Panel voronkasi shulardan
+# yig'iladi: xat -> xiyobon -> Gringotts -> hayvon -> tayoqcha -> bilet ->
+# poyezd -> saralanish. Tayoqcha (wand_*), saralash boshlanishi (sort_start)
+# va fakultet (house_*) allaqachon yoziladi, shuning uchun bu yerda yo'q.
+ONB_STEPS = {"letter", "alley", "gringotts", "ticket", "train"}
+# Uy hayvoni: xatdagi rasmiy ro'yxat (boyo'g'li, mushuk, qurbaqa) va kalamush -
+# ro'yxatda yo'q, lekin asarda uchraydi (Ronning Qorasochi).
+VALID_PETS = {"owl", "cat", "toad", "rat"}
 
 
 def check_value(kind, value):
@@ -1065,6 +1073,18 @@ def check_value(kind, value):
     # umrbod ogohlantirishi kiritilgandan keyin bu nisbat tushmasligi kerak.
     if kind == "sort_start":
         return "sort_start"
+
+    # Onboarding qadami. Ilova har qadamni bir marta yuboradi (qurilmada
+    # belgilab qo'yadi), takrori kelsa ham panel odam bo'yicha sanaydi.
+    if kind == "onb":
+        if value in ONB_STEPS:
+            return "onb_" + value
+        return None
+
+    if kind == "pet":
+        if value in VALID_PETS:
+            return "pet_" + value
+        return None
 
     return None
 
@@ -1335,8 +1355,10 @@ async def handle_house(request):
             except Exception:
                 pass
 
+    # Sinov o'quvchisi (manfiy raqam) statistikaga yozilmaydi
     try:
-        await log_user_action(_WebUser(user), payload)
+        if int(user["id"]) > 0:
+            await log_user_action(_WebUser(user), payload)
     except Exception as e:
         logging.error("Profil yozishda xato: %s", e)
         return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
