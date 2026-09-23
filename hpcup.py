@@ -800,7 +800,8 @@ def _referral_board(user_id, lang="uz"):
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT user_id, first_name, house, refs FROM users WHERE refs > 0 "
+            "SELECT user_id, first_name, house, refs FROM users "
+            "WHERE refs > 0 AND user_id > 0 "
             "ORDER BY refs DESC, COALESCE(ref_awarded_at, created_at) ASC, "
             "user_id ASC").fetchall()
         mine = conn.execute("SELECT refs FROM users WHERE user_id=?",
@@ -929,7 +930,7 @@ def _sorted_users():
     try:
         return [(r["user_id"], r["house"]) for r in conn.execute(
             "SELECT user_id, house FROM users WHERE house IS NOT NULL "
-            "ORDER BY user_id")]
+            "AND user_id > 0 ORDER BY user_id")]
     finally:
         conn.close()
 
@@ -991,7 +992,7 @@ def _season_entry(conn, row, number):
         "SELECT p.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house, "
         "SUM(p.points) AS pts, MIN(p.id) AS first_id "
         "FROM points p JOIN users u ON u.user_id = p.user_id "
-        "WHERE p.season_id = ? AND u.house IS NOT NULL "
+        "WHERE p.season_id = ? AND u.house IS NOT NULL AND p.user_id > 0 "
         "GROUP BY p.user_id ORDER BY pts DESC, first_id ASC LIMIT 1",
         (row["id"],)).fetchone()
     best = None
@@ -1136,7 +1137,7 @@ WITH active AS (
     SELECT p.user_id, u.house, SUM(p.points) AS pts
     FROM points p
     JOIN users u ON u.user_id = p.user_id
-    WHERE p.season_id = ? AND u.house IS NOT NULL
+    WHERE p.season_id = ? AND u.house IS NOT NULL AND p.user_id > 0
     GROUP BY p.user_id, u.house
     HAVING SUM(p.points) >= ?
 )
@@ -1177,7 +1178,7 @@ def _leaderboard(season_id):
         # a'zolar ballari, shunda qismlar yig'indisi jami ballga teng bo'ladi.
         by_house = _by_source(
             conn, season_id, "u.house",
-            "u.house IS NOT NULL AND p.user_id IN ("
+            "u.house IS NOT NULL AND p.user_id > 0 AND p.user_id IN ("
             "  SELECT user_id FROM points WHERE season_id = ? "
             "  GROUP BY user_id HAVING SUM(points) >= ?)",
             (season_id, ACTIVE_MIN_POINTS))
@@ -1287,16 +1288,17 @@ def _hall(conn, house, user_id, season_id):
         return None
 
     total = conn.execute(
-        "SELECT COUNT(*) FROM users WHERE house=?", (house,)).fetchone()[0]
+        "SELECT COUNT(*) FROM users WHERE house=? AND (user_id > 0 OR user_id = ?)",
+        (house, int(user_id))).fetchone()[0]
 
     rows = conn.execute(
         "SELECT u.user_id, u.username, COALESCE(u.first_name, 'Sehrgar') AS name, COALESCE(SUM(p.points), 0) AS pts "
         "FROM users u "
         "LEFT JOIN points p ON u.user_id=p.user_id AND p.season_id=? "
-        "WHERE u.house=? "
+        "WHERE u.house=? AND (u.user_id > 0 OR u.user_id = ?) "
         "GROUP BY u.user_id "
         "ORDER BY pts DESC, u.user_id ASC",
-        (season_id, house)).fetchall()
+        (season_id, house, int(user_id))).fetchall()
 
     active_count = sum(1 for r in rows if r["pts"] >= ACTIVE_MIN_POINTS)
     by_user = _by_source(conn, season_id, "p.user_id", "u.house = ?", (house,))
@@ -1371,8 +1373,8 @@ def presence_count(house=None):
     for k in [k for k, v in _presence.items() if now - v[0] >= PRESENCE_TTL]:
         del _presence[k]
     if house is None:
-        return len(_presence)
-    return sum(1 for v in _presence.values() if v[1] == house)
+        return sum(1 for k in _presence if k > 0)
+    return sum(1 for k, v in _presence.items() if k > 0 and v[1] == house)
 
 
 async def hall(house, user_id, season_id):
@@ -1391,7 +1393,7 @@ def _feed(conn, limit=50):
     rows = conn.execute(
         "SELECT user_id, COALESCE(first_name, 'Sehrgar') AS name, house, sorted_at "
         "FROM users "
-        "WHERE house IS NOT NULL AND sorted_at IS NOT NULL "
+        "WHERE house IS NOT NULL AND sorted_at IS NOT NULL AND user_id > 0 "
         "ORDER BY sorted_at DESC "
         "LIMIT ?", (limit,)).fetchall()
 
@@ -1771,7 +1773,8 @@ def _counts():
                      "question_assignments", "daily_schedule", "badges"):
             out[name] = conn.execute("SELECT COUNT(*) FROM " + name).fetchone()[0]
         out["sorted_users"] = conn.execute(
-            "SELECT COUNT(*) FROM users WHERE house IS NOT NULL").fetchone()[0]
+            "SELECT COUNT(*) FROM users WHERE house IS NOT NULL "
+            "AND user_id > 0").fetchone()[0]
         out["named_users"] = conn.execute(
             "SELECT COUNT(*) FROM users WHERE first_name IS NOT NULL").fetchone()[0]
         out["resort_until"] = _resort_until(conn)
@@ -1901,6 +1904,14 @@ CHAT_EDIT_HOURS = 48
 CHAT_REACTIONS = ("👍", "❤️", "😂", "🔥", "😮", "⚡")
 
 
+def _hide_test(viewer):
+    """Sinov o'quvchisi (manfiy raqam) yozganini faqat o'zi ko'radi."""
+    try:
+        return "" if int(viewer or 0) < 0 else " AND c.user_id > 0"
+    except Exception:
+        return " AND c.user_id > 0"
+
+
 def _chat_row(r):
     if r["deleted"]:
         return {"id": r["id"], "rev": r["rev"], "deleted": True}
@@ -1973,21 +1984,25 @@ async def get_chat_messages(house, limit=50, after=None, before=None, since=None
         try:
             if since is not None:
                 rows = conn.execute(
-                    _CHAT_SELECT + "WHERE c.house=? AND c.rev>? ORDER BY c.rev ASC LIMIT ?",
+                    _CHAT_SELECT + "WHERE c.house=? AND c.rev>?" + _hide_test(viewer) +
+                    " ORDER BY c.rev ASC LIMIT ?",
                     (house, int(since), limit)).fetchall()
                 return _chat_reactions(conn, [_chat_row(r) for r in rows], viewer)
             if after is not None:
                 rows = conn.execute(
-                    _CHAT_SELECT + "WHERE c.house=? AND c.id>? AND c.deleted=0 ORDER BY c.id ASC LIMIT ?",
+                    _CHAT_SELECT + "WHERE c.house=? AND c.id>? AND c.deleted=0" + _hide_test(viewer) +
+                    " ORDER BY c.id ASC LIMIT ?",
                     (house, int(after), limit)).fetchall()
                 return _chat_reactions(conn, [_chat_row(r) for r in rows], viewer)
             if before is not None:
                 rows = conn.execute(
-                    _CHAT_SELECT + "WHERE c.house=? AND c.id<? AND c.deleted=0 ORDER BY c.id DESC LIMIT ?",
+                    _CHAT_SELECT + "WHERE c.house=? AND c.id<? AND c.deleted=0" + _hide_test(viewer) +
+                    " ORDER BY c.id DESC LIMIT ?",
                     (house, int(before), limit)).fetchall()
             else:
                 rows = conn.execute(
-                    _CHAT_SELECT + "WHERE c.house=? AND c.deleted=0 ORDER BY c.id DESC LIMIT ?",
+                    _CHAT_SELECT + "WHERE c.house=? AND c.deleted=0" + _hide_test(viewer) +
+                    " ORDER BY c.id DESC LIMIT ?",
                     (house, limit)).fetchall()
             return _chat_reactions(conn, [_chat_row(r) for r in reversed(rows)], viewer)
         finally:
@@ -2010,8 +2025,10 @@ def _read_state(conn, house, user_id):
                      (int(user_id), house, top))
         conn.commit()
         return top, 0
+    hide = "" if int(user_id) < 0 else " AND user_id > 0"
     unread = conn.execute(
-        "SELECT COUNT(*) FROM chat_messages WHERE house=? AND id>? AND deleted=0 AND user_id<>?",
+        "SELECT COUNT(*) FROM chat_messages WHERE house=? AND id>? AND deleted=0 "
+        "AND user_id<>?" + hide,
         (house, row["last_id"], int(user_id))).fetchone()[0]
     return row["last_id"], unread
 
@@ -2139,7 +2156,7 @@ async def chat_user(user_id):
     return await asyncio.to_thread(_do)
 
 
-async def chat_members(house, season_id):
+async def chat_members(house, season_id, viewer=0):
     """Fakultetga kirganlar (house None - hamma fakultet), shu mavsum ballari bo'yicha."""
     def _do():
         conn = _connect()
@@ -2151,8 +2168,9 @@ async def chat_members(house, season_id):
                 "SELECT u.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house, "
                 "COALESCE(SUM(p.points), 0) AS pts FROM users u "
                 "LEFT JOIN points p ON p.user_id=u.user_id AND p.season_id=? "
-                "WHERE " + where + " GROUP BY u.user_id ORDER BY pts DESC, u.user_id ASC",
-                [season_id] + args).fetchall()
+                "WHERE " + where + " AND (u.user_id > 0 OR u.user_id = ?) "
+                "GROUP BY u.user_id ORDER BY pts DESC, u.user_id ASC",
+                [season_id] + args + [int(viewer or 0)]).fetchall()
             return [{"uid": r["user_id"], "name": (r["name"] or "Sehrgar").strip()[:40],
                      "house": r["house"], "points": r["pts"]} for r in rows]
         finally:
@@ -2422,3 +2440,52 @@ async def react_chat_message(house, user_id, msg_id, emoji):
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
+
+
+# ---------------------------------------------------------------- sinov hisobi
+
+async def test_reset(user_id):
+    """Sinov o'quvchisining (manfiy raqamli hisob) hamma izini o'chiradi.
+
+    Admin ilovadagi "Noldan boshlash" tugmasini bosganda chaqiriladi: shundan
+    keyin u ilovaga xuddi birinchi marta kirgan odamdek tushadi. Manfiy bo'lmagan
+    raqam kelsa hech narsa qilmaydi - asl hisoblar himoyalangan.
+    """
+    uid = int(user_id)
+    if uid >= 0:
+        raise ValueError("test_reset faqat manfiy (sinov) raqam uchun")
+
+    def _do():
+        conn = _connect()
+        try:
+            conn.execute(
+                "DELETE FROM chat_reactions WHERE user_id=? OR message_id IN "
+                "(SELECT id FROM chat_messages WHERE user_id=?)", (uid, uid))
+            # Sinov o'quvchisining xabariga javob bo'lgan qatorlar osilib qolmasin
+            conn.execute(
+                "UPDATE chat_messages SET reply_to=NULL WHERE reply_to IN "
+                "(SELECT id FROM chat_messages WHERE user_id=?)", (uid,))
+            for sql in (
+                    "DELETE FROM chat_messages WHERE user_id=?",
+                    "DELETE FROM chat_reads WHERE user_id=?",
+                    "DELETE FROM chat_bans WHERE user_id=?",
+                    "DELETE FROM chat_blocks WHERE user_id=? OR blocked_id=?",
+                    "DELETE FROM points WHERE user_id=?",
+                    "DELETE FROM answers WHERE user_id=?",
+                    "DELETE FROM question_assignments WHERE user_id=?",
+                    "DELETE FROM badges WHERE user_id=?",
+                    "DELETE FROM chess_games WHERE white_uid=? OR black_uid=?",
+                    "DELETE FROM chess_ratings WHERE user_id=?",
+                    "DELETE FROM chess_bot_results WHERE user_id=?",
+                    "UPDATE users SET invited_by=NULL, ref_awarded_at=NULL WHERE invited_by=?",
+                    "DELETE FROM users WHERE user_id=?"):
+                try:
+                    conn.execute(sql, (uid, uid) if sql.count("?") == 2 else (uid,))
+                except sqlite3.OperationalError:
+                    # Jadval hali yaratilmagan bo'lsa (masalan shaxmat) - o'tamiz
+                    pass
+            conn.commit()
+        finally:
+            conn.close()
+
+    await asyncio.to_thread(_do)

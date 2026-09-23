@@ -777,7 +777,7 @@ def register(dp, bot, app, cfg):
                 if which != "global" and not whose:
                     return cors(web.json_response({"error": "no_house"}, status=403))
                 season = await hpcup.current_season()
-                members = await hpcup.chat_members(whose, season["id"])
+                members = await hpcup.chat_members(whose, season["id"], uid)
                 for m in members:
                     m["online"] = chat_is_online(m["uid"])
                 return cors(web.json_response({"ok": True, "members": members}))

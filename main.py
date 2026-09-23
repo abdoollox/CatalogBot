@@ -19,6 +19,7 @@ logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
 import json
 import html
+import contextvars
 import aiofiles
 import urllib.parse
 import hmac
@@ -52,6 +53,29 @@ BOT_USERNAME = "garripotterkinobot"
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",")
              if x.isdigit()}
 DB_CHANNEL_ID = -1003641399832
+# "Sinov o'quvchisi": admin ilovada shu rejimni yoqsa, so'rovlari MANFIY
+# raqamli alohida hisobga tushadi (-<o'z raqami>). Shunda u ilovani chinakam
+# yangi odam sifatida boshidan o'tadi: fakultet, tayoqcha, ball, chat - hammasi
+# noldan. Asl hisobiga tegilmaydi, istalgan payt "Noldan boshlash" bilan
+# sinov hisobi butunlay tozalanadi. Reyting/kubok/chat manfiy raqamlarni
+# hisobga olmaydi (hpcup.REAL_ONLY).
+TEST_HEADER = "X-HP-Test"
+_test_mode = contextvars.ContextVar("hp_test_mode", default=False)
+
+
+def test_uid(user_id):
+    """Sinov rejimidagi admin uchun soxta (manfiy) raqam."""
+    return -abs(int(user_id))
+
+
+def tg_chat_id(user_id):
+    """Telegramga yozish uchun haqiqiy chat raqami.
+
+    Sinov o'quvchisi bazada manfiy raqam bilan yuradi, lekin film va
+    xabarlar baribir adminning o'z chatiga kelishi kerak - aks holda
+    kutubxona qismini sinab bo'lmaydi.
+    """
+    return abs(int(user_id))
 # Kuzatuv paneli (dashboard) shu kalit bilan loglarni o'qiydi. Kalit .env da
 # turadi; bo'sh bo'lsa panel manzili butunlay yopiq qoladi.
 DASH_TOKEN = os.getenv("DASH_TOKEN", "")
@@ -1060,7 +1084,8 @@ def _cors(resp):
     # sarlavhaga qo'yiladi: query string nginx access log'iga tushadi va
     # foydalanuvchi ma'lumoti bilan imzo o'sha yerda qolib ketardi.
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Telegram-Init-Data, X-Dash-Token"
+    resp.headers["Access-Control-Allow-Headers"] = ("Content-Type, X-Telegram-Init-Data, "
+                                                    "X-Dash-Token, " + TEST_HEADER)
     resp.headers["Access-Control-Max-Age"] = "86400"
     return resp
 
@@ -1097,7 +1122,64 @@ def verify_init_data(init_data):
     except Exception:
         return None
 
-    return user if user.get("id") else None
+    if not user.get("id"):
+        return None
+
+    # Sinov o'quvchisi rejimi: imzo HAQIQIY (odam baribir o'zi), lekin
+    # raqamni manfiyga almashtiramiz - server uchun bu butunlay boshqa,
+    # bo'm-bo'sh odam. Faqat adminlar uchun.
+    try:
+        if _test_mode.get() and int(user["id"]) in ADMIN_IDS:
+            user = dict(user)
+            user["id"] = test_uid(user["id"])
+            user["first_name"] = "Sinov o'quvchisi"
+            user.pop("username", None)
+    except Exception:
+        pass
+
+    return user
+
+
+@web.middleware
+async def test_mode_middleware(request, handler):
+    """Har so'rovda sinov sarlavhasini o'qiydi (contextvar so'rovga xos)."""
+    _test_mode.set(request.headers.get(TEST_HEADER, "") == "1")
+    return await handler(request)
+
+
+async def api_test_reset(request):
+    """Sinov o'quvchisini butunlay o'chiradi - keyingi kirish yana noldan.
+
+    Faqat admin va faqat sinov sarlavhasi bilan. Asl hisobga TEGMAYDI.
+    """
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+
+    init = request.headers.get("X-Telegram-Init-Data", "")
+    if not init:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        init = str(body.get("initData", ""))
+
+    # Bu yerda _test_mode yoqiq bo'lsa user allaqachon manfiy raqamli bo'ladi.
+    user = verify_init_data(init)
+    if not user:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    uid = int(user["id"])
+    if uid >= 0 or abs(uid) not in ADMIN_IDS:
+        return _cors(web.json_response({"ok": False, "error": "not_allowed"}, status=403))
+
+    try:
+        await hpcup.test_reset(uid)
+    except Exception as e:
+        logging.error("Sinov hisobini tozalashda xato: %s", e)
+        return _cors(web.json_response({"ok": False, "error": "baza"}, status=503))
+
+    logging.info("Sinov o'quvchisi tozalandi: %s", uid)
+    return _cors(web.json_response({"ok": True}))
 
 
 async def api_loglar(request):
@@ -1772,20 +1854,22 @@ async def api_send(request):
     if not catalog.is_ready(movie_key, lang):
         return _cors(web.json_response({"ok": False, "error": "not_ready"}))
 
-    if await is_subscribed(user.id) is False:
+    if await is_subscribed(tg_chat_id(user.id)) is False:
         # WebApp buni ko'rib, foydalanuvchini botga yo'naltiradi
         return _cors(web.json_response({"ok": False, "error": "not_subscribed"}))
 
     vk_url = movie_data.get("vk_url") if lang == "uz" else None
     try:
-        sent = await send_film(user.id, movie_key, lang, vk_url)
+        sent = await send_film(tg_chat_id(user.id), movie_key, lang, vk_url)
     except Exception as e:
         # Eng ko'p uchraydigani: foydalanuvchi botni hech qachon ochmagan,
         # shuning uchun bot unga yoza olmaydi.
         logging.error("API orqali yuborishda xato (%s): %s", movie_key, e)
         return _cors(web.json_response({"ok": False, "error": "send_failed"}))
 
-    await log_user_action(user, "%s_%s" % (movie_key, lang), "web_%s_%s" % (movie_key, lang))
+    # Sinov o'quvchisining harakati statistikaga yozilmaydi
+    if user.id > 0:
+        await log_user_action(user, "%s_%s" % (movie_key, lang), "web_%s_%s" % (movie_key, lang))
     remember_send(user.id, sent.message_id, movie_key, lang)
 
     # Xogvarts kubogi: kino ochilgani uchun ball. Film allaqachon yuborilgan,
@@ -1832,12 +1916,13 @@ async def api_undo(request):
 
     movie_key, lang = topildi
     try:
-        await bot.delete_message(user.id, message_id)
+        await bot.delete_message(tg_chat_id(user.id), message_id)
     except Exception as e:
         logging.info("Bekor qilishda o'chirib bo'lmadi (%s): %s", movie_key, e)
         return _cors(web.json_response({"ok": False, "error": "delete_failed"}))
 
-    await log_user_action(user, "bekor_%s" % movie_key)
+    if user.id > 0:
+        await log_user_action(user, "bekor_%s" % movie_key)
     logging.info("Bekor qilindi: %s -> %s", user.id, movie_key)
     return _cors(web.json_response({"ok": True, "movie_id": movie_key}))
 
@@ -1847,7 +1932,7 @@ async def handle(request):
 
 async def main():
     logging.info("Bot va Server ishga tushmoqda...")
-    app = web.Application()
+    app = web.Application(middlewares=[test_mode_middleware])
     app.router.add_get('/', handle)
     app.router.add_route('*', '/api/house', handle_house)
     app.router.add_route('*', '/api/profile', handle_house)
@@ -1856,6 +1941,7 @@ async def main():
     app.router.add_route('*', '/api/loglar', api_loglar)
     app.router.add_route('*', '/api/sabablar', api_sabablar)
     app.router.add_route('*', '/api/kanal', api_kanal)
+    app.router.add_route('*', '/api/test/reset', api_test_reset)
 
     # --- Xogvarts kubogi ---
     # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -
