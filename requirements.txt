@@ -4,3 +4,4 @@ aiohttp==3.9.3
 gspread
 google-auth
 chess==1.11.2
+pillow==11.3.0

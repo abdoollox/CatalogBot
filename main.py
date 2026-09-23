@@ -33,6 +33,11 @@ import hpbot
 import hpchess
 import hpleave
 import hpkanal
+try:
+    import hpxat            # xat rasmi (Pillow kerak)
+except Exception as _xat_error:   # kutubxona yo'q bo'lsa bot baribir ishlasin
+    hpxat = None
+    logging.error("Xat rasmi moduli yuklanmadi: %s", _xat_error)
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -1949,6 +1954,101 @@ async def api_undo(request):
     return _cors(web.json_response({"ok": True, "movie_id": movie_key}))
 
 
+# --- XOGVARTSDAN MAKTUB RASMI ---
+# Ilovadagi "Xatni ulashish" shu yerga keladi. Rasm ismga qarab yasaladi va
+# ochiq manzilda turadi (Telegram Stories faqat ochiq URL ni oladi), lekin
+# manzilda ism emas, tasodifiy token bo'ladi.
+PUBLIC_BASE = "https://bot.tizimshunos.uz"
+_xat_vaqt = {}          # {uid: oxirgi so'rov} - daqiqada bir necha marta bosilmasin
+
+
+async def prepare_xat_share(user_id, lang, url):
+    """Chatga ulashish uchun tayyor xabar (shaxmat kartasi bilan bir xil usul)."""
+    matn = {"uz": "Menga Xogvartsdan maktub keldi!",
+            "ru": "Мне пришло письмо из Хогвартса!",
+            "en": "My Hogwarts letter has arrived!"}.get(lang, "Xogvartsdan maktub")
+    tugma = {"uz": "Menga ham maktub kelsin",
+             "ru": "Хочу своё письмо",
+             "en": "Get my own letter"}.get(lang, "Xogvartsga kirish")
+    result = {
+        "type": "photo", "id": "xat_%s" % int(time.time()),
+        "caption": matn,
+        "photo_url": url, "thumbnail_url": url,
+        "photo_width": 1080, "photo_height": 1920,
+        "reply_markup": {"inline_keyboard": [[{
+            "text": tugma,
+            "url": "https://t.me/%s/catalog?startapp=olam" % BOT_USERNAME}]]},
+    }
+    payload = {"user_id": int(user_id), "result": result,
+               "allow_user_chats": True, "allow_group_chats": True}
+    vaqt = aiohttp.ClientTimeout(total=10)
+    try:
+        async with aiohttp.ClientSession(timeout=vaqt) as s:
+            async with s.post(
+                    "https://api.telegram.org/bot%s/savePreparedInlineMessage" % TOKEN,
+                    json=payload) as r:
+                data = await r.json()
+        if data.get("ok"):
+            return data["result"]["id"]
+        logging.error("Xat uchun savePreparedInlineMessage: %s", data.get("description"))
+    except Exception as e:
+        logging.error("Xat xabarini tayyorlashda xato: %s", e)
+    return None
+
+
+async def api_xat(request):
+    """Xat rasmini yasaydi va manzilini qaytaradi."""
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+    if request.method != "POST":
+        return _cors(web.json_response({"ok": False, "error": "method"}, status=405))
+    if not hpxat:
+        return _cors(web.json_response({"ok": False, "error": "yoq"}, status=503))
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    user = verify_init_data(request.headers.get("X-Telegram-Init-Data", "")
+                            or str(body.get("initData", "")))
+    if not user:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    uid = int(user["id"])
+    hozir = time.time()
+    if hozir - _xat_vaqt.get(uid, 0) < 3:
+        return _cors(web.json_response({"ok": False, "error": "tez"}, status=429))
+    _xat_vaqt[uid] = hozir
+
+    lang = str(body.get("lang", "uz"))
+    try:
+        token = await asyncio.to_thread(hpxat.ensure, uid, user.get("first_name"), lang)
+    except Exception as e:
+        logging.error("Xat rasmini yasashda xato: %s", e)
+        return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
+
+    url = "%s/api/xat/%s.jpg" % (PUBLIC_BASE, token)
+    share_id = None
+    if uid > 0:          # sinov o'quvchisiga Telegram xabari tayyorlanmaydi
+        share_id = await prepare_xat_share(uid, lang, url)
+    return _cors(web.json_response({"ok": True, "url": url, "share_id": share_id}))
+
+
+async def api_xat_file(request):
+    """Yasalgan rasmni beradi (token bilan, ismsiz)."""
+    if not hpxat:
+        return web.Response(status=404, text="yoq")
+    token = request.match_info.get("token", "")
+    if not re.fullmatch(r"[0-9a-f]{20}", token):
+        return web.Response(status=404, text="yoq")
+    yol = hpxat.path_of(token)
+    if not os.path.exists(yol):
+        return web.Response(status=404, text="yoq")
+    return web.FileResponse(yol, headers={"Cache-Control": "public, max-age=604800",
+                                          "Access-Control-Allow-Origin": "*"})
+
+
 async def handle(request):
     return web.Response(text="Bot is alive!")
 
@@ -1964,6 +2064,8 @@ async def main():
     app.router.add_route('*', '/api/sabablar', api_sabablar)
     app.router.add_route('*', '/api/kanal', api_kanal)
     app.router.add_route('*', '/api/test/reset', api_test_reset)
+    app.router.add_route('*', '/api/xat', api_xat)
+    app.router.add_get('/api/xat/{token}.jpg', api_xat_file)
 
     # --- Xogvarts kubogi ---
     # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -
