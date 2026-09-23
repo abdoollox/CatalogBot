@@ -345,6 +345,20 @@ def _migrate(conn, users_json):
     # Kim shaxsiy xabar yoza oladi: NULL/'all' - hamma, 'house' - fakultetdoshlar, 'none' - hech kim.
     if "dm_privacy" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN dm_privacy TEXT")
+    # Gringotts hamyoni va Diagon xiyobonidagi xaridlar (onboarding).
+    # galleons - qoldiq; vault_at - xona qachon ochilgan (bir marta pul beriladi);
+    # pet - tanlangan uy hayvoni; wand_at - tayoqcha qachon sotib olingan
+    # (ikki marta pul yechilmasligi uchun); ticket_at - Hagrid biletni bergan vaqt.
+    if "galleons" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN galleons INTEGER NOT NULL DEFAULT 0")
+    if "vault_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN vault_at TEXT")
+    if "pet" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN pet TEXT")
+    if "wand_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN wand_at TEXT")
+    if "ticket_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN ticket_at TEXT")
 
     # Chat: javob, tahrir, o'chirish. `rev` - o'zgarish raqami: yangi xabar,
     # tahrir, o'chirish va reaksiya uni oshiradi; ilova "shu raqamdan keyin
@@ -2489,3 +2503,120 @@ async def test_reset(user_id):
             conn.close()
 
     await asyncio.to_thread(_do)
+
+
+# ---------------------------------------------------------------- Gringotts hamyoni
+
+# Onboarding iqtisodi. Asardagi narx: tayoqcha 7 galleon. Boshlang'ich pul eng
+# qimmat yo'ldan borganda ham (boyo'g'li 10 + tayoqcha 7) ortib qoladi.
+START_GALLEONS = 25
+WAND_PRICE = 7
+PET_PRICES = {"owl": 10, "cat": 8, "toad": 2, "rat": 1}
+
+
+def _wallet_row(conn, user_id):
+    return conn.execute(
+        "SELECT galleons, vault_at, pet, wand_at, ticket_at FROM users WHERE user_id=?",
+        (int(user_id),)).fetchone()
+
+
+def _wallet_out(row):
+    if not row:
+        return {"galleons": 0, "vault": False, "pet": None, "wand": False, "ticket": False}
+    return {
+        "galleons": int(row["galleons"] or 0),
+        "vault": bool(row["vault_at"]),
+        "pet": row["pet"],
+        "wand": bool(row["wand_at"]),
+        "ticket": bool(row["ticket_at"]),
+        "prices": {"wand": WAND_PRICE, "pets": PET_PRICES},
+    }
+
+
+async def wallet(user_id):
+    """Hamyon holati: qoldiq, xona ochilganmi, hayvon, tayoqcha, bilet."""
+    def _do():
+        conn = _connect()
+        try:
+            _touch_user(conn, user_id)
+            return _wallet_out(_wallet_row(conn, user_id))
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def open_vault(user_id):
+    """Gringottsdagi xonani ochadi - boshlang'ich pul BIR MARTA beriladi."""
+    def _do():
+        conn = _connect()
+        try:
+            _touch_user(conn, user_id)
+            row = _wallet_row(conn, user_id)
+            if row and row["vault_at"]:
+                return _wallet_out(row), False        # allaqachon ochilgan
+            conn.execute(
+                "UPDATE users SET galleons = galleons + ?, vault_at = ? WHERE user_id = ?",
+                (START_GALLEONS, _utc_iso(now_tk()), int(user_id)))
+            conn.commit()
+            return _wallet_out(_wallet_row(conn, user_id)), True
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def buy(user_id, item):
+    """Xarid: item = "wand" yoki hayvon nomi. (holat, xato) qaytaradi.
+
+    Xatolar: "yoq" (noma'lum narsa), "vault" (xona ochilmagan),
+    "pul" (yetmaydi), "bor" (allaqachon olingan).
+    """
+    def _do():
+        conn = _connect()
+        try:
+            _touch_user(conn, user_id)
+            row = _wallet_row(conn, user_id)
+            if not row or not row["vault_at"]:
+                return _wallet_out(row), "vault"
+
+            if item == "wand":
+                if row["wand_at"]:
+                    return _wallet_out(row), "bor"
+                narx, ustun, qiymat = WAND_PRICE, "wand_at", _utc_iso(now_tk())
+            elif item in PET_PRICES:
+                if row["pet"]:
+                    return _wallet_out(row), "bor"
+                narx, ustun, qiymat = PET_PRICES[item], "pet", item
+            else:
+                return _wallet_out(row), "yoq"
+
+            if int(row["galleons"] or 0) < narx:
+                return _wallet_out(row), "pul"
+
+            conn.execute(
+                "UPDATE users SET galleons = galleons - ?, " + ustun + " = ? WHERE user_id = ?",
+                (narx, qiymat, int(user_id)))
+            conn.commit()
+            return _wallet_out(_wallet_row(conn, user_id)), None
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def give_ticket(user_id):
+    """Hagrid biletni beradi (bepul). Xaridlar tugagan bo'lishi kerak."""
+    def _do():
+        conn = _connect()
+        try:
+            _touch_user(conn, user_id)
+            row = _wallet_row(conn, user_id)
+            if not row or not row["wand_at"]:
+                return _wallet_out(row), "tayoqcha"
+            if row["ticket_at"]:
+                return _wallet_out(row), None
+            conn.execute("UPDATE users SET ticket_at = ? WHERE user_id = ?",
+                         (_utc_iso(now_tk()), int(user_id)))
+            conn.commit()
+            return _wallet_out(_wallet_row(conn, user_id)), None
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)

@@ -2049,6 +2049,69 @@ async def api_xat_file(request):
                                           "Access-Control-Allow-Origin": "*"})
 
 
+# --- GRINGOTTS HAMYONI VA XIYOBONDAGI XARIDLAR ---
+# Onboarding qadamlari shu yerdan o'tadi: xona ochish (pul), uy hayvoni,
+# tayoqcha, bilet. Har qadam logga ham yoziladi (panel voronkasi uchun).
+_wallet_vaqt = {}
+
+
+async def api_wallet(request):
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+    if request.method != "POST":
+        return _cors(web.json_response({"ok": False, "error": "method"}, status=405))
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    user = verify_init_data(request.headers.get("X-Telegram-Init-Data", "")
+                            or str(body.get("initData", "")))
+    if not user:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    uid = int(user["id"])
+    amal = str(body.get("action", "get"))
+
+    if amal != "get":
+        hozir = time.time()
+        if hozir - _wallet_vaqt.get(uid, 0) < 1:
+            return _cors(web.json_response({"ok": False, "error": "tez"}, status=429))
+        _wallet_vaqt[uid] = hozir
+
+    try:
+        if user.get("first_name"):
+            await hpcup.touch_user(uid, user.get("first_name"), user.get("username"))
+
+        if amal == "get":
+            return _cors(web.json_response({"ok": True, "wallet": await hpcup.wallet(uid)}))
+
+        if amal == "vault":
+            holat, yangi = await hpcup.open_vault(uid)
+            if yangi and uid > 0:
+                await log_user_action(_WebUser(user), "onb_gringotts")
+            return _cors(web.json_response({"ok": True, "wallet": holat, "new": yangi}))
+
+        if amal == "buy":
+            item = str(body.get("item", ""))
+            holat, xato = await hpcup.buy(uid, item)
+            if not xato and uid > 0 and item in hpcup.PET_PRICES:
+                await log_user_action(_WebUser(user), "pet_" + item)
+            return _cors(web.json_response({"ok": not xato, "error": xato, "wallet": holat}))
+
+        if amal == "ticket":
+            holat, xato = await hpcup.give_ticket(uid)
+            if not xato and uid > 0:
+                await log_user_action(_WebUser(user), "onb_ticket")
+            return _cors(web.json_response({"ok": not xato, "error": xato, "wallet": holat}))
+    except Exception as e:
+        logging.error("Hamyon amalida xato (%s): %s", amal, e)
+        return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
+
+    return _cors(web.json_response({"ok": False, "error": "amal"}, status=400))
+
+
 async def handle(request):
     return web.Response(text="Bot is alive!")
 
@@ -2065,6 +2128,7 @@ async def main():
     app.router.add_route('*', '/api/kanal', api_kanal)
     app.router.add_route('*', '/api/test/reset', api_test_reset)
     app.router.add_route('*', '/api/xat', api_xat)
+    app.router.add_route('*', '/api/wallet', api_wallet)
     app.router.add_get('/api/xat/{token}.jpg', api_xat_file)
 
     # --- Xogvarts kubogi ---
