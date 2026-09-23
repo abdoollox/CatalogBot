@@ -31,6 +31,7 @@ import hpcup
 import hpbot
 import hpchess
 import hpleave
+import hpkanal
 from datetime import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -982,21 +983,25 @@ async def channel_status_changed(event: types.ChatMemberUpdated):
     new = event.new_chat_member.status
     was_in = old in ("member", "administrator", "creator")
     is_in = new in ("member", "administrator", "creator")
+    # Holati o'zgargan odam - `new_chat_member.user`. `from_user` esa amalni
+    # BAJARGAN kishi: admin kimnidir chiqarsa yoki qo'shsa, u admin bo'ladi va
+    # hodisa adminning nomiga yozilib qolardi.
+    member = event.new_chat_member.user
     if was_in and not is_in:
-        await log_user_action(event.from_user, "left")
+        await log_user_action(member, "left")
         # Nega ketganini so'raymiz (bir necha daqiqadan keyin, navbat bilan).
-        await hpleave.on_left(event.from_user)
+        await hpleave.on_left(member)
     elif is_in and not was_in:
-        await log_user_action(event.from_user, "subscribed")
+        await log_user_action(member, "subscribed")
         # So'rovdan keyin qaytgan bo'lsa - o'lchov uchun belgilab qo'yamiz.
-        await hpleave.mark_returned(event.from_user.id)
+        await hpleave.mark_returned(member.id)
 
         # Kutayotgan odam bo'lsa - oqimni O'ZIMIZ davom ettiramiz.
         # "Tasdiqlash" tugmasini bosish shart emas.
-        payload, prompt_id = take_pending(event.from_user.id)
+        payload, prompt_id = take_pending(member.id)
         if prompt_id or payload:
             try:
-                await after_subscribe(event.from_user, event.from_user.id,
+                await after_subscribe(member, member.id,
                                       payload, prompt_id)
             except Exception as e:
                 # Bot bilan suhbat boshlanmagan bo'lsa yozib bo'lmaydi -
@@ -1005,7 +1010,7 @@ async def channel_status_changed(event: types.ChatMemberUpdated):
         else:
             # Kutilayotgan ish yo'q (masalan, xotira yangilangan), lekin
             # odam kimdir taklif qilgan yangi foydalanuvchi bo'lishi mumkin.
-            await notify_inviter(event.from_user)
+            await notify_inviter(member)
 
 
 ALLOWED_ORIGIN = "https://abdoollox.github.io"
@@ -1137,6 +1142,31 @@ async def api_sabablar(request):
                               "labels": hpleave.BUTTONS["uz"]})
     resp.enable_compression()
     return _cors(resp)
+
+
+async def api_kanal(request):
+    """Kuzatuv paneli: kanal obunachilari Telegramning o'zidan (nazorat uchun).
+
+    Panel sonni loglardan hisoblaydi; bu yerdagi son faqat solishtirish uchun.
+    """
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+
+    got = request.headers.get("X-Dash-Token", "")
+    if not DASH_TOKEN or not hmac.compare_digest(got, DASH_TOKEN):
+        return _cors(web.json_response({"ok": False, "error": "bad_token"}, status=403))
+
+    son = None
+    try:
+        son = await hpkanal.hozir(bot, CHANNEL_ID)
+    except Exception as e:
+        logging.error("Kanal sonini olishda xato: %s", e)
+    try:
+        suratlar = await asyncio.to_thread(hpkanal.tarix)
+    except Exception as e:
+        logging.error("Kanal tarixini o'qishda xato: %s", e)
+        suratlar = []
+    return _cors(web.json_response({"ok": True, "hozir": son, "tarix": suratlar}))
 
 
 async def _cup_block(user_id):
@@ -1825,6 +1855,7 @@ async def main():
     app.router.add_route('*', '/api/undo', api_undo)
     app.router.add_route('*', '/api/loglar', api_loglar)
     app.router.add_route('*', '/api/sabablar', api_sabablar)
+    app.router.add_route('*', '/api/kanal', api_kanal)
 
     # --- Xogvarts kubogi ---
     # Baza va handlerlar. Kubok ishlamay qolsa ham bot ishlashda davom etsin -
@@ -1861,6 +1892,8 @@ async def main():
     # Karta rasmlari kubokka bog'liq emas - u ishlamasa ham ishga tushsin.
     await load_promo()
     asyncio.create_task(wide_watcher())
+    # Kanal soni - loglar to'g'ri tushayotganini tekshirish uchun
+    asyncio.create_task(hpkanal.kuzatuvchi(bot, CHANNEL_ID))
     # Panel keshini oldindan to'ldiramiz: birinchi so'rov 15 soniya kutmasin.
     if DASH_TOKEN:
         asyncio.create_task(sheets.read_csv())
