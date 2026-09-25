@@ -42,6 +42,7 @@ import re
 import time
 
 import aiohttp
+import types as _pytypes
 from aiohttp import web
 from aiogram import types
 from aiogram.filters import Command
@@ -50,6 +51,9 @@ from aiogram.exceptions import (TelegramBadRequest, TelegramForbiddenError,
 from aiogram.types import InputMediaAudio
 
 STORE = "/data/music.json"   # MUTLAQ yo'l: faqat /data konteynerdan tashqarida yashaydi
+# Mavzudagi har xabarning xom nusxasi (matn + audio ma'lumoti). Albomlar shundan
+# qayta hisoblanadi (rebuild) — qoidani o'zgartirsak guruhni qayta o'qish shart emas.
+RAW = "/data/music_raw.json"
 
 ORDER = ["hp1", "hp2", "hp3", "hp4", "hp5", "hp6", "hp7", "hp8"]
 ALBUMS = {
@@ -94,6 +98,7 @@ _last_send = {}              # user_id -> vaqt
 _report_task = None
 _scan_task = None
 _scan_errors = {}            # skanerda Telegram rad etgan sabablar -> soni
+_raw = []                    # [{mid, x: matn, a: audio|None}] mid bo'yicha tartibda
 _session = None
 _lock = None                 # asyncio.Lock — ishga tushganda yaratiladi
 
@@ -121,6 +126,56 @@ def _save():
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(_data, f, ensure_ascii=False, indent=1)
     os.replace(tmp, STORE)
+
+
+def load_raw():
+    global _raw
+    try:
+        with open(RAW, encoding="utf-8") as f:
+            _raw = json.load(f)
+    except FileNotFoundError:
+        _raw = []
+    except Exception as e:
+        logging.error("music_raw.json o'qilmadi: %s", e)
+        _raw = []
+
+
+def _save_raw():
+    tmp = RAW + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(_raw, f, ensure_ascii=False)
+    os.replace(tmp, RAW)
+
+
+def raw_item(mid, text, audio):
+    a = None
+    if audio is not None:
+        a = {"p": audio.performer, "t": audio.title, "f": audio.file_name, "d": audio.duration,
+             "s": audio.file_size, "m": audio.mime_type, "id": audio.file_id, "u": audio.file_unique_id}
+    return {"mid": mid, "x": (text or "")[:1500], "a": a}
+
+
+def _audio_obj(a):
+    return _pytypes.SimpleNamespace(performer=a.get("p"), title=a.get("t"), file_name=a.get("f"),
+                                 duration=a.get("d"), file_size=a.get("s"), mime_type=a.get("m"),
+                                 file_id=a.get("id"), file_unique_id=a.get("u"))
+
+
+def remember(item):
+    """Xom nusxani mid bo'yicha qo'shadi/yangilaydi."""
+    for i, x in enumerate(_raw):
+        if x["mid"] == item["mid"]:
+            _raw[i] = item
+            return
+    _raw.append(item)
+    _raw.sort(key=lambda x: x["mid"])
+
+
+def rebuild():
+    """Albomlarni xom nusxalardan boshidan hisoblaydi."""
+    _data["albums"], _data["cur"], _data["prev_n"] = {}, None, None
+    for it in _raw:
+        see(it["mid"], it.get("x") or "", _audio_obj(it["a"]) if it.get("a") else None)
 
 
 def tracks(album):
@@ -343,7 +398,15 @@ async def on_group_message(message: types.Message):
     if audio is None and not header_album(text) and not _CLEAR.search(text):
         return
     async with _lock:
-        album = see(message.message_id, text, audio)
+        item = raw_item(message.message_id, text, audio)
+        is_new = not _raw or item["mid"] > _raw[-1]["mid"]
+        remember(item)
+        _save_raw()
+        if is_new:
+            album = see(message.message_id, text, audio)
+        else:                     # tahrir yoki eski xabar — hammasini qayta hisoblaymiz
+            rebuild()
+            album = None
         _save()
     if audio is not None:
         logging.info("Musiqa: %s <- %s (%s)", album or "?", audio.file_name, message.message_id)
@@ -386,18 +449,23 @@ async def scan(chat, start, upto):
     inbox, note = await _inbox(bot)
     if not inbox:
         raise RuntimeError("hech bir admin bot bilan shaxsiy chat ochmagan (/start bosing)")
-    async with _lock:
-        _data["albums"], _data["cur"], _data["prev_n"] = {}, None, None
     topildi = 0
+    yigim = []
     for mid in range(start, upto):
         m = await _peek(bot, chat, mid, inbox)
         if m is not None:
-            async with _lock:
-                see(mid, m.text or m.caption or "", m.audio)
-                _save()
+            yigim.append(raw_item(mid, m.text or m.caption or "", m.audio))
             if m.audio:
                 topildi += 1
         await asyncio.sleep(SCAN_PACE)
+    async with _lock:
+        global _raw
+        # skanerdan keyin jonli kelganlar ham saqlanib qolsin
+        keyin = [x for x in _raw if x["mid"] >= upto]
+        _raw = sorted(yigim + keyin, key=lambda x: x["mid"])
+        _save_raw()
+        rebuild()
+        _save()
     try:
         await bot.delete_message(inbox, note)
     except Exception:
@@ -422,6 +490,15 @@ async def _scan_job(chat, start, upto):
             pass
     finally:
         _scan_task = None
+
+
+def _auto_scan():
+    global _scan_task
+    if _scan_task and not _scan_task.done():
+        return
+    th = _data.get("thread")
+    logging.info("Soundtrack: xom nusxa yo'q — mavzuni o'zim qayta o'qiyman")
+    _scan_task = asyncio.create_task(_scan_job(_data["group"], (th or 0) + 1, _data["up_to"]))
 
 
 def _is_admin(message):
@@ -449,7 +526,7 @@ async def on_music_command(message: types.Message):
         return
     thread = message.message_thread_id if message.is_topic_message else None
     async with _lock:
-        _data.update({"group": message.chat.id, "thread": thread})
+        _data.update({"group": message.chat.id, "thread": thread, "up_to": message.message_id})
         _save()
     start = (thread or 0) + 1
     upto = message.message_id
@@ -741,6 +818,17 @@ def register(dp, bot, app, cfg):
     _cfg.setdefault("file_base", "https://api.telegram.org/file/bot%s/" % cfg["token"])
     _lock = asyncio.Lock()
     load()
+    load_raw()
+    if _raw:
+        rebuild()                 # qoida o'zgargan bo'lsa ham albomlar yangi qoida bilan
+        _save()
+    elif _data.get("group"):
+        if not _data.get("up_to"):
+            # eski yozuvda chegara yo'q: ma'lum oxirgi trekdan keyin yana 40 ta xabar
+            mids = [x["mid"] for lst in _data["albums"].values() for x in lst]
+            _data["up_to"] = (max(mids) + 40) if mids else None
+        if _data.get("up_to"):
+            asyncio.get_event_loop().call_later(30, _auto_scan)
     dp.message.register(on_music_command, Command("musiqa"))
     dp.message.register(on_group_message, _in_topic)
     app.router.add_route("*", "/api/music", api_list)
