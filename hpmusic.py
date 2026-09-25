@@ -210,13 +210,16 @@ def title_album(text):
 
 
 def header_album(text):
-    """Sarlavha xabari bo'lsa albomni qaytaradi. Mundarija (bir nechta albom) — None."""
-    found = []
+    """Sarlavha xabari bo'lsa albomni qaytaradi — FAQAT birinchi qatoridan.
+
+    Guruhdagi sarlavha: "🎼 Harry Potter and the Philosopher's Stone / Composer / 1. Prologue / ...".
+    Keyingi qatorlardagi "1. Prologue", "2. ..." ni film raqami deb o'qib bo'lmaydi.
+    Mundarijaning birinchi qatori ("FILM SOUNDTRACKS") albom emas — e'tiborga olinmaydi.
+    """
     for line in (text or "").splitlines():
-        a = title_album(line)
-        if a and a not in found:
-            found.append(a)
-    return found[0] if len(found) == 1 else None
+        if line.strip():
+            return title_album(line)
+    return None
 
 
 def composer_of(audio):
