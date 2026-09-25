@@ -33,6 +33,7 @@ import hpbot
 import hpchess
 import hpleave
 import hpkanal
+import hpmusic
 try:
     import hpxat            # xat rasmi (Pillow kerak)
 except Exception as _xat_error:   # kutubxona yo'q bo'lsa bot baribir ishlasin
@@ -2163,6 +2164,23 @@ async def main():
     except Exception as leave_error:
         logging.error("Chiqish so'rovi ishga tushmadi: %s", leave_error)
 
+    # --- Soundtrack kutubxonasi ---
+    # Alohida try: musiqa ishlamasa ham filmlar tarqatilaversin.
+    try:
+        async def _music_log(user, payload):
+            await log_user_action(_WebUser(user), payload)
+        hpmusic.register(dp, bot, app, {
+            "token": TOKEN,
+            "db_channel_id": DB_CHANNEL_ID,
+            "verify_init_data": verify_init_data,
+            "cors": _cors,
+            "is_subscribed": is_subscribed,
+            "tg_chat_id": tg_chat_id,
+            "log": _music_log,
+        })
+    except Exception as music_error:
+        logging.error("Soundtrack ishga tushmadi: %s", music_error)
+
     # Karta rasmlari kubokka bog'liq emas - u ishlamasa ham ishga tushsin.
     await load_promo()
     asyncio.create_task(wide_watcher())
@@ -2197,7 +2215,9 @@ async def main():
             # ham xuddi shunday - sukut bo'yicha yuborilmaydi.
             allowed_updates=["message", "callback_query", "my_chat_member",
                              "chat_member", "inline_query",
-                             "chosen_inline_result"])
+                             "chosen_inline_result",
+                             # yopiq kanalga tashlangan soundtrack fayllari (hpmusic)
+                             "channel_post"])
     except Exception as e:
         logging.error(f"BOT KRITIK XATOGA UCHRADI: {e}")
         raise e
