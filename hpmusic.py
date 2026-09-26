@@ -49,7 +49,6 @@ from aiogram import types
 from aiogram.filters import Command
 from aiogram.exceptions import (TelegramBadRequest, TelegramForbiddenError,
                                 TelegramNetworkError, TelegramRetryAfter)
-from aiogram.types import InputMediaAudio
 
 STORE = "/data/music.json"   # MUTLAQ yo'l: faqat /data konteynerdan tashqarida yashaydi
 # Mavzudagi har xabarning xom nusxasi (matn + audio ma'lumoti). Albomlar shundan
@@ -84,6 +83,7 @@ TITLE_WORDS = [
 KEY_TTL = 12 * 3600          # ilovadagi tinglash kaliti shuncha amal qiladi
 PATH_TTL = 50 * 60           # Telegram fayl manzili ~1 soat yashaydi
 SEND_GAP = 4                 # bir odam Telegramga yuborish orasidagi soniya
+SEND_PACE = 0.5              # albom treklari orasidagi pauza (bitta chatga ~1 xabar/s)
 REPORT_DELAY = 8             # oxirgi fayldan keyin hisobot kutish
 SCAN_PACE = 0.35             # shaxsiy chatga nusxa oralig'i
 NET_TRIES = 6                # tarmoq uzilsa shuncha qayta urinish
@@ -175,6 +175,7 @@ def remember(item):
 def rebuild():
     """Albomlarni xom nusxalardan boshidan hisoblaydi."""
     _data["albums"], _data["cur"], _data["prev_n"] = {}, None, None
+    _data["heads"], _data["hmid"] = {}, None
     for it in _raw:
         see(it["mid"], it.get("x") or "", _audio_obj(it["a"]) if it.get("a") else None)
 
@@ -298,6 +299,10 @@ def place(message_id, audio):
     if not cur:
         return None
     _data["cur"], _data["prev_n"] = cur, n
+    # albomning birinchi treki: undan oldingi sarlavha xabari — muqova manbasi
+    hm = _data.get("hmid")
+    if hm and hm[0] == cur:
+        _data.setdefault("heads", {}).setdefault(cur, hm[1])
     _drop(audio.file_unique_id)
     _data["albums"].setdefault(cur, []).append({
         "mid": message_id,
@@ -324,6 +329,7 @@ def see(message_id, text, audio):
         album = header_album(text)
         if album:
             _data["cur"], _data["prev_n"] = album, None
+            _data["hmid"] = [album, message_id]
     if audio is not None:
         return place(message_id, audio)
     return None
@@ -357,6 +363,8 @@ async def _report_later():
     try:
         await asyncio.sleep(REPORT_DELAY)
         await _say("\U0001f3b5 Soundtrack yangilandi:\n\n" + summary_text())
+        if _missing_covers():
+            _start_covers()
     except asyncio.CancelledError:
         pass
     except Exception as e:
@@ -434,12 +442,12 @@ async def _peek(bot, chat, mid, inbox):
     return m
 
 
-async def _inbox(bot):
+async def _inbox(bot, note=None):
     """Nusxalar boradigan admin chati: bot yoza oladigan birinchi admin."""
     for uid in sorted(_cfg.get("admin_ids", ())):
         try:
-            m = await _tg(bot.send_message, uid, "\U0001f3b5 Soundtrack mavzusini o'qiyapman — "
-                          "bu yerda bir lahza xabarlar ko'rinib o'chadi.", disable_notification=True)
+            m = await _tg(bot.send_message, uid, note or ("\U0001f3b5 Soundtrack mavzusini o'qiyapman — "
+                          "bu yerda bir lahza xabarlar ko'rinib o'chadi."), disable_notification=True)
             return uid, m.message_id
         except (TelegramBadRequest, TelegramForbiddenError):
             continue
@@ -481,6 +489,7 @@ async def _scan_job(chat, start, upto):
     global _scan_task
     try:
         n = await scan(chat, start, upto)
+        _start_covers()
         joy = sum(len(v) for v in _data["albums"].values())
         izoh = "\n".join("  %s — %d" % (k, v) for k, v in sorted(_scan_errors.items(), key=lambda x: -x[1])[:4])
         logging.info("Musiqa skaneri: %d ta audio, %d joylandi, rad etilgan: %s", n, joy, _scan_errors)
@@ -517,6 +526,10 @@ async def on_music_command(message: types.Message):
     global _scan_task
     if not _is_admin(message):
         return
+    if "muqova" in (message.text or "").lower():
+        _start_covers(force=True)
+        await message.reply("\U0001f5bc Albom muqovalarini qayta olyapman.")
+        return
     if message.chat.type == "private":
         g = _data.get("group")
         await message.answer(("Guruh: %s, mavzu: %s\n\n%s" % (g, _data.get("thread"), summary_text())) if g else
@@ -538,6 +551,106 @@ async def on_music_command(message: types.Message):
     await message.reply("\U0001f50e Soundtrack mavzusini o'qiyapman (~%d daq). Guruhga hech narsa "
                         "yozilmaydi; bot bilan shaxsiy chatingizda xabarlar bir lahza ko'rinib o'chadi." % daq)
     _scan_task = asyncio.create_task(_scan_job(message.chat.id, start, upto))
+
+
+# --- ALBOM MUQOVALARI ---
+# Guruhdagi albom sarlavhasi (rasm + izoh) rasmidan; rasm bo'lmasa birinchi
+# trek faylining ichidagi muqovadan. Serverda saqlanadi, ilova
+# /api/music/cover/<albom>.jpg dan oladi. Yangi albom qo'shilsa o'zi olinadi.
+
+COVER_DIR = "/data/ost"
+_cover_task = None
+
+
+def cover_path(album):
+    return os.path.join(COVER_DIR, album + ".jpg")
+
+
+def _best_photo(sizes, want=640):
+    """Rasmning ~640px li o'lchami (katta bo'lsa ham, kichigi bo'lsa ham eng yaqini)."""
+    if not sizes:
+        return None
+    big = [p for p in sizes if min(p.width, p.height) >= want]
+    return (min(big, key=lambda p: p.width) if big else max(sizes, key=lambda p: p.width)).file_id
+
+
+def _missing_covers():
+    return [a for a in ORDER if tracks(a) and not os.path.exists(cover_path(a))]
+
+
+async def fetch_covers(force=False):
+    """Muqovasi yo'q albomlar uchun rasm oladi. Olinganlar sonini qaytaradi."""
+    bot = _cfg["bot"]
+    todo = [a for a in ORDER if tracks(a)] if force else _missing_covers()
+    if not todo or not _data.get("group"):
+        return 0
+    inbox, note = await _inbox(bot, "\U0001f5bc Albom muqovalarini olyapman — bu yerda bir lahza "
+                               "xabarlar ko'rinib o'chadi.")
+    if not inbox:
+        return 0
+    os.makedirs(COVER_DIR, exist_ok=True)
+    olindi = 0
+    for album in todo:
+        try:
+            fid = None
+            head = (_data.get("heads") or {}).get(album)
+            if head:
+                m = await _peek(bot, _data["group"], head, inbox)
+                if m is not None and getattr(m, "photo", None):
+                    fid = _best_photo(m.photo)
+            if not fid:
+                m = await _peek(bot, _data["group"], tracks(album)[0]["mid"], inbox)
+                th = getattr(m.audio, "thumbnail", None) if m is not None and m.audio else None
+                if th:
+                    fid = th.file_id
+            if not fid:
+                logging.warning("Soundtrack: %s muqovasi topilmadi", album)
+                continue
+            tmp = cover_path(album) + ".tmp"
+            await _tg(bot.download, fid, destination=tmp)
+            os.replace(tmp, cover_path(album))
+            olindi += 1
+        except Exception as e:
+            logging.error("Soundtrack: %s muqovasi olinmadi: %s", album, e)
+        await asyncio.sleep(SCAN_PACE)
+    try:
+        await bot.delete_message(inbox, note)
+    except Exception:
+        pass
+    logging.info("Soundtrack: %d ta muqova olindi", olindi)
+    return olindi
+
+
+async def _cover_job(force=False):
+    global _cover_task
+    try:
+        await fetch_covers(force)
+    except Exception as e:
+        logging.error("Soundtrack muqovalari: %s", e)
+    finally:
+        _cover_task = None
+
+
+def _start_covers(force=False):
+    global _cover_task
+    if _cover_task and not _cover_task.done():
+        return
+    _cover_task = asyncio.create_task(_cover_job(force))
+
+
+def _cover_ver(album):
+    try:
+        return int(os.path.getmtime(cover_path(album)))
+    except OSError:
+        return None
+
+
+async def api_cover(request):
+    album = request.match_info.get("album", "")
+    if album not in ALBUMS or not os.path.exists(cover_path(album)):
+        return web.Response(status=404)
+    return web.FileResponse(cover_path(album), headers={
+        "Cache-Control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*"})
 
 
 # --- ILOVA UCHUN KALIT ---
@@ -783,6 +896,7 @@ def _public_list(uid=None, mine=frozenset()):
         out[key] = {
             "year": ALBUMS[key]["year"],
             "composer": ALBUMS[key]["composer"],
+            "cv": _cover_ver(key),
             "tracks": [{"t": x["t"], "d": x["d"], "big": x["s"] > BOT_API_LIMIT,
                         "l": _shown(x["fuid"], uid, x["fuid"] in mine),
                         "me": x["fuid"] in mine} for x in lst],
@@ -900,28 +1014,39 @@ async def api_send(request):
     if await _cfg["is_subscribed"](chat) is False:
         return cors(web.json_response({"ok": False, "error": "not_subscribed"}))
 
+    if _sending.get(uid):
+        return cors(web.json_response({"ok": False, "error": "slow"}))
     bot = _cfg["bot"]
+    # Fayl raqami (file_id) bilan, har trek ALOHIDA xabar (guruhlanmaydi), filmlar kabi himoyalangan.
+    # Birinchisini shu yerda yuboramiz (bot bloklangan bo'lsa darhol bilinadi), qolganlari orqada.
+    items = [x for x in lst if x["mid"] in mids]
     try:
-        # fayl raqami (file_id) bilan: guruhda "nusxalashni taqiqlash" yoqilsa ham ishlaydi.
-        # Albom 10 talik to'plamlarda (media group) — chatda bitta blok bo'lib turadi.
-        items = [x for x in lst if x["mid"] in mids]
-        if len(items) == 1:
-            await _tg(bot.send_audio, chat, items[0]["fid"], protect_content=True)
-        else:
-            for i in range(0, len(items), 10):
-                part = items[i:i + 10]
-                if len(part) == 1:
-                    await _tg(bot.send_audio, chat, part[0]["fid"], protect_content=True)
-                else:
-                    await _tg(bot.send_media_group, chat, [InputMediaAudio(media=x["fid"]) for x in part],
-                              protect_content=True)
+        await _tg(bot.send_audio, chat, items[0]["fid"], protect_content=True)
     except Exception as e:
         logging.error("Musiqa yuborilmadi (%s): %s", album, e)
         return cors(web.json_response({"ok": False, "error": "send_failed"}))
+    if len(items) > 1:
+        _sending[uid] = True
+        asyncio.create_task(_send_rest(uid, chat, album, items[1:]))
 
     if uid > 0:
         await _cfg["log"](user, "music_%s%s" % (album, "_%d" % n if n else ""))
     return cors(web.json_response({"ok": True, "count": len(mids)}))
+
+
+_sending = {}                # user_id -> albom hali yuborilmoqda
+
+
+async def _send_rest(uid, chat, album, items):
+    bot = _cfg["bot"]
+    try:
+        for x in items:
+            await asyncio.sleep(SEND_PACE)
+            await _tg(bot.send_audio, chat, x["fid"], protect_content=True)
+    except Exception as e:
+        logging.error("Albom oxirigacha yuborilmadi (%s -> %s): %s", album, chat, e)
+    finally:
+        _sending.pop(uid, None)
 
 
 # --- ULASH ---
@@ -956,4 +1081,7 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/music/send", api_send)
     app.router.add_route("*", "/api/music/like", api_like)
     app.router.add_get("/api/music/a/{album}/{n}", api_stream)
+    app.router.add_get("/api/music/cover/{album}.jpg", api_cover)
+    if _raw and _data.get("group") and _missing_covers():
+        asyncio.get_event_loop().call_later(40, _start_covers)
     logging.info("Soundtrack: %d ta albom tayyor", len(_public_list()))
