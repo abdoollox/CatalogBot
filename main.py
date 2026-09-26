@@ -2163,6 +2163,8 @@ async def main():
             "is_subscribed": is_subscribed,
             "tg_chat_id": tg_chat_id,
             "log": _music_log,
+            "user_lang": user_lang,
+            "brand": lambda lang: T(lang)["brand"],
         })
     except Exception as music_error:
         logging.error("Soundtrack ishga tushmadi: %s", music_error)

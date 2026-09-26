@@ -47,6 +47,8 @@ import types as _pytypes
 from aiohttp import web
 from aiogram import types
 from aiogram.filters import Command
+import emoji
+import catalog
 from aiogram.exceptions import (TelegramBadRequest, TelegramForbiddenError,
                                 TelegramNetworkError, TelegramRetryAfter)
 
@@ -1019,15 +1021,21 @@ async def api_send(request):
     bot = _cfg["bot"]
     # Fayl raqami (file_id) bilan, har trek ALOHIDA xabar (guruhlanmaydi), filmlar kabi himoyalangan.
     # Birinchisini shu yerda yuboramiz (bot bloklangan bo'lsa darhol bilinadi), qolganlari orqada.
-    items = [x for x in lst if x["mid"] in mids]
+    idx = [i for i, x in enumerate(lst) if x["mid"] in mids]
+    lang = str(body.get("lang") or "")
+    if lang not in CAP and _cfg.get("user_lang"):
+        try:
+            lang = await _cfg["user_lang"](chat) or "uz"
+        except Exception:
+            lang = "uz"
     try:
-        await _tg(bot.send_audio, chat, items[0]["fid"], protect_content=True)
+        await send_track(chat, album, idx[0], lang)
     except Exception as e:
         logging.error("Musiqa yuborilmadi (%s): %s", album, e)
         return cors(web.json_response({"ok": False, "error": "send_failed"}))
-    if len(items) > 1:
+    if len(idx) > 1:
         _sending[uid] = True
-        asyncio.create_task(_send_rest(uid, chat, album, items[1:]))
+        asyncio.create_task(_send_rest(uid, chat, album, idx[1:], lang))
 
     if uid > 0:
         await _cfg["log"](user, "music_%s%s" % (album, "_%d" % n if n else ""))
@@ -1036,13 +1044,79 @@ async def api_send(request):
 
 _sending = {}                # user_id -> albom hali yuborilmoqda
 
+# Trek ostidagi yozuv (film kartasi uslubida). Custom emoji faqat bor belgilar
+# uchun (yil, vaqt, tasdiq); musiqa belgisi to'plamda yo'q — oddiy emoji.
+CAP = {
+    "uz": {"kick": "Filmning asl musiqasi", "trek": "Trek", "komp": "Kompozitor", "yil": "Yil",
+           "vaqt": "Davomiyligi", "like": "Yoqdi"},
+    "ru": {"kick": "Оригинальный саундтрек", "trek": "Трек", "komp": "Композитор", "yil": "Год",
+           "vaqt": "Длительность", "like": "Нравится"},
+    "en": {"kick": "Original motion picture soundtrack", "trek": "Track", "komp": "Composer",
+           "yil": "Year", "vaqt": "Duration", "like": "Likes"},
+}
+COMPOSER_NAME = {
+    "John Williams": {"uz": "Jon Uilyams", "ru": "Джон Уильямс"},
+    "Patrick Doyle": {"uz": "Patrik Doyl", "ru": "Патрик Дойл"},
+    "Nicholas Hooper": {"uz": "Nikolas Xuper", "ru": "Николас Хупер"},
+    "Alexandre Desplat": {"uz": "Aleksandr Despla", "ru": "Александр Деспла"},
+}
+APP_LINK = "https://t.me/garripotterkinobot/catalog?startapp=ost_%s"
 
-async def _send_rest(uid, chat, album, items):
-    bot = _cfg["bot"]
+
+def album_title(album, lang):
+    """"Garri Potter va Hikmatlar Toshi" — katalogdagi film nomidan (raqam va teglarsiz)."""
     try:
-        for x in items:
+        cap = catalog.FILMS[ALBUMS[album]["film"]][lang]["caption"]
+    except KeyError:
+        return album
+    cap = re.sub(r"<[^>]+>", "", cap)
+    return re.sub(r"^\s*\d+\.\s*", "", cap).strip()
+
+
+def track_caption(album, i, lang):
+    """i — 0 dan boshlanadigan trek tartibi."""
+    lang = lang if lang in CAP else "uz"
+    c, lst = CAP[lang], tracks(album)
+    tr = lst[i]
+    comp = ALBUMS[album]["composer"]
+    comp = COMPOSER_NAME.get(comp, {}).get(lang, comp)
+    esc = lambda x: x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    lines = [
+        "<b>%s</b>" % esc(album_title(album, lang)),
+        "<i>%s</i>" % c["kick"],
+        "— — — — — — — — — —",
+        "\U0001f3bc %s: %d / %d" % (c["trek"], i + 1, len(lst)),
+        "\U0001f464 %s: %s" % (c["komp"], esc(comp)),
+        "%s %s: %s" % (emoji.tag("yil"), c["yil"], ALBUMS[album]["year"]),
+    ]
+    if tr["d"]:
+        lines.append("%s %s: %s" % (emoji.tag("vaqt"), c["vaqt"], _fmt_dur(tr["d"])))
+    likes = _likes.get(tr["fuid"], 0)
+    if likes:
+        lines.append("\u2764\ufe0f %s: %d" % (c["like"], likes))
+    brand = _cfg.get("brand", lambda l: "GARRI POTTER KOLLEKSIYA")(lang)
+    lines += ["", '%s <b><a href="%s">%s</a></b>' % (emoji.tag("tasdiq"), APP_LINK % album, brand)]
+    return "\n".join(lines)
+
+
+async def send_track(chat, album, i, lang):
+    """Bitta trekni yozuvi bilan yuboradi. Custom emoji rad etilsa — oddiy belgilar bilan."""
+    bot = _cfg["bot"]
+    cap = track_caption(album, i, lang)
+    fid = tracks(album)[i]["fid"]
+    try:
+        return await _tg(bot.send_audio, chat, fid, caption=cap, parse_mode="HTML", protect_content=True)
+    except TelegramBadRequest as e:
+        logging.warning("Trek yozuvi custom emoji bilan o'tmadi (%s): %s", chat, e)
+        return await _tg(bot.send_audio, chat, fid, caption=emoji.strip_tags(cap), parse_mode="HTML",
+                         protect_content=True)
+
+
+async def _send_rest(uid, chat, album, idx, lang):
+    try:
+        for i in idx:
             await asyncio.sleep(SEND_PACE)
-            await _tg(bot.send_audio, chat, x["fid"], protect_content=True)
+            await send_track(chat, album, i, lang)
     except Exception as e:
         logging.error("Albom oxirigacha yuborilmadi (%s -> %s): %s", album, chat, e)
     finally:
