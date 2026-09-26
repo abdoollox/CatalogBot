@@ -1029,7 +1029,7 @@ async def api_send(request):
         except Exception:
             lang = "uz"
     try:
-        await send_track(chat, album, idx[0], lang)
+        await send_track(chat, album, idx[0], lang, caption=len(idx) == 1)
     except Exception as e:
         logging.error("Musiqa yuborilmadi (%s): %s", album, e)
         return cors(web.json_response({"ok": False, "error": "send_failed"}))
@@ -1099,11 +1099,15 @@ def track_caption(album, i, lang):
     return "\n".join(lines)
 
 
-async def send_track(chat, album, i, lang):
-    """Bitta trekni yozuvi bilan yuboradi. Custom emoji rad etilsa — oddiy belgilar bilan."""
+async def send_track(chat, album, i, lang, caption=True):
+    """Trekni yuboradi. Yozuv faqat BITTA trek so'ralganda (foydalanuvchi qarori:
+    butun albom yozuvsiz keladi — 20 ta bir xil matn chatni to'ldirib yuboradi).
+    Custom emoji rad etilsa — oddiy belgilar bilan."""
     bot = _cfg["bot"]
-    cap = track_caption(album, i, lang)
     fid = tracks(album)[i]["fid"]
+    if not caption:
+        return await _tg(bot.send_audio, chat, fid, protect_content=True)
+    cap = track_caption(album, i, lang)
     try:
         return await _tg(bot.send_audio, chat, fid, caption=cap, parse_mode="HTML", protect_content=True)
     except TelegramBadRequest as e:
@@ -1116,7 +1120,7 @@ async def _send_rest(uid, chat, album, idx, lang):
     try:
         for i in idx:
             await asyncio.sleep(SEND_PACE)
-            await send_track(chat, album, i, lang)
+            await send_track(chat, album, i, lang, caption=False)
     except Exception as e:
         logging.error("Albom oxirigacha yuborilmadi (%s -> %s): %s", album, chat, e)
     finally:
