@@ -39,6 +39,7 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import time
 
 import aiohttp
@@ -709,9 +710,71 @@ async def api_stream(request):
         up.release()
 
 
+# --- LIKE'LAR ---
+# Asosiy bazada (hp.db — har kungi zaxiraga tushadi). Trek fayl raqami (fuid)
+# bo'yicha: albomlar qayta hisoblansa ham like'lar o'z trekida qoladi.
+# Umumiy son faqat HAQIQIY odamlardan (user_id > 0); sinov o'quvchisi
+# o'z like'ini ko'radi, lekin u hech kimning soniga qo'shilmaydi.
+
+DB_PATH = os.getenv("HP_DB_PATH", "/data/hp.db")
+LIKE_LIMIT = (30, 60)        # bir odam 60 soniyada 30 tadan ortiq bosa olmaydi
+_likes = {}                  # fuid -> son
+_like_hits = {}              # user_id -> [vaqtlar]
+
+
+def _db():
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.execute("PRAGMA busy_timeout = 5000")
+    return conn
+
+
+def _init_likes():
+    conn = _db()
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS music_likes ("
+                     "fuid TEXT NOT NULL, user_id INTEGER NOT NULL, created_at INTEGER NOT NULL, "
+                     "PRIMARY KEY (fuid, user_id))")
+        conn.commit()
+        rows = conn.execute("SELECT fuid, COUNT(*) FROM music_likes WHERE user_id > 0 "
+                            "GROUP BY fuid").fetchall()
+    finally:
+        conn.close()
+    _likes.clear()
+    _likes.update({f: n for f, n in rows})
+
+
+def _my_likes(uid):
+    conn = _db()
+    try:
+        return {r[0] for r in conn.execute("SELECT fuid FROM music_likes WHERE user_id = ?", (uid,))}
+    finally:
+        conn.close()
+
+
+def _set_like(uid, fuid, on):
+    """Like qo'yadi/oladi. O'zgargan bo'lsa True."""
+    conn = _db()
+    try:
+        if on:
+            cur = conn.execute("INSERT OR IGNORE INTO music_likes (fuid, user_id, created_at) "
+                               "VALUES (?, ?, ?)", (fuid, uid, int(time.time())))
+        else:
+            cur = conn.execute("DELETE FROM music_likes WHERE fuid = ? AND user_id = ?", (fuid, uid))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def _shown(fuid, uid, mine):
+    """Ko'rinadigan son: sinov o'quvchisi o'z like'ini ham ko'rsin."""
+    n = _likes.get(fuid, 0)
+    return n + 1 if (mine and uid is not None and uid < 0) else n
+
+
 # --- RO'YXAT VA TELEGRAMGA YUBORISH ---
 
-def _public_list():
+def _public_list(uid=None, mine=frozenset()):
     out = {}
     for key in ORDER:
         lst = tracks(key)
@@ -720,7 +783,9 @@ def _public_list():
         out[key] = {
             "year": ALBUMS[key]["year"],
             "composer": ALBUMS[key]["composer"],
-            "tracks": [{"t": x["t"], "d": x["d"], "big": x["s"] > BOT_API_LIMIT} for x in lst],
+            "tracks": [{"t": x["t"], "d": x["d"], "big": x["s"] > BOT_API_LIMIT,
+                        "l": _shown(x["fuid"], uid, x["fuid"] in mine),
+                        "me": x["fuid"] in mine} for x in lst],
         }
     return out
 
@@ -730,10 +795,59 @@ async def api_list(request):
     if request.method == "OPTIONS":
         return cors(web.Response(status=204))
     user = _cfg["verify_init_data"](request.headers.get("X-Telegram-Init-Data", ""))
-    body = {"ok": True, "albums": _public_list(), "price": 0}
+    uid, mine = None, frozenset()
     if user:
-        body["key"] = make_key(user["id"])
+        uid = int(user["id"])
+        try:
+            mine = await asyncio.to_thread(_my_likes, uid)
+        except Exception as e:
+            logging.error("Musiqa like'lari o'qilmadi: %s", e)
+    body = {"ok": True, "albums": _public_list(uid, mine), "price": 0}
+    if user:
+        body["key"] = make_key(uid)
     return cors(web.json_response(body))
+
+
+async def api_like(request):
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+    if request.method != "POST":
+        return cors(web.json_response({"ok": False, "error": "method"}, status=405))
+    try:
+        body = await request.json()
+    except Exception:
+        return cors(web.json_response({"ok": False, "error": "bad_json"}, status=400))
+    user = _cfg["verify_init_data"](request.headers.get("X-Telegram-Init-Data", "")
+                                    or str(body.get("initData", "")))
+    if not user:
+        return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+    uid = int(user["id"])
+    lst = tracks(str(body.get("album", "")))
+    try:
+        n = int(body.get("track"))
+    except (TypeError, ValueError):
+        n = 0
+    if not (1 <= n <= len(lst)):
+        return cors(web.json_response({"ok": False, "error": "unknown"}, status=404))
+    fuid = lst[n - 1]["fuid"]
+
+    now = time.time()
+    hits = [t for t in _like_hits.get(uid, []) if now - t < LIKE_LIMIT[1]]
+    if len(hits) >= LIKE_LIMIT[0]:
+        return cors(web.json_response({"ok": False, "error": "slow"}))
+    hits.append(now)
+    _like_hits[uid] = hits
+
+    on = bool(body.get("on"))
+    try:
+        changed = await asyncio.to_thread(_set_like, uid, fuid, on)
+    except Exception as e:
+        logging.error("Musiqa like'i yozilmadi: %s", e)
+        return cors(web.json_response({"ok": False, "error": "server"}, status=500))
+    if changed and uid > 0:
+        _likes[fuid] = max(0, _likes.get(fuid, 0) + (1 if on else -1))
+    return cors(web.json_response({"ok": True, "me": on, "l": _shown(fuid, uid, on)}))
 
 
 async def api_send(request):
@@ -822,6 +936,10 @@ def register(dp, bot, app, cfg):
     _lock = asyncio.Lock()
     load()
     load_raw()
+    try:
+        _init_likes()
+    except Exception as e:
+        logging.error("Musiqa like jadvali ochilmadi: %s", e)
     if _raw:
         rebuild()                 # qoida o'zgargan bo'lsa ham albomlar yangi qoida bilan
         _save()
@@ -836,5 +954,6 @@ def register(dp, bot, app, cfg):
     dp.message.register(on_group_message, _in_topic)
     app.router.add_route("*", "/api/music", api_list)
     app.router.add_route("*", "/api/music/send", api_send)
+    app.router.add_route("*", "/api/music/like", api_like)
     app.router.add_get("/api/music/a/{album}/{n}", api_stream)
     logging.info("Soundtrack: %d ta albom tayyor", len(_public_list()))
