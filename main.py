@@ -2165,6 +2165,8 @@ async def main():
             "log": _music_log,
             "user_lang": user_lang,
             "brand": lambda lang: T(lang)["brand"],
+            "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(
+                req.headers.get("X-Dash-Token", ""), DASH_TOKEN),
         })
     except Exception as music_error:
         logging.error("Soundtrack ishga tushmadi: %s", music_error)

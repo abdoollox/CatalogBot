@@ -750,6 +750,10 @@ async def api_stream(request):
     except ValueError:
         return web.Response(status=416, headers={"Content-Range": "bytes */%d" % size})
 
+    # Fayl boshidan so'ralsa — tinglash boshlandi (o'rtasidan = o'tkazib yuborish, sanalmaydi)
+    if request.method == "GET" and (rng is None or rng[0] == 0):
+        await note_play(uid, tr["fuid"])
+
     base_headers = {
         "Content-Type": tr.get("mime") or "audio/mpeg",
         "Accept-Ranges": "bytes",
@@ -849,6 +853,10 @@ def _init_likes():
         conn.execute("CREATE TABLE IF NOT EXISTS music_likes ("
                      "fuid TEXT NOT NULL, user_id INTEGER NOT NULL, created_at INTEGER NOT NULL, "
                      "PRIMARY KEY (fuid, user_id))")
+        # Ilovada tinglash: bir odam bitta trekni PLAY_GAP ichida qayta boshlasa — bitta tinglash
+        conn.execute("CREATE TABLE IF NOT EXISTS music_plays ("
+                     "fuid TEXT NOT NULL, user_id INTEGER NOT NULL, ts INTEGER NOT NULL)")
+        conn.execute("CREATE INDEX IF NOT EXISTS music_plays_ts ON music_plays(ts)")
         conn.commit()
         rows = conn.execute("SELECT fuid, COUNT(*) FROM music_likes WHERE user_id > 0 "
                             "GROUP BY fuid").fetchall()
@@ -879,6 +887,81 @@ def _set_like(uid, fuid, on):
         return cur.rowcount > 0
     finally:
         conn.close()
+
+
+PLAY_GAP = 30 * 60
+_play_seen = {}              # (user_id, fuid) -> oxirgi yozilgan vaqt
+
+
+def _add_play(uid, fuid, ts):
+    conn = _db()
+    try:
+        conn.execute("INSERT INTO music_plays (fuid, user_id, ts) VALUES (?, ?, ?)", (fuid, uid, ts))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def note_play(uid, fuid):
+    """Tinglash boshlandi (fayl boshidan so'raldi). Faqat haqiqiy odamlar."""
+    if uid is None or uid <= 0:
+        return
+    now = int(time.time())
+    key = (uid, fuid)
+    if now - _play_seen.get(key, 0) < PLAY_GAP:
+        return
+    _play_seen[key] = now
+    if len(_play_seen) > 20000:          # xotira o'smasin
+        eski = now - PLAY_GAP
+        for k in [k for k, v in _play_seen.items() if v < eski]:
+            _play_seen.pop(k, None)
+    try:
+        await asyncio.to_thread(_add_play, uid, fuid, now)
+    except Exception as e:
+        logging.error("Tinglash yozilmadi: %s", e)
+
+
+def _stat_rows():
+    conn = _db()
+    try:
+        plays = conn.execute("SELECT fuid, user_id, ts FROM music_plays ORDER BY ts").fetchall()
+        likes = conn.execute("SELECT fuid, user_id, created_at FROM music_likes WHERE user_id > 0 "
+                             "ORDER BY created_at").fetchall()
+    finally:
+        conn.close()
+    return plays, likes
+
+
+async def api_stat(request):
+    """Kuzatuv paneli uchun: albomlar/treklar, tinglashlar va like'lar (vaqti, kim)."""
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+    if not _cfg.get("dash_ok", lambda r: False)(request):
+        return cors(web.json_response({"ok": False, "error": "bad_token"}, status=403))
+    where = {}
+    albums = []
+    for key in ORDER:
+        lst = tracks(key)
+        if not lst:
+            continue
+        for i, x in enumerate(lst):
+            where[x["fuid"]] = (key, i + 1)
+        albums.append({"id": key, "name": album_title(key, "uz"), "composer": ALBUMS[key]["composer"],
+                       "year": ALBUMS[key]["year"], "tracks": [{"t": x["t"], "d": x["d"]} for x in lst]})
+    try:
+        plays, likes = await asyncio.to_thread(_stat_rows)
+    except Exception as e:
+        logging.error("Musiqa statistikasi o'qilmadi: %s", e)
+        return cors(web.json_response({"ok": False, "error": "server"}, status=500))
+    def pack(rows):
+        out = []
+        for fuid, uid, ts in rows:
+            w = where.get(fuid)
+            if w:
+                out.append([ts, str(uid), w[0], w[1]])
+        return out
+    return cors(web.json_response({"ok": True, "albums": albums, "plays": pack(plays), "likes": pack(likes)}))
 
 
 def _shown(fuid, uid, mine):
@@ -1158,6 +1241,7 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/music", api_list)
     app.router.add_route("*", "/api/music/send", api_send)
     app.router.add_route("*", "/api/music/like", api_like)
+    app.router.add_route("*", "/api/musiqa", api_stat)       # kuzatuv paneli (X-Dash-Token)
     app.router.add_get("/api/music/a/{album}/{n}", api_stream)
     app.router.add_get("/api/music/cover/{album}.jpg", api_cover)
     if _raw and _data.get("group") and _missing_covers():
