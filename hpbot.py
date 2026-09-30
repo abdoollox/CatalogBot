@@ -170,8 +170,7 @@ def format_table(table):
         place += 1
         lines.append("<b>%d. %s</b> — %d ball (%d a'zo)" % (
             place, name, row["total_points"], row["active_members"]))
-    lines.append("\n<i>Faol a'zo — mavsumda kamida %d ball to'plagan foydalanuvchi.</i>"
-                 % hpcup.ACTIVE_MIN_POINTS)
+    lines.append("\n<i>Fakultet bali — a'zolari to'plagan barcha ballar yig'indisi.</i>")
     return "\n".join(lines)
 
 

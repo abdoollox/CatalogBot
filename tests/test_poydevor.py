@@ -77,6 +77,23 @@ async def test_exam():
     check("yo'q savol rad etiladi", r.get("ok") is False)
 
 
+# ------------------------------------------------------------------ kubok: kichik hissa
+async def test_small_points_count():
+    """2026-09-30: 30 ball chegarasi olib tashlandi - 5 ball ham fakultetga qo'shiladi."""
+    season = await hpcup.current_season()
+    await hpcup.touch_user(701, "Besh")
+    await hpcup.touch_user(702, "Nol")
+    await hpcup.set_house(701, "hufflepuff")
+    await hpcup.set_house(702, "hufflepuff")
+    await hpcup.award(701, "film_open", "1", 5)
+    st = await hpcup.user_stats(701, season["id"])
+    check("5 ball - faol a'zo", st["is_active"] is True and st["to_active"] == 0)
+    table = {r["house"]: r for r in await hpcup.leaderboard(season["id"])}
+    huf = table.get("hufflepuff") or {}
+    check("5 ball fakultet baliga qo'shildi", huf.get("total_points") == 5)
+    check("0 balli a'zo sanalmaydi", huf.get("active_members") == 1)
+
+
 # ------------------------------------------------------------------ filmlar
 def V(name, cap=""):
     return {"mid": 0, "name": name, "cap": cap, "size": 1, "dur": 1}
@@ -217,6 +234,7 @@ def test_links_and_auth():
 
 async def amain():
     await test_exam()
+    await test_small_points_count()
     test_films_names()
     await test_films_scan()
     await test_send_film_without_source()

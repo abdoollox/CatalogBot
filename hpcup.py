@@ -10,7 +10,8 @@ Sinxron variantlari `_` bilan boshlanadi va faqat shu modul ichida ishlatiladi.
 2.0 da o'zgargani:
   - fakultet endi `users` jadvalida va UMRBOD (o'zgarmaydi)
   - `points.house` olib tashlandi — fakultet o'zgarmagani uchun keraksiz
-  - faol a'zo = mavsumda kamida 30 ball (avval 1 ball edi)
+  - faol a'zo = mavsumda kamida 1 ball (2026-09-30 gacha 30 edi; foydalanuvchi
+    qarori: kichik hissa ham hisobga kirsin - eng kichik ball 5)
 """
 
 import os
@@ -58,7 +59,9 @@ MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_DAILY * DAILY_PER_WEEK
               + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON)   # = 400
 
-ACTIVE_MIN_POINTS = 30    # foydalanuvchi "faol" hisoblanishi uchun kerak ball
+# Fakultet baliga kirish uchun kerak ball. 1 = ball to'plagan HAR KIM hisobga
+# kiradi (eng kichik ball - 5). Ilgari 30 edi: 5-25 ball to'plaganlar hissasi yo'qolardi.
+ACTIVE_MIN_POINTS = 1
 
 # Ball manbalari - ilovadagi "ballar qayerdan keldi" bo'limi uchun guruhlar.
 # Kalitlar ilovadagi CUP_SRC bilan bir xil.

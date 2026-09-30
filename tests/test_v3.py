@@ -90,13 +90,13 @@ async def run_tests():
     assert pending_after == [2, 3, 4, 5, 6, 7, 8]
     print("✅ [3] exam_pending to'g'ri hisoblanmoqda.")
 
-    # 4. Ballar va Faol a'zo (30 ball ostona)
+    # 4. Ballar va Faol a'zo (ball to'plagan har kim)
     print("\n[4] Faol a'zo va reyting...")
     stats = await hpcup.user_stats(1003, season["id"])
     print(f"1003 foydalanuvchi bali: {stats['points']}, is_active: {stats['is_active']}")
     assert stats["points"] == 30, f"Kutilgan 30 ball (3x10), topildi: {stats['points']}"
-    assert stats["is_active"] is True, "30 ball bilan is_active True bo'lishi kerak!"
-    print("✅ [4] Faol a'zo ostonasi (30 ball) to'g'ri ishladi.")
+    assert stats["is_active"] is True, "Ball to'plagan odam is_active True bo'lishi kerak!"
+    print("✅ [4] Faol a'zo to'g'ri aniqlandi.")
 
     # 5. Hall (Fakultet zali) tekshiruvi
     print("\n[5] Fakultet zali (hall) tekshiruvi...")
