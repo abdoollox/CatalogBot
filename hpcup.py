@@ -345,6 +345,9 @@ def _migrate(conn, users_json):
     # Kim shaxsiy xabar yoza oladi: NULL/'all' - hamma, 'house' - fakultetdoshlar, 'none' - hech kim.
     if "dm_privacy" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN dm_privacy TEXT")
+    # Ilovada oxirgi marta qachon ko'ringani (UTC ISO) - chatda "oxirgi marta onlayn".
+    if "last_seen_at" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN last_seen_at TEXT")
     # Gringotts hamyoni va Diagon xiyobonidagi xaridlar (onboarding).
     # galleons - qoldiq; vault_at - xona qachon ochilgan (bir marta pul beriladi);
     # pet - tanlangan uy hayvoni; wand_at - tayoqcha qachon sotib olingan
@@ -1358,8 +1361,38 @@ async def house_board(house, user_id):
 # (/api/presence). Bazaga yozilmaydi - faqat xotirada. Chatdagi va shaxmat
 # jadvalidagi "onlayn" belgisi shunga qaraydi: odam chatga kirmagan bo'lsa ham
 # ilovada bo'lsa - onlayn.
-PRESENCE_TTL = 35          # so'nggi shuncha soniyada ko'ringan - onlayn
+PRESENCE_TTL = 35          # so'nggi shuncha soniyada ko'rilgan - onlayn
+SEEN_SAVE_EVERY = 60       # "oxirgi marta ko'ringan" bazaga shuncha soniyada bir yoziladi
 _presence = {}             # uid -> (monotonic vaqt, fakultet)
+_seen_wall = {}            # uid -> oxirgi ko'ringan vaqt (time.time()) - jonli, xotirada
+_seen_saved = {}           # uid -> bazaga oxirgi yozilgan vaqt (time.time())
+
+
+def _save_seen(uid, ts):
+    try:
+        conn = _connect()
+        try:
+            conn.execute("UPDATE users SET last_seen_at=? WHERE user_id=?",
+                         (_utc_iso(datetime.fromtimestamp(ts, timezone.utc)), uid))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        logging.exception("last_seen_at yozilmadi")
+
+
+def _seen_flush(uid, force=False):
+    """Bazaga yozadi (kamida SEEN_SAVE_EVERY soniyada bir, force - darhol)."""
+    ts = _seen_wall.get(uid)
+    if ts is None or uid <= 0:
+        return
+    if not force and ts - _seen_saved.get(uid, 0) < SEEN_SAVE_EVERY:
+        return
+    _seen_saved[uid] = ts
+    try:
+        asyncio.get_running_loop().run_in_executor(None, _save_seen, uid, ts)
+    except RuntimeError:
+        pass
 
 
 def presence_mark(user_id, house=None):
@@ -1368,10 +1401,24 @@ def presence_mark(user_id, house=None):
     if house is None and uid in _presence:
         house = _presence[uid][1]
     _presence[uid] = (time.monotonic(), house)
+    _seen_wall[uid] = time.time()
+    _seen_flush(uid)
 
 
 def presence_leave(user_id):
-    _presence.pop(int(user_id), None)
+    uid = int(user_id)
+    _presence.pop(uid, None)
+    _seen_wall[uid] = time.time()
+    _seen_flush(uid, force=True)
+
+
+def presence_seen(user_id, db_value=None):
+    """Oxirgi marta ko'ringan vaqt (UTC ISO) yoki None. Xotiradagi (jonli) qiymat
+    bazadagidan yangiroq bo'ladi; ikkalasi ham bo'lmasa - hech qachon ko'rilmagan."""
+    ts = _seen_wall.get(int(user_id))
+    if ts is not None:
+        return _utc_iso(datetime.fromtimestamp(ts, timezone.utc))
+    return db_value or None
 
 
 def presence_online(user_id):
@@ -2162,9 +2209,10 @@ async def chat_user(user_id):
     def _do():
         conn = _connect()
         try:
-            r = conn.execute("SELECT user_id, COALESCE(first_name, 'Sehrgar') AS name, house "
+            r = conn.execute("SELECT user_id, COALESCE(first_name, 'Sehrgar') AS name, house, last_seen_at "
                              "FROM users WHERE user_id=?", (int(user_id),)).fetchone()
-            return {"uid": r["user_id"], "name": r["name"], "house": r["house"]} if r else None
+            return {"uid": r["user_id"], "name": r["name"], "house": r["house"],
+                    "seen": presence_seen(r["user_id"], r["last_seen_at"])} if r else None
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
@@ -2179,14 +2227,15 @@ async def chat_members(house, season_id, viewer=0):
             if house:
                 where, args = "u.house=?", [house]
             rows = conn.execute(
-                "SELECT u.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house, "
+                "SELECT u.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house, u.last_seen_at, "
                 "COALESCE(SUM(p.points), 0) AS pts FROM users u "
                 "LEFT JOIN points p ON p.user_id=u.user_id AND p.season_id=? "
                 "WHERE " + where + " AND (u.user_id > 0 OR u.user_id = ?) "
                 "GROUP BY u.user_id ORDER BY pts DESC, u.user_id ASC",
                 [season_id] + args + [int(viewer or 0)]).fetchall()
             return [{"uid": r["user_id"], "name": (r["name"] or "Sehrgar").strip()[:40],
-                     "house": r["house"], "points": r["pts"]} for r in rows]
+                     "house": r["house"], "points": r["pts"],
+                     "seen": presence_seen(r["user_id"], r["last_seen_at"])} for r in rows]
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
@@ -2208,13 +2257,14 @@ async def chat_dm_list(user_id):
                 peer = _dm_peer(r["room"], uid)
                 if peer is None:
                     continue
-                p = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name, house FROM users "
+                p = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name, house, last_seen_at FROM users "
                                  "WHERE user_id=?", (peer,)).fetchone()
                 m = conn.execute("SELECT user_id, message, created_at FROM chat_messages WHERE id=?",
                                  (r["last_id"],)).fetchone()
                 out.append({
                     "room": "dm:%d" % peer,
-                    "peer": {"uid": peer, "name": p["name"] if p else "Sehrgar", "house": p["house"] if p else None},
+                    "peer": {"uid": peer, "name": p["name"] if p else "Sehrgar", "house": p["house"] if p else None,
+                             "seen": presence_seen(peer, p["last_seen_at"] if p else None)},
                     "last": {"uid": m["user_id"], "text": (m["message"] or "")[:120], "time": m["created_at"]},
                     "unread": _read_state(conn, r["room"], uid)[1],
                 })

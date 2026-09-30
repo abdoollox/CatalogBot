@@ -690,7 +690,9 @@ def register(dp, bot, app, cfg):
         live = {"online": max(1, online),
                 "typing": [{"uid": k, "name": v[1], "house": v[2]} for k, v in typing.items() if k != uid]}
         if target.startswith("dm:"):
-            live["peer_online"] = chat_is_online(hpcup._dm_peer(target, uid))
+            peer_id = hpcup._dm_peer(target, uid)
+            live["peer_online"] = chat_is_online(peer_id)
+            live["peer_seen"] = hpcup.presence_seen(peer_id) if peer_id else None
         return live
 
     def chat_is_online(who):
