@@ -150,6 +150,17 @@ def _item(mid, m, v):
             "dur": int(getattr(v, "duration", 0) or 0)}
 
 
+_SKIP = re.compile(r"\[\s*\d\s*\]|2160p|\b4k\b|ultra\s*hd|\buhd\b", re.I)
+
+
+def _skip(it):
+    """Hozircha ishlatilmaydigan video: 4K va qismlarga bo'lingan ("[1]", "[2]") nusxalar.
+    Bot filmni BITTA fayl bilan yuboradi (1080p). Ingliz mavzusida 4K nusxalar ikki
+    qismda turibdi - ular bog'lansa odam filmning yarmini olardi (2026-09-30).
+    Kelajakdagi "sifat tanlash" uchun ular seen da saqlanib turadi."""
+    return bool(_SKIP.search("%s\n%s" % (it["name"], it["cap"])))
+
+
 def _guess(it, topic_lang):
     """(film, til, til_manbasi). Manba: "nom" - nomidan (ishonchli), "mavzu" - mavzudan."""
     text = "%s\n%s" % (it["name"], it["cap"])
@@ -158,6 +169,20 @@ def _guess(it, topic_lang):
     if not lang and topic_lang:
         lang, how = topic_lang, "mavzu"
     return film_of(text), lang, how
+
+
+def rebuild():
+    """Jadvalni o'qilgan videolardan qoidalar bo'yicha qayta tuzadi (qo'lda bog'langanlar qoladi).
+    Qoida o'zgarsa guruhni qayta o'qish shart emas."""
+    manual = {k: v for k, v in _data["map"].items() if v.get("by") == "qolda"}
+    _data["map"] = dict(manual)
+    noaniq = set(_data.get("noaniq", []))
+    for _, it in sorted(_data["seen"].items(), key=lambda x: int(x[0])):
+        if _skip(it) or it["mid"] in noaniq:
+            continue
+        film, lang, how = _guess(it, it.get("tl"))
+        if film and lang:
+            _place(it, film, lang, how)
 
 
 # --- HISOBOT ---
@@ -177,6 +202,9 @@ def table_text():
                 b = "❌"
             belgilar.append(flag[l] + b)
         qator.append("%-4s %s" % (fid, "  ".join(belgilar)))
+    kopi = sum(1 for it in _data["seen"].values() if _skip(it))
+    if kopi:
+        qator += ["", "📀 4K / qismlarga bo'lingan videolar: %d ta — hozircha ishlatilmaydi (keyin sifat tanlash uchun)." % kopi]
     shubha = ["%s_%s ← %d-xabar (%s)" % (k.split("_")[0], k.split("_")[1], v["mid"], (v["name"] or v["cap"] or "nomsiz")[:50])
               for k, v in sorted(_data["map"].items()) if v.get("by") == "mavzu"]
     if shubha:
@@ -238,6 +266,10 @@ async def scan(chat, start, upto, topic_lang):
         if it is None:
             continue
         topilgan += 1
+        if _skip(it):
+            continue
+        if topic_lang and not it.get("tl"):
+            it["tl"] = topic_lang        # qayta hisoblash (rebuild) uchun
         film, lang, how = _guess(it, topic_lang)
         if film and lang and how == "mavzu":
             # Tili nomida yo'q video ikki mavzuning oralig'iga tushsa - qaysi
@@ -380,8 +412,14 @@ async def on_group_video(message: types.Message):
         return
     it = _item(message.message_id, message, v)
     topic_lang = _data["topics"].get(_topic_of(message))
+    it["tl"] = topic_lang
     film = film_of("%s\n%s" % (it["name"], it["cap"]))
     _data["seen"][str(it["mid"])] = it
+    if _skip(it):
+        _save()
+        await _tell("🎬 4K / qismli video saqlandi, lekin hozircha ishlatilmaydi: %d-xabar (%s)"
+                    % (it["mid"], it["name"]))
+        return
     if film and topic_lang and _place(it, film, topic_lang, "nom"):
         _save()
         await _tell("🎬 Yangi video bog'landi: %s_%s ← %d-xabar (%s)" % (film, topic_lang, it["mid"], it["name"]))
@@ -416,6 +454,9 @@ def register(dp, bot, cfg):
     _cfg.update(cfg)
     _cfg["bot"] = bot
     load()
+    if _data["seen"]:
+        rebuild()
+        _save()
     dp.message.register(on_scan_command, Command("filmlar"))
     dp.message.register(on_film_command, Command("film"))
     dp.message.register(on_archive_command, Command("arxiv"))
