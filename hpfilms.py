@@ -1,27 +1,36 @@
 # -*- coding: utf-8 -*-
-"""Filmlar bazasi - yopiq GURUHDAN (mavzularga bo'lingan "Hogwarts Cinema").
+"""Filmlar bazasi - yopiq GURUHDAN (mavzularga bo'lingan "Database" guruhi).
 
 Ilgari filmlar eski yopiq kanaldan (DB_CHANNEL_ID) va catalog.py ga QO'LDA
 yozilgan xabar raqamlari bilan yuborilardi. Kanaldagi post o'chsa yoki
 almashsa film jimgina ishlamay qolardi (2026-09-27 da hp1 shunday bo'ldi).
 Endi manba - guruh: qaysi film qaysi xabarda ekanini bot o'zi aniqlaydi.
 
-Sozlash (bir marta, admin):
-    Filmlar turgan mavzuda `/filmlar` deb yozing. Bot guruh va mavzuni eslab
-    qoladi va mavzudagi videolarni o'qiydi (musiqa skaneri usulida: har xabar
-    adminning bot bilan shaxsiy chatiga nusxalab o'qiladi va darhol o'chiriladi;
-    guruhga hech narsa yozilmaydi). Natija - shaxsiy chatda jadval.
-    `/filmlar 1200` - 1200-xabardan boshlab o'qiydi (mavzu ildizidan emas).
+Guruhda HAR TIL uchun alohida mavzu bor. Sozlash (bir marta, admin):
+    o'zbekcha filmlar mavzusida:  /filmlar uz
+    ruscha filmlar mavzusida:     /filmlar ru
+    inglizcha filmlar mavzusida:  /filmlar en
+Bot mavzu va uning tilini eslab qoladi, mavzudagi eski videolarni o'qiydi
+(musiqa skaneri usulida: har xabar adminning bot bilan shaxsiy chatiga
+nusxalab o'qiladi va darhol o'chiriladi; guruhga hech narsa yozilmaydi).
+Natija - adminning shaxsiy chatida 11 film x 3 til jadvali.
+`/filmlar uz 1200` - 1200-xabardan boshlab o'qiydi (mavzu ildizidan emas).
 
-Qaysi film va til - video nomidan / izohidan:
-    "Harry Potter and the Philosopher's Stone (2001)(1080p)(uz).mp4" -> hp1_uz
-    Aniqlanmaganlari jadvalda alohida ko'rsatiladi, ularni qo'lda bog'lash:
-        /film hp1_uz 1234     - hp1 o'zbekchasi guruhdagi 1234-xabar
-        /film hp1_uz -        - bog'lanishni olib tashlash (eski kanalga qaytadi)
-        /film                 - hozirgi holat (shaxsiy chatda)
-Mavzuga keyin yangi video tashlansa - o'zi taniladi va adminga xabar boradi.
+Qaysi film - video nomidan / izohidan ("...Philosopher's Stone...mp4" -> hp1).
+Qaysi til - avval nomidan ("(uz)", "rus", "ENG"...), nomda bo'lmasa - mavzu
+tilidan. ESKI xabarlarni o'qiganda xabar qaysi mavzudaligi bilinmaydi (Telegram
+nusxada buni aytmaydi), shuning uchun tili faqat mavzudan olinganlari jadvalda
+⚠️ bilan belgilanadi - tekshirib qo'yish kerak. YANGI tashlangan videoning
+mavzusi aniq ma'lum - uning tili ishonchli.
 
+Qo'lda (adminning bot bilan shaxsiy chatida):
+    /film                 - hozirgi holat
+    /film hp1_uz 1234     - hp1 o'zbekchasi guruhdagi 1234-xabar
+    /film hp1_uz -        - bog'lanishni olib tashlash (eski kanalga qaytadi)
 Bog'lanmagan film eski kanaldan yuborilaveradi - hech narsa buzilmaydi.
+
+Zaxira ham shu guruhga: "Arxiv" mavzusida /arxiv yozilsa, backup_hp.py
+kundalik arxivni o'sha mavzuga yuboradi (/data/backup_target.json).
 """
 
 import asyncio
@@ -37,10 +46,14 @@ import catalog
 import hpmusic          # guruhni o'qish vositalari (_peek, _inbox, _tg) - bir xil usul
 
 STORE = "/data/films.json"     # MUTLAQ yo'l: faqat /data konteynerdan tashqarida yashaydi
+BACKUP_TARGET = "/data/backup_target.json"
 SCAN_PACE = 0.35
+LANGS = ("uz", "ru", "en")
 
 _cfg = {}
-_data = {"group": None, "thread": None, "map": {}, "seen": {}}
+# topics: {mavzu raqami: til}; map: {"hp1_uz": video}; seen: {xabar: video};
+# empty: o'qilgan, lekin video bo'lmagan xabarlar (qayta o'qilmasin)
+_data = {"group": None, "topics": {}, "map": {}, "seen": {}, "empty": []}
 _scan_task = None
 
 
@@ -51,7 +64,8 @@ def load():
     try:
         with open(STORE, encoding="utf-8") as f:
             d = json.load(f)
-        for k, v in (("group", None), ("thread", None), ("map", {}), ("seen", {})):
+        d.pop("thread", None)          # birinchi (bitta mavzuli) variant qoldig'i
+        for k, v in (("group", None), ("topics", {}), ("map", {}), ("seen", {}), ("empty", [])):
             d.setdefault(k, v)
         _data = d
     except FileNotFoundError:
@@ -63,7 +77,7 @@ def load():
 def _save():
     tmp = STORE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(_data, f, ensure_ascii=False, indent=1)
+        json.dump(_data, f, ensure_ascii=False)
     os.replace(tmp, STORE)
 
 
@@ -98,10 +112,7 @@ def film_of(text):
         return "fb" + m.group(1) if m else "fb1"
     # Garri Potter: yil va sifat raqamlari ("2001", "1080p") chalg'itmasin
     clean = re.sub(r"\b(19|20)\d\d\b|\b\d{3,4}p\b|\b[hx]26[45]\b", " ", n)
-    album = hpmusic.title_album(clean)
-    if album:
-        return album
-    for line in clean.splitlines():
+    for line in [clean] + clean.splitlines():
         a = hpmusic.title_album(line)
         if a:
             return a
@@ -139,27 +150,37 @@ def _item(mid, m, v):
             "dur": int(getattr(v, "duration", 0) or 0)}
 
 
-def _guess(it):
+def _guess(it, topic_lang):
+    """(film, til, til_manbasi). Manba: "nom" - nomidan (ishonchli), "mavzu" - mavzudan."""
     text = "%s\n%s" % (it["name"], it["cap"])
-    return film_of(text), lang_of(text)
+    lang = lang_of(text)
+    how = "nom"
+    if not lang and topic_lang:
+        lang, how = topic_lang, "mavzu"
+    return film_of(text), lang, how
 
 
 # --- HISOBOT ---
 
 def table_text():
     flag = {"uz": "🇺🇿", "ru": "🇷🇺", "en": "🇬🇧"}
-    qator = ["🎬 Filmlar manbasi (✅ guruh · 📦 eski kanal · ❌ yo'q)", ""]
+    qator = ["🎬 Filmlar manbasi", "✅ guruh · ⚠️ guruh (tili mavzudan, tekshiring) · 📦 eski kanal · ❌ yo'q", ""]
     for fid in catalog.FILMS:
         belgilar = []
         for l in catalog.LANGS:
-            if in_group(fid, l):
-                b = "✅"
+            it = _data["map"].get("%s_%s" % (fid, l))
+            if it and _data.get("group"):
+                b = "⚠️" if it.get("by") == "mavzu" else "✅"
             elif catalog.is_ready(fid, l):
                 b = "📦"
             else:
                 b = "❌"
             belgilar.append(flag[l] + b)
         qator.append("%-4s %s" % (fid, "  ".join(belgilar)))
+    shubha = ["%s_%s ← %d-xabar (%s)" % (k.split("_")[0], k.split("_")[1], v["mid"], (v["name"] or v["cap"] or "nomsiz")[:50])
+              for k, v in sorted(_data["map"].items()) if v.get("by") == "mavzu"]
+    if shubha:
+        qator += ["", "⚠️ Tili nomidan emas, mavzudan olinganlar:"] + ["• " + x for x in shubha]
     return "\n".join(qator)
 
 
@@ -173,40 +194,69 @@ async def _tell(text):
             continue
 
 
-def _place(it, film, lang):
-    """Topilgan videoni jadvalga qo'yadi. Joy bo'sh bo'lmasa - kattaroq xabar raqami (yangisi) ustun."""
+def _place(it, film, lang, how):
+    """Topilgan videoni jadvalga qo'yadi.
+
+    Ustunlik: qo'lda bog'langan > tili nomidan aniqlangan > tili mavzudan olingan;
+    teng bo'lsa - kattaroq xabar raqami (yangi yuklangani)."""
     key = "%s_%s" % (film, lang)
+    it = dict(it, by=how)
     old = _data["map"].get(key)
-    if old and old.get("manual"):
-        return False                      # qo'lda bog'langanini skaner almashtirmaydi
-    if old and int(old["mid"]) >= it["mid"]:
-        return False
-    _data["map"][key] = dict(it)
+    if old:
+        rank = {"qolda": 3, "nom": 2, "mavzu": 1}
+        if rank.get(old.get("by"), 2) > rank[how]:
+            return False
+        if rank.get(old.get("by"), 2) == rank[how] and int(old["mid"]) >= it["mid"]:
+            return False
+    _data["map"][key] = it
     return True
 
 
 # --- SKANER ---
 
-async def scan(chat, start, upto):
+async def scan(chat, start, upto, topic_lang):
     bot = _cfg["bot"]
     inbox, note = await hpmusic._inbox(bot, "🎬 Filmlar mavzusini o'qiyapman — bu yerda bir lahza "
                                             "xabarlar ko'rinib o'chadi.")
     if not inbox:
         raise RuntimeError("hech bir admin bot bilan shaxsiy chat ochmagan (/start bosing)")
+    empty = set(_data["empty"])
+    noaniq = set(_data.get("noaniq", []))
     topilgan, tanilmagan = 0, []
     for mid in range(start, upto):
-        m = await hpmusic._peek(bot, chat, mid, inbox)
-        v = _video(m)
-        if v is not None:
-            topilgan += 1
-            it = _item(mid, m, v)
-            film, lang = _guess(it)
-            _data["seen"][str(mid)] = it
-            if film and lang:
-                _place(it, film, lang)
+        it = _data["seen"].get(str(mid))
+        if it is None and mid not in empty:
+            # Boshqa mavzuni o'qiganda ko'rilgan xabar qayta o'qilmaydi
+            m = await hpmusic._peek(bot, chat, mid, inbox)
+            v = _video(m)
+            if v is None:
+                empty.add(mid)
             else:
+                it = _item(mid, m, v)
+                _data["seen"][str(mid)] = it
+            await asyncio.sleep(SCAN_PACE)
+        if it is None:
+            continue
+        topilgan += 1
+        film, lang, how = _guess(it, topic_lang)
+        if film and lang and how == "mavzu":
+            # Tili nomida yo'q video ikki mavzuning oralig'iga tushsa - qaysi
+            # mavzudaligi noma'lum: hech qaysi tilga bog'lanmaydi, qo'lda tanlanadi.
+            boshqa = [k for k, v in _data["map"].items()
+                      if v.get("by") == "mavzu" and v["mid"] == it["mid"] and not k.endswith("_" + lang)]
+            if boshqa:
+                for k in boshqa:
+                    _data["map"].pop(k, None)
+                noaniq.add(it["mid"])
+            if it["mid"] in noaniq or it["mid"] in _data.setdefault("noaniq", []):
                 tanilmagan.append(it)
-        await asyncio.sleep(SCAN_PACE)
+                continue
+        if film and lang:
+            _place(it, film, lang, how)
+        else:
+            tanilmagan.append(it)
+    _data["empty"] = sorted(empty)
+    _data["noaniq"] = sorted(noaniq)
     _save()
     try:
         await bot.delete_message(inbox, note)
@@ -215,18 +265,18 @@ async def scan(chat, start, upto):
     return topilgan, tanilmagan
 
 
-async def _scan_job(chat, start, upto):
+async def _scan_job(chat, start, upto, topic_lang):
     global _scan_task
     try:
-        n, tanilmagan = await scan(chat, start, upto)
-        matn = "🎬 O'qib chiqdim: %d ta video.\n\n%s" % (n, table_text())
+        n, tanilmagan = await scan(chat, start, upto, topic_lang)
+        matn = "🎬 O'qib chiqdim (%s mavzusi): %d ta video.\n\n%s" % (topic_lang, n, table_text())
         if tanilmagan:
             matn += "\n\nNomidan tanilmaganlar (qo'lda: /film hp1_uz <raqam>):\n" + "\n".join(
                 "• %d — %s" % (x["mid"], (x["name"] or x["cap"] or "?")[:70]) for x in tanilmagan[:30])
         await _tell(matn)
     except Exception as e:
         logging.error("Film skaneri to'xtadi: %s", e)
-        await _tell("❌ Filmlarni o'qish to'xtadi: %s\nQayta /filmlar yozsangiz boshidan boshlaydi." % e)
+        await _tell("❌ Filmlarni o'qish to'xtadi: %s\nQayta /filmlar yozsangiz davom etadi." % e)
     finally:
         _scan_task = None
 
@@ -241,33 +291,42 @@ def _is_admin(message):
 
 
 async def on_scan_command(message: types.Message):
+    """Guruhdagi til mavzusida: /filmlar uz  (ixtiyoriy: /filmlar uz 1200)."""
     global _scan_task
     if not _is_admin(message):
         return
     if message.chat.type == "private":
-        await message.answer("Bu buyruq guruhda, filmlar turgan mavzuda yoziladi.\n\n" + table_text())
+        await message.answer("Bu buyruq guruhda, har til mavzusida yoziladi: /filmlar uz, /filmlar ru, "
+                             "/filmlar en\n\n" + table_text())
         return
     if message.chat.type != "supergroup":
         return
-    if _scan_task and not _scan_task.done():
-        await message.reply("O'qish allaqachon ketmoqda.")
-        return
-    thread = message.message_thread_id if message.is_topic_message else None
     bolak = (message.text or "").split()
-    start = (thread or 0) + 1
-    if len(bolak) > 1 and bolak[1].isdigit():
-        start = int(bolak[1])
-    upto = message.message_id
-    _data.update({"group": message.chat.id, "thread": thread})
-    _save()
-    daq = max(1, round((upto - start) * (SCAN_PACE + 0.5) / 60))
+    lang = next((b.lower() for b in bolak[1:] if b.lower() in LANGS), None)
     try:
         await message.delete()             # guruhda buyruq izi qolmasin
     except Exception:
         pass
-    await _tell("🔎 Filmlar mavzusini o'qiyapman (~%d daq, %d xabar). Tugagach jadval yuboraman."
-                % (daq, upto - start))
-    _scan_task = asyncio.create_task(_scan_job(message.chat.id, start, upto))
+    if not lang:
+        await _tell("Mavzu tilini ham yozing: /filmlar uz (yoki ru, en).")
+        return
+    if _scan_task and not _scan_task.done():
+        await _tell("O'qish allaqachon ketmoqda — tugagach keyingi mavzuda yozing.")
+        return
+    thread = message.message_thread_id if message.is_topic_message else None
+    start = (thread or 0) + 1
+    raqam = [b for b in bolak[1:] if b.isdigit()]
+    if raqam:
+        start = int(raqam[0])
+    upto = message.message_id
+    _data["group"] = message.chat.id
+    _data["topics"][str(thread)] = lang
+    _save()
+    bosh = set(_data["empty"])
+    yangi = sum(1 for mid in range(start, upto) if str(mid) not in _data["seen"] and mid not in bosh)
+    daq = max(1, round(yangi * (SCAN_PACE + 0.5) / 60))
+    await _tell("🔎 %s mavzusini o'qiyapman (~%d daq). Tugagach jadval yuboraman." % (lang, daq))
+    _scan_task = asyncio.create_task(_scan_job(message.chat.id, start, upto, lang))
 
 
 async def on_film_command(message: types.Message):
@@ -289,7 +348,7 @@ async def on_film_command(message: types.Message):
         await message.answer("Olib tashlandi: %s (eski kanaldan yuboriladi)\n\n%s" % (key, table_text()))
         return
     if not bolak[2].isdigit() or not _data.get("group"):
-        await message.answer("Avval guruhdagi filmlar mavzusida /filmlar yozing, keyin raqam bering.")
+        await message.answer("Avval guruhdagi til mavzusida /filmlar uz yozing, keyin raqam bering.")
         return
     mid = int(bolak[2])
     m2 = await hpmusic._peek(_cfg["bot"], _data["group"], mid, message.chat.id)
@@ -298,46 +357,67 @@ async def on_film_command(message: types.Message):
         await message.answer("%d-xabarda video topilmadi." % mid)
         return
     it = _item(mid, m2, v)
-    it["manual"] = True
-    _data["map"][key] = it
+    _data["seen"][str(mid)] = it
+    _data["map"][key] = dict(it, by="qolda")
     _save()
     await message.answer("✅ %s -> guruhdagi %d-xabar (%s)\n\n%s" % (key, mid, it["name"] or "nomsiz", table_text()))
 
 
-async def on_group_video(message: types.Message):
-    """Filmlar mavzusiga yangi video tashlandi - o'zi taniladi."""
-    v = _video(message)
-    if v is None:
-        return
-    it = _item(message.message_id, message, v)
-    film, lang = _guess(it)
-    _data["seen"][str(it["mid"])] = it
-    if film and lang and _place(it, film, lang):
-        _save()
-        await _tell("🎬 Yangi video bog'landi: %s_%s <- %d-xabar (%s)" % (film, lang, it["mid"], it["name"]))
-    else:
-        _save()
-        await _tell("🎬 Yangi video tanilmadi: %d-xabar (%s)\nQo'lda: /film hp1_uz %d"
-                    % (it["mid"], it["name"] or it["cap"][:60] or "nomsiz", it["mid"]))
+def _topic_of(message):
+    return str(message.message_thread_id if message.is_topic_message else None)
 
 
 def _in_films_topic(message):
     if not _data.get("group") or message.chat.id != _data["group"]:
         return False
-    th = message.message_thread_id if message.is_topic_message else None
-    return th == _data.get("thread")
+    return _topic_of(message) in _data["topics"]
+
+
+async def on_group_video(message: types.Message):
+    """Til mavzusiga yangi video tashlandi - o'zi taniladi (mavzusi aniq, tili ishonchli)."""
+    v = _video(message)
+    if v is None:
+        return
+    it = _item(message.message_id, message, v)
+    topic_lang = _data["topics"].get(_topic_of(message))
+    film = film_of("%s\n%s" % (it["name"], it["cap"]))
+    _data["seen"][str(it["mid"])] = it
+    if film and topic_lang and _place(it, film, topic_lang, "nom"):
+        _save()
+        await _tell("🎬 Yangi video bog'landi: %s_%s ← %d-xabar (%s)" % (film, topic_lang, it["mid"], it["name"]))
+    else:
+        _save()
+        await _tell("🎬 Yangi video tanilmadi: %d-xabar (%s)\nQo'lda: /film hp1_%s %d"
+                    % (it["mid"], it["name"] or it["cap"][:60] or "nomsiz", topic_lang or "uz", it["mid"]))
+
+
+async def on_archive_command(message: types.Message):
+    """"Arxiv" mavzusida /arxiv - kundalik zaxira shu mavzuga yuboriladi."""
+    if not _is_admin(message) or message.chat.type != "supergroup":
+        return
+    thread = message.message_thread_id if message.is_topic_message else None
+    tmp = BACKUP_TARGET + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"chat": message.chat.id, "thread": thread}, f)
+    os.replace(tmp, BACKUP_TARGET)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await hpmusic._tg(_cfg["bot"].send_message, message.chat.id,
+                      "🗄 Kundalik zaxira har kecha soat 03:00 da shu mavzuga keladi.",
+                      message_thread_id=thread, disable_notification=True)
 
 
 # --- ULASH ---
 
 def register(dp, bot, cfg):
-    """cfg: admin_ids. hpmusic DAN KEYIN ulanadi (uning vositalari ishlatiladi),
-    lekin guruhdagi musiqa handleridan OLDIN - filmlar mavzusi boshqa bo'lgani uchun
-    ular to'qnashmaydi."""
+    """cfg: admin_ids. hpmusic DAN KEYIN ulanadi (uning vositalari ishlatiladi)."""
     _cfg.update(cfg)
     _cfg["bot"] = bot
     load()
     dp.message.register(on_scan_command, Command("filmlar"))
     dp.message.register(on_film_command, Command("film"))
+    dp.message.register(on_archive_command, Command("arxiv"))
     dp.message.register(on_group_video, _in_films_topic)
-    logging.info("Filmlar: %d ta film-til guruhdan", len(_data["map"]))
+    logging.info("Filmlar: %d ta film-til guruhdan, %d mavzu", len(_data["map"]), len(_data["topics"]))

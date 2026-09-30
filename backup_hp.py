@@ -11,7 +11,8 @@ Arxiv ichida:
 
 Qayerga:
   - backups/daily/hp-YYYY-MM-DD.zip  (serverda, oxirgi KEEP_DAYS kun)
-  - Telegram: HP_BACKUP_CHAT, u yo'q bo'lsa .env dagi BIRINCHI admin (ADMIN_IDS)
+  - Telegram: Database guruhidagi "Arxiv" mavzusi (u yerda /arxiv yozilgan -
+    data/backup_target.json); u yo'q bo'lsa HP_BACKUP_CHAT, keyin birinchi admin
 
 ESKI XATO (2026-09-28 da topildi): nusxalar `backups/hp-*.db` da turardi va
 tozalash qo'lda olingan `hp-before-*.db` larni ham sanardi. Ular alifboda
@@ -46,6 +47,7 @@ KEEP_DAYS = 14
 # 30 kundan eskilari o'chiriladi, lekin eng yangi 5 tasi doim qoladi.
 MANUAL_DAYS = 30
 MANUAL_KEEP = 5
+TARGET = os.path.join(DATA, "backup_target.json")   # bot yozadi: {"chat": ..., "thread": ...}
 EXTRA = ["users_db.json", "music.json", "music_raw.json", "films.json", "promo.json"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -120,12 +122,31 @@ def make_backup():
     return target, summary
 
 
-def send_to_telegram(path, token, chat_id, caption):
+def target(env):
+    """(chat, mavzu) - zaxira qayerga yuboriladi."""
+    try:
+        with open(TARGET, encoding="utf-8") as f:
+            t = json.load(f)
+        if t.get("chat"):
+            return t["chat"], t.get("thread")
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        logging.error("backup_target.json o'qilmadi: %s", e)
+    admins = [x for x in env.get("ADMIN_IDS", "").replace(" ", "").split(",") if x.lstrip("-").isdigit()]
+    return (env.get("HP_BACKUP_CHAT") or (admins[0] if admins else None)), None
+
+
+def send_to_telegram(path, token, chat_id, caption, thread=None):
     """Faylni Telegram chatiga yuboradi (multipart, kutubxonasiz)."""
     boundary = "----hpbackup%d" % int(time.time() * 1000)
     with open(path, "rb") as f:
         blob = f.read()
-    parts = [
+    parts = []
+    if thread:
+        parts.append(("--%s\r\nContent-Disposition: form-data; name=\"message_thread_id\"\r\n\r\n%s\r\n"
+                      % (boundary, thread)).encode())
+    parts += [
         ("--%s\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n%s\r\n"
          % (boundary, chat_id)).encode(),
         ("--%s\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n%s\r\n"
@@ -176,8 +197,7 @@ def main():
         path, summary = None, None
     env = read_env()
     token = env.get("BOT_TOKEN")
-    admins = [x for x in env.get("ADMIN_IDS", "").replace(" ", "").split(",") if x.lstrip("-").isdigit()]
-    chat = env.get("HP_BACKUP_CHAT") or (admins[0] if admins else None)
+    chat, thread = target(env)
 
     if not path:
         # Zaxira olinmagani ham jim qolmasin - admin bilsin
@@ -185,7 +205,7 @@ def main():
             try:
                 req = urllib.request.Request(
                     "https://api.telegram.org/bot%s/sendMessage" % token,
-                    data=json.dumps({"chat_id": chat, "text": "⚠️ Kundalik zaxira OLINMADI. "
+                    data=json.dumps({"chat_id": chat, "message_thread_id": thread, "text": "⚠️ Kundalik zaxira OLINMADI. "
                                      "Serverdagi backups/backup.log ni tekshirish kerak."}).encode(),
                     headers={"Content-Type": "application/json"})
                 urllib.request.urlopen(req, timeout=30).read()
@@ -198,8 +218,8 @@ def main():
     elif token and chat:
         caption = "🗄 Garri Potter zaxirasi — %s\n%s" % (datetime.now().strftime("%Y-%m-%d %H:%M"), summary)
         try:
-            send_to_telegram(path, token, chat, caption)
-            logging.info("Telegramga yuborildi (chat %s)", chat)
+            send_to_telegram(path, token, chat, caption, thread)
+            logging.info("Telegramga yuborildi (chat %s, mavzu %s)", chat, thread)
         except Exception as e:
             logging.error("Telegramga yuborishda xato: %s", e)
     else:
