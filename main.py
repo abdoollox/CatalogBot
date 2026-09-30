@@ -35,6 +35,8 @@ import hpleave
 import hpkanal
 import hpmusic
 import hpfilms
+import hpevents
+import threading
 try:
     import hpxat            # xat rasmi (Pillow kerak)
 except Exception as _xat_error:   # kutubxona yo'q bo'lsa bot baribir ishlasin
@@ -90,7 +92,6 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 # --- BAZA QULFI VA FAYL MANZILI ---
-db_lock = asyncio.Lock()
 USERS_FILE = "users_db.json"
 
 # --- FILMLAR KATALOGI ---
@@ -102,42 +103,22 @@ MOVIES_DB = catalog.FILMS
 
 # --- MIJOZ HARAKATLARINI BAZAGA YOZISH ---
 async def log_user_action(user: types.User, payload: str, sheet_payload: str = None):
-    """Harakatni users_db.json va Google Sheets'ga yozadi.
+    """Harakatni hp.db (`events` jadvali) va Google Sheets'ga yozadi.
 
     sheet_payload - faqat jadvalda ko'rinadigan nom (masalan `web_hp1_uz`).
-    Bazadagi kalit o'zgarmaydi: remind_hp2.py va migrate.py `hp1_uz` ni o'qiydi.
+    Bazadagi kalit o'zgarmaydi (`hp1_uz`).
+
+    Ilgari bu yerda users_db.json har safar to'liq qayta yozilardi va yozish
+    uzilsa butun tarix yo'qolishi mumkin edi - endi bitta qator (hpevents).
     """
-    async with db_lock:
-        try:
-            async with aiofiles.open(USERS_FILE, "r", encoding="utf-8") as f:
-                content = await f.read()
-                db = json.loads(content) if content else {}
-        except (FileNotFoundError, json.JSONDecodeError):
-            db = {}
-
-        user_id = str(user.id)
-        
-        if user_id not in db:
-            db[user_id] = {
-                "nickname": user.full_name,
-                "username": f"@{user.username}" if user.username else "Yo'q",
-                "clicks": {}
-            }
-        else:
-            db[user_id]["nickname"] = user.full_name
-            db[user_id]["username"] = f"@{user.username}" if user.username else "Yo'q"
-
-        if payload not in db[user_id]["clicks"]:
-            db[user_id]["clicks"][payload] = []
-            
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        db[user_id]["clicks"][payload].append(now)
-
-        async with aiofiles.open(USERS_FILE, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(db, indent=4, ensure_ascii=False))
-
-    await sheets.append_click(user.id, db[user_id]["nickname"], db[user_id]["username"],
-                              sheet_payload or payload, now)
+    nickname = user.full_name
+    username = f"@{user.username}" if user.username else "Yo'q"
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        await hpevents.log(user.id, nickname, username, payload, now)
+    except Exception as e:
+        logging.error("Harakatni bazaga yozishda xato (%s, %s): %s", user.id, payload, e)
+    await sheets.append_click(user.id, nickname, username, sheet_payload or payload, now)
 
 
 async def send_html(chat_id, text, **kw):
@@ -449,11 +430,9 @@ async def start_cmd(message: types.Message, command: CommandObject):
 
     is_new = True
     try:
-        async with aiofiles.open(USERS_FILE, "r", encoding="utf-8") as f:
-            content = await f.read()
-            is_new = str(user_id) not in (json.loads(content) if content else {})
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass
+        is_new = not await hpevents.known(user_id)
+    except Exception as e:
+        logging.error("Yangi odammi - aniqlab bo'lmadi (%s): %s", user_id, e)
 
     if not payload or is_new:
         await log_user_action(message.from_user, "start")
@@ -2205,6 +2184,63 @@ async def api_wallet(request):
 async def handle(request):
     return web.Response(text="Bot is alive!")
 
+
+# --- QOROVUL (WATCHDOG) ---
+# Healthcheck faqat "kasal" deb belgilaydi, hech kim botni qayta yoqmaydi -
+# bir marta bot 17 daqiqa javobsiz turgan (2026-09-21). Endi alohida oqim har
+# 30 soniyada tekshiradi: asosiy sikl tirikmi va veb-server javob beryaptimi.
+# 3 marta ketma-ket javob bo'lmasa - sababini yozib, jarayon to'xtatiladi;
+# Docker (restart: unless-stopped) uni darhol qayta yoqadi, qayta yonganda
+# adminlarga sababi bilan xabar boradi.
+WATCHDOG_FILE = "/data/watchdog.json"
+_beat = {"t": time.monotonic()}
+
+
+async def _heartbeat():
+    while True:
+        _beat["t"] = time.monotonic()
+        await asyncio.sleep(10)
+
+
+def _watchdog(port, grace=180, every=30, limit=3):
+    import urllib.request
+    time.sleep(grace)                 # ishga tushish vaqti (tarmoq sekin bo'lishi mumkin)
+    xato = 0
+    while True:
+        sabab = None
+        if time.monotonic() - _beat["t"] > 120:
+            sabab = "asosiy sikl 2 daqiqadan beri qotgan"
+        else:
+            try:
+                urllib.request.urlopen("http://127.0.0.1:%d/" % port, timeout=10).read()
+            except Exception as e:
+                sabab = "veb-server javob bermadi: %s" % e
+        xato = xato + 1 if sabab else 0
+        if xato >= limit:
+            try:
+                with open(WATCHDOG_FILE, "w", encoding="utf-8") as f:
+                    json.dump({"sabab": sabab, "vaqt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}, f)
+            except Exception:
+                pass
+            logging.critical("QOROVUL: %s - bot qayta ishga tushiriladi", sabab)
+            os._exit(1)
+        time.sleep(every)
+
+
+async def _watchdog_report():
+    """Oldingi ishga tushishni qorovul to'xtatgan bo'lsa - adminlarga xabar."""
+    try:
+        with open(WATCHDOG_FILE, encoding="utf-8") as f:
+            info = json.load(f)
+        os.remove(WATCHDOG_FILE)
+    except FileNotFoundError:
+        return
+    except Exception as e:
+        logging.error("watchdog.json o'qilmadi: %s", e)
+        return
+    await alert_admins("watchdog", "♻️ Bot o'zini qayta ishga tushirdi (%s UTC).\nSabab: %s"
+                       % (info.get("vaqt"), info.get("sabab")), oraliq=0)
+
 async def main():
     logging.info("Bot va Server ishga tushmoqda...")
     app = web.Application(middlewares=[test_mode_middleware])
@@ -2227,6 +2263,11 @@ async def main():
     try:
         # users_db.json - 1.0 dagi fakultetlarni ko'chirish uchun manba
         await hpcup.init(USERS_FILE)
+        # users_db.json (muzlatilgan) tarixi bir marta events jadvaliga ko'chadi
+        try:
+            await hpevents.init(USERS_FILE)
+        except Exception as ev_error:          # buzuq JSON kubokni to'xtatmasin
+            logging.error("users_db.json ko'chirilmadi: %s", ev_error)
         hpbot.register(dp, bot, app, {
             "channel_id": CHANNEL_ID,
             "verify_init_data": verify_init_data,
@@ -2298,6 +2339,9 @@ async def main():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     logging.info("Veb-server ishga tushdi.")
+    asyncio.create_task(_heartbeat())
+    threading.Thread(target=_watchdog, args=(port,), daemon=True).start()
+    asyncio.create_task(_watchdog_report())
     
     # Bot o'z inline kartasini boshqa botnikidan ajratishi uchun kerak.
     global BOT_ID
@@ -2308,7 +2352,9 @@ async def main():
         logging.error("Bot id sini olishda xato: %s", e)
 
     try:
-        await bot.delete_webhook(drop_pending_updates=True) 
+        # Kutib turgan xabarlar TASHLANMAYDI: deploy paytida bosilgan /start, obuna
+        # tasdig'i va kanalga kirish-chiqish hodisalari qayta yonganda qabul qilinadi.
+        await bot.delete_webhook(drop_pending_updates=False)
         await dp.start_polling(
             bot,
             # inline_query SHART: ro'yxatda bo'lmasa Telegram bu update'ni

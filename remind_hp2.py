@@ -24,7 +24,7 @@ import urllib.error
 from datetime import datetime
 
 BASE = "/root/CatalogBot"
-USERS_FILE = os.path.join(BASE, "data", "users_db.json")
+DB_FILE = os.path.join(BASE, "data", "hp.db")
 SENT_FILE = os.path.join(BASE, "data", "sent_hp2.json")
 ENV_FILE = os.path.join(BASE, ".env")
 
@@ -85,6 +85,23 @@ def api(token, method, params, retries=3):
     return {"ok": False, "error_code": 0}
 
 
+def load_users():
+    """{uid: {nickname, clicks: {payload: [vaqt]}}} - hp.db dagi events jadvalidan.
+    (users_db.json 2026-09-30 da muzlatildi, tarix events ga ko'chgan.)"""
+    import sqlite3
+    conn = sqlite3.connect(DB_FILE, timeout=30)
+    try:
+        db = {}
+        for uid, nick, payload, ts in conn.execute(
+                "SELECT user_id, nickname, payload, ts FROM events ORDER BY id"):
+            rec = db.setdefault(str(uid), {"nickname": nick or "", "clicks": {}})
+            rec["nickname"] = nick or rec["nickname"]
+            rec["clicks"].setdefault(payload, []).append(ts)
+        return db
+    finally:
+        conn.close()
+
+
 def has_film(clicks, num):
     pat = re.compile(r"^hp%d(_|$)" % num)
     for k in clicks:
@@ -125,8 +142,7 @@ def main():
         print("XATO: .env da BOT_TOKEN yoki CHANNEL_ID yo'q")
         sys.exit(1)
 
-    with open(USERS_FILE, encoding="utf-8") as f:
-        db = json.load(f)
+    db = load_users()
     print("Bazada: %d foydalanuvchi" % len(db))
 
     sent_before = {}

@@ -1,0 +1,15 @@
+# Image ichiga faqat kod kiradi. Maxfiy kalitlar (.env, google_key.json) va
+# ma'lumotlar (data/, backups/) docker-compose orqali tashqaridan ulanadi -
+# ilgari ular 40+ eski image ichida nusxa bo'lib qolib ketgan edi.
+.env
+.env.*
+google_key.json
+data/
+backups/
+.git/
+__pycache__/
+*.pyc
+*.log
+*.bak
+tests/
+marvel_reklama.py

@@ -404,7 +404,11 @@ def _migrate(conn, users_json):
 
     # 2) users_db.json - fakultet va ismlarning manbai (eng oxirgi saralanish).
     #    Yuqoridagi qadam qo'ygan qiymatni ham to'g'rilaydi.
-    for uid, house, when, first_name, uname in _houses_from_json(users_json):
+    # users_db.json 2026-09-30 da muzlatildi va events jadvaliga ko'chdi - shundan
+    # keyin undan fakultetni qayta tiklash kerak emas (va xavfli: eski qiymat qaytib qoladi).
+    json_done = conn.execute("SELECT 1 FROM sqlite_master WHERE name='settings'").fetchone() and \
+        conn.execute("SELECT 1 FROM settings WHERE key='events_from_json'").fetchone()
+    for uid, house, when, first_name, uname in ([] if json_done else _houses_from_json(users_json)):
         conn.execute(
             "INSERT INTO users (user_id, first_name, username, house, sorted_at, created_at) VALUES (?,?,?,?,?,?) "
             "ON CONFLICT(user_id) DO UPDATE SET "
