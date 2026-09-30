@@ -1610,7 +1610,7 @@ def preview_options(movie_key, lang):
 
 PROMO_QUERIES = {"taklif", "invite", "пригласить"}
 PROMO_FILE = os.getenv("PROMO_FILE", "/data/promo.json")
-promo_state = {}          # til -> {"etag": ..., "id": file_id, "chat": ...}; shaxmat: "chess_<til>"
+promo_state = {}          # til -> {"sum": rasm mazmuni xeshi, "id": file_id, "chat": ...}; shaxmat: "chess_<til>"
 CARDS_TARGET = "/data/cards_target.json"
 
 
@@ -1656,23 +1656,31 @@ async def ensure_promo():
     vaqt = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=vaqt) as s:
         for lang, path in card_images():
+            # Rasm o'zgarganini MAZMUNIDAN bilamiz: GitHub Pages har yangilanishda
+            # ETag ni o'zgartiradi, shuning uchun ilgari har deploydan keyin bir xil
+            # rasmlar "Kartalar" mavzusiga qayta tashlanardi.
             try:
-                async with s.head(path) as r:
+                async with s.get(path) as r:
                     if r.status != 200:
                         continue
-                    belgi = r.headers.get("ETag") or r.headers.get("Last-Modified") or "1"
+                    etag = hashlib.md5(await r.read()).hexdigest()[:8]
             except Exception:
                 continue            # tarmoq uzildi - eski file_id qolaveradi
-            etag = hashlib.md5(belgi.encode()).hexdigest()[:8]
             joriy = promo_state.get(lang) or {}
             # Eski kanalga yuklangan rasmlar (chat yozilmagan) ham qayta yuklanadi
-            if joriy.get("id") and joriy.get("etag") == etag and joriy.get("chat") == chat:
-                continue
+            if joriy.get("id") and joriy.get("chat") == chat:
+                if joriy.get("sum") == etag:
+                    continue
+                if "sum" not in joriy:
+                    # Birinchi marta: hozirgi rasm allaqachon yuklangan - faqat belgilab qo'yamiz
+                    joriy["sum"] = etag
+                    changed = True
+                    continue
             try:
                 msg = await bot.send_photo(chat, "%s?v=%s" % (path, etag),
                                            message_thread_id=thread,
                                            disable_notification=True)
-                promo_state[lang] = {"etag": etag, "id": msg.photo[-1].file_id, "chat": chat}
+                promo_state[lang] = {"sum": etag, "id": msg.photo[-1].file_id, "chat": chat}
                 changed = True
                 logging.info("Reklama rasmi yuklandi: %s", lang)
             except Exception as e:
