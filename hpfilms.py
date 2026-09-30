@@ -27,7 +27,8 @@ Qo'lda (adminning bot bilan shaxsiy chatida):
     /film                 - hozirgi holat
     /film hp1_uz 1234     - hp1 o'zbekchasi guruhdagi 1234-xabar
     /film hp1_uz -        - bog'lanishni olib tashlash (eski kanalga qaytadi)
-Bog'lanmagan film eski kanaldan yuborilaveradi - hech narsa buzilmaydi.
+Bog'lanmagan film YUBORILMAYDI (eski kanal 2026-09-30 dan ishlatilmaydi) -
+foydalanuvchi "tez orada" / tushunarli xabar ko'radi, admin ogohlantiriladi.
 
 Zaxira ham shu guruhga: "Arxiv" mavzusida /arxiv yozilsa, backup_hp.py
 kundalik arxivni o'sha mavzuga yuboradi (/data/backup_target.json).
@@ -189,15 +190,13 @@ def rebuild():
 
 def table_text():
     flag = {"uz": "🇺🇿", "ru": "🇷🇺", "en": "🇬🇧"}
-    qator = ["🎬 Filmlar manbasi", "✅ guruh · ⚠️ guruh (tili mavzudan, tekshiring) · 📦 eski kanal · ❌ yo'q", ""]
+    qator = ["🎬 Filmlar manbasi", "✅ guruh · ⚠️ guruh (tili mavzudan, tekshiring) · ❌ yo'q", ""]
     for fid in catalog.FILMS:
         belgilar = []
         for l in catalog.LANGS:
             it = _data["map"].get("%s_%s" % (fid, l))
             if it and _data.get("group"):
                 b = "⚠️" if it.get("by") == "mavzu" else "✅"
-            elif catalog.is_ready(fid, l):
-                b = "📦"
             else:
                 b = "❌"
             belgilar.append(flag[l] + b)
@@ -377,7 +376,7 @@ async def on_film_command(message: types.Message):
     if bolak[2] == "-":
         _data["map"].pop(key, None)
         _save()
-        await message.answer("Olib tashlandi: %s (eski kanaldan yuboriladi)\n\n%s" % (key, table_text()))
+        await message.answer("Olib tashlandi: %s (endi yuborilmaydi)\n\n%s" % (key, table_text()))
         return
     if not bolak[2].isdigit() or not _data.get("group"):
         await message.answer("Avval guruhdagi til mavzusida /filmlar uz yozing, keyin raqam bering.")

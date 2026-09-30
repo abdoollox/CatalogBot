@@ -59,7 +59,6 @@ BOT_USERNAME = "garripotterkinobot"
 # /holat kabi xizmat buyruqlari faqat shu odamlarga (.env: ADMIN_IDS=1,2)
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",")
              if x.isdigit()}
-DB_CHANNEL_ID = -1003641399832
 # "Sinov o'quvchisi": admin ilovada shu rejimni yoqsa, so'rovlari MANFIY
 # raqamli alohida hisobga tushadi (-<o'z raqami>). Shunda u ilovani chinakam
 # yangi odam sifatida boshidan o'tadi: fakultet, tayoqcha, ball, chat - hammasi
@@ -334,8 +333,9 @@ def check_sub_keyboard(lang=DEFAULT_LANG):
     ])
 
 def film_ready(movie_key, lang):
-    """Film shu tilda yuborishga tayyormi: guruhda bog'langan yoki eski kanalda bor."""
-    return catalog.is_ready(movie_key, lang) or hpfilms.in_group(movie_key, lang)
+    """Film shu tilda yuborishga tayyormi: Database guruhida bog'langan (hpfilms).
+    Eski yopiq kanal (2026-09-30 gacha manba) ISHLATILMAYDI - o'chirilgan deb hisoblanadi."""
+    return hpfilms.in_group(movie_key, lang)
 
 
 def webapp_url(lang):
@@ -817,8 +817,10 @@ async def send_film(chat_id, movie_key, lang, vk_url=None):
     qayta yuboriladi: film yetkazish HECH QACHON shu sababdan to'xtamasin.
     """
     matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id)
-    # Manba: guruhda bog'langan bo'lsa - guruh (hpfilms), aks holda eski kanal.
-    manba = hpfilms.source(movie_key, lang) or (DB_CHANNEL_ID, catalog.FILMS[movie_key][lang]["message_id"])
+    # Manba - faqat Database guruhi (hpfilms). Bog'lanmagan film yuborilmaydi.
+    manba = hpfilms.source(movie_key, lang)
+    if not manba:
+        raise RuntimeError("film guruhda bog'lanmagan: %s_%s (message to copy not found)" % (movie_key, lang))
     kw = dict(chat_id=chat_id, from_chat_id=manba[0],
               message_id=manba[1],
               parse_mode="HTML",
@@ -961,7 +963,7 @@ def movie_from_markup(markup):
 @dp.message(Command("holat"), F.from_user.id.in_(ADMIN_IDS))
 async def status_cmd(message: types.Message):
     """Admin uchun: katalog, rasmlar va odamlar qayerdan kelgani."""
-    tayyor = ", ".join("%s %d/%d" % (BAYROQ[l], len(catalog.FILMS) - len(catalog.not_ready(l)),
+    tayyor = ", ".join("%s %d/%d" % (BAYROQ[l], sum(1 for f in catalog.FILMS if film_ready(f, l)),
                                        len(catalog.FILMS)) for l in catalog.LANGS)
     rep = await hpcup.source_report()
     lines = [
@@ -1621,13 +1623,29 @@ def preview_options(movie_key, lang):
 #
 # Nega CachedPhoto: tashqi URL bilan yuborilgan InlineQueryResultPhoto da
 # Telegram caption'ni tashlab yuborishi mumkin (Marvel botida shunday
-# bo'lgan). Shuning uchun rasm bir marta yopiq kanalga yuklanadi va
-# file_id saqlanadi. Rasm yangilansa (ETag o'zgarsa) - qayta yuklanadi.
+# bo'lgan). Shuning uchun rasm bir marta Database guruhining "Kartalar"
+# mavzusiga yuklanadi va file_id saqlanadi. Rasm yangilansa (ETag o'zgarsa)
+# yoki mavzu almashsa - qayta yuklanadi. Mavzu u yerda /kartalar yozib
+# belgilanadi (/data/cards_target.json). Belgilanmagan bo'lsa - yuklanmaydi.
 # Rasmlar: CatalogWebApp/img/promo_<til>.jpg (tools/promogen.py).
 
 PROMO_QUERIES = {"taklif", "invite", "пригласить"}
 PROMO_FILE = os.getenv("PROMO_FILE", "/data/promo.json")
-promo_state = {}          # til -> {"etag": ..., "id": file_id}; shaxmat: "chess_<til>"
+promo_state = {}          # til -> {"etag": ..., "id": file_id, "chat": ...}; shaxmat: "chess_<til>"
+CARDS_TARGET = "/data/cards_target.json"
+
+
+def cards_target():
+    """(chat, mavzu) - karta rasmlari yuklanadigan joy, yoki (None, None)."""
+    try:
+        with open(CARDS_TARGET, encoding="utf-8") as f:
+            t = json.load(f)
+        return t.get("chat"), t.get("thread")
+    except FileNotFoundError:
+        return None, None
+    except Exception as e:
+        logging.error("cards_target.json o'qilmadi: %s", e)
+        return None, None
 
 
 def promo_path(lang):
@@ -1650,7 +1668,11 @@ async def load_promo():
 
 
 async def ensure_promo():
-    """Har til uchun rasm yopiq kanalga yuklanganiga ishonch hosil qiladi."""
+    """Har til uchun rasm "Kartalar" mavzusiga yuklanganiga ishonch hosil qiladi."""
+    chat, thread = cards_target()
+    if not chat:
+        logging.warning("Kartalar mavzusi belgilanmagan (/kartalar) - rasmlar yuklanmadi")
+        return
     changed = False
     vaqt = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=vaqt) as s:
@@ -1664,13 +1686,14 @@ async def ensure_promo():
                 continue            # tarmoq uzildi - eski file_id qolaveradi
             etag = hashlib.md5(belgi.encode()).hexdigest()[:8]
             joriy = promo_state.get(lang) or {}
-            if joriy.get("id") and joriy.get("etag") == etag:
+            # Eski kanalga yuklangan rasmlar (chat yozilmagan) ham qayta yuklanadi
+            if joriy.get("id") and joriy.get("etag") == etag and joriy.get("chat") == chat:
                 continue
             try:
-                msg = await bot.send_photo(DB_CHANNEL_ID,
-                                           "%s?v=%s" % (path, etag),
+                msg = await bot.send_photo(chat, "%s?v=%s" % (path, etag),
+                                           message_thread_id=thread,
                                            disable_notification=True)
-                promo_state[lang] = {"etag": etag, "id": msg.photo[-1].file_id}
+                promo_state[lang] = {"etag": etag, "id": msg.photo[-1].file_id, "chat": chat}
                 changed = True
                 logging.info("Reklama rasmi yuklandi: %s", lang)
             except Exception as e:
@@ -1681,6 +1704,32 @@ async def ensure_promo():
                 await f.write(json.dumps(promo_state, ensure_ascii=False))
         except Exception as e:
             logging.error("promo.json ga yozishda xato: %s", e)
+
+
+@dp.message(Command("kartalar"))
+async def cards_topic_cmd(message: types.Message):
+    """Database guruhidagi "Kartalar" mavzusida /kartalar - karta rasmlari shu yerga yuklanadi."""
+    u = message.from_user
+    admin = (u and u.id in ADMIN_IDS) or (message.sender_chat and message.sender_chat.id == message.chat.id)
+    if not admin or message.chat.type != "supergroup":
+        return
+    thread = message.message_thread_id if message.is_topic_message else None
+    tmp = CARDS_TARGET + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"chat": message.chat.id, "thread": thread}, f)
+    os.replace(tmp, CARDS_TARGET)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await ensure_promo()
+    tayyor = sum(1 for v in promo_state.values() if v.get("chat") == message.chat.id)
+    try:
+        await bot.send_message(message.chat.id, "🖼 Reklama va shaxmat kartalarining rasmlari shu mavzuda "
+                               "saqlanadi (%d ta)." % tayyor, message_thread_id=thread,
+                               disable_notification=True)
+    except Exception as e:
+        logging.warning("Kartalar mavzusiga javob yozilmadi: %s", e)
 
 
 def promo_caption(lang, inviter_name=None):
