@@ -34,6 +34,7 @@ import hpchess
 import hpleave
 import hpkanal
 import hpmusic
+import hpfilms
 try:
     import hpxat            # xat rasmi (Pillow kerak)
 except Exception as _xat_error:   # kutubxona yo'q bo'lsa bot baribir ishlasin
@@ -158,6 +159,22 @@ async def send_html(chat_id, text, **kw):
         return await bot.send_message(chat_id, oddiy, parse_mode="HTML", **kw)
 
 
+_alert_vaqt = {}
+
+
+async def alert_admins(kalit, matn, oraliq=3600):
+    """Adminlarga xabar. Bir xil sabab (kalit) soatda bir martadan ko'p yuborilmaydi."""
+    hozir = time.time()
+    if hozir - _alert_vaqt.get(kalit, 0) < oraliq:
+        return
+    _alert_vaqt[kalit] = hozir
+    for uid in ADMIN_IDS:
+        try:
+            await bot.send_message(uid, matn[:3500])
+        except Exception as e:
+            logging.warning("Adminga ogohlantirish bormadi (%s): %s", uid, e)
+
+
 # --- BOT MATNLARI (uch tilda) ---
 # Foydalanuvchi /start da tilni bir marta tanlaydi; keyin BARCHA xabarlar
 # va filmlar shu tilda boradi.
@@ -172,6 +189,7 @@ TEXTS = {
         "btn_lang": "Tilni o'zgartirish",
         "not_subscribed": "Hali obuna bo'lmadingiz! Avval kanalga a'zo bo'ling.",
         "soon": "⏳ Bu tildagi film tez orada yuklanadi.",
+        "send_fail": "😔 Kechirasiz, bu filmni hozir yuborib bo'lmadi. Adminlar xabardor — tez orada tuzatamiz.",
         "brand": "GARRI POTTER KOLLEKSIYA",
         "nothing_found": "Topilmadi",
         "try_other": "Boshqa nom bilan urinib ko'ring",
@@ -207,6 +225,7 @@ TEXTS = {
         "btn_lang": "Сменить язык",
         "not_subscribed": "Вы ещё не подписаны! Сначала вступите в канал.",
         "soon": "⏳ Фильм на этом языке скоро появится.",
+        "send_fail": "😔 Извините, сейчас не получилось отправить этот фильм. Админы уже знают — скоро исправим.",
         "brand": "КОЛЛЕКЦИЯ ГАРРИ ПОТТЕРА",
         "nothing_found": "Ничего не найдено",
         "try_other": "Попробуйте другое название",
@@ -242,6 +261,7 @@ TEXTS = {
         "btn_lang": "Change language",
         "not_subscribed": "You are not subscribed yet! Please join the channel first.",
         "soon": "⏳ The film in this language will be uploaded soon.",
+        "send_fail": "😔 Sorry, we couldn't send this film right now. The admins know — we'll fix it soon.",
         "brand": "HARRY POTTER COLLECTION",
         "nothing_found": "Nothing found",
         "try_other": "Try another title",
@@ -312,6 +332,11 @@ def check_sub_keyboard(lang=DEFAULT_LANG):
         [InlineKeyboardButton(text=t["btn_check"], callback_data="check_sub",
                               icon_custom_emoji_id=emoji.icon("tasdiq"))]
     ])
+
+def film_ready(movie_key, lang):
+    """Film shu tilda yuborishga tayyormi: guruhda bog'langan yoki eski kanalda bor."""
+    return catalog.is_ready(movie_key, lang) or hpfilms.in_group(movie_key, lang)
+
 
 def webapp_url(lang):
     """WebApp manzili tanlangan til bilan.
@@ -588,7 +613,7 @@ async def handle_payload(user, chat_id, payload):
         # referal qismisiz - eski yozuvlar bilan bir xil bo'lsin.
         payload_clean = "%s_%s" % (movie_key, lang)
 
-        if movie_data.get("message_id", 0) == 0:
+        if not film_ready(movie_key, lang):
             await bot.send_message(chat_id, T(lang)["soon"])
             return
 
@@ -612,7 +637,14 @@ async def handle_payload(user, chat_id, payload):
 
     except Exception as e:
         logging.error(f"Kritik API xatosi: {e}")
-        await bot.send_message(chat_id, f"⚠️ Telegram API xatosi (Fayl yuborish quladi): {str(e)}")
+        # Foydalanuvchiga texnik matn ko'rsatilmaydi - uning tilida tushunarli xabar,
+        # adminlarga esa sababi bilan ogohlantirish.
+        lang_u = await user_lang(chat_id) or DEFAULT_LANG
+        try:
+            await bot.send_message(chat_id, T(lang_u)["send_fail"])
+        except Exception:
+            pass
+        await alert_admins("film:%s" % payload, "⚠️ Film yuborilmadi: %s\n%s" % (payload, e))
 
 
 async def after_subscribe(user, chat_id, payload, prompt_message_id=None):
@@ -759,7 +791,7 @@ def share_caption(movie_key, film, lang, sharer_id=None):
         lines.append("%s %s: %s" % (emoji.tag("vaqt"), k["vaqt"],
                                     k["soat"] % divmod(daqiqa, 60)))
     # Sifat faqat yuklangan versiyada - yuklanmaganida bu va'da bo'lib qolardi
-    if catalog.is_ready(movie_key, lang):
+    if film_ready(movie_key, lang):
         lines.append("%s %s: %s" % (emoji.tag("sifat"), k["sifat"], catalog.QUALITY))
     # Faqat shu versiyaning tili. Boshqa tillar ("yana 🇷🇺 🇬🇧") ataylab
     # yozilmaydi - foydalanuvchi kerak emas dedi (2026-09-10).
@@ -785,14 +817,18 @@ async def send_film(chat_id, movie_key, lang, vk_url=None):
     qayta yuboriladi: film yetkazish HECH QACHON shu sababdan to'xtamasin.
     """
     matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id)
-    kw = dict(chat_id=chat_id, from_chat_id=DB_CHANNEL_ID,
-              message_id=catalog.FILMS[movie_key][lang]["message_id"],
+    # Manba: guruhda bog'langan bo'lsa - guruh (hpfilms), aks holda eski kanal.
+    manba = hpfilms.source(movie_key, lang) or (DB_CHANNEL_ID, catalog.FILMS[movie_key][lang]["message_id"])
+    kw = dict(chat_id=chat_id, from_chat_id=manba[0],
+              message_id=manba[1],
               parse_mode="HTML",
               reply_markup=movie_delivery_keyboard(movie_key, lang, vk_url),
               protect_content=True)
     try:
         return await bot.copy_message(caption=matn, **kw)
     except TelegramBadRequest as e:
+        if "not found" in str(e).lower():
+            raise                     # manbadagi xabar yo'q - oddiy belgilar ham yordam bermaydi
         logging.warning("Film custom emoji bilan yuborilmadi (%s): %s", chat_id, e)
         return await bot.copy_message(caption=emoji.strip_tags(matn), **kw)
 
@@ -847,7 +883,7 @@ async def inline_search(query: types.InlineQuery):
         juftlar = [(fid, l) for l in tartib for fid, _ in topildi]
 
     # Yuklanmagan versiya ko'rsatilmaydi: ulashilsa, do'st uni ocha olmasdi.
-    juftlar = [(f, l) for f, l in juftlar if catalog.is_ready(f, l)][:INLINE_LIMIT]
+    juftlar = [(f, l) for f, l in juftlar if film_ready(f, l)][:INLINE_LIMIT]
 
     natijalar = []
     for movie_key, film_tili in juftlar:
@@ -1879,7 +1915,7 @@ async def api_send(request):
 
     # Bu tilda hali yuklanmagan. WebApp bunday kartani kulrang qilib
     # ko'rsatadi, lekin eski ilova qolib ketishi mumkin - server ham tekshiradi.
-    if not catalog.is_ready(movie_key, lang):
+    if not film_ready(movie_key, lang):
         return _cors(web.json_response({"ok": False, "error": "not_ready"}))
 
     if await is_subscribed(tg_chat_id(user.id)) is False:
@@ -1893,6 +1929,10 @@ async def api_send(request):
         # Eng ko'p uchraydigani: foydalanuvchi botni hech qachon ochmagan,
         # shuning uchun bot unga yoza olmaydi.
         logging.error("API orqali yuborishda xato (%s): %s", movie_key, e)
+        if "not found" in str(e).lower():
+            await alert_admins("film:%s_%s" % (movie_key, lang),
+                               "⚠️ Film yuborilmadi: %s_%s\n%s" % (movie_key, lang, e))
+            return _cors(web.json_response({"ok": False, "error": "film_missing"}))
         return _cors(web.json_response({"ok": False, "error": "send_failed"}))
 
     # Sinov o'quvchisining harakati statistikaga yozilmaydi
@@ -2170,6 +2210,13 @@ async def main():
         })
     except Exception as music_error:
         logging.error("Soundtrack ishga tushmadi: %s", music_error)
+
+    # --- Filmlar bazasi guruhda ---
+    # Musiqadan KEYIN (uning guruh o'qish vositalarini ishlatadi), hpleave dan OLDIN.
+    try:
+        hpfilms.register(dp, bot, {"admin_ids": ADMIN_IDS})
+    except Exception as films_error:
+        logging.error("Filmlar moduli ishga tushmadi: %s", films_error)
 
     # --- Chiqib ketish so'rovi ---
     # Alohida try: bu ishlamay qolsa ham bot kino tarqatishda davom etsin.

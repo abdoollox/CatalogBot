@@ -1620,6 +1620,14 @@ async def film_questions(user_id, season_id, film_part):
         _pick_film_questions, user_id, season_id, film_part)
 
 
+def _public_question(q):
+    """Ilovaga yuboriladigan savol: to'g'ri javob raqamisiz (javob faqat
+    yuborilgandan keyin, /api/tasks/submit javobida qaytadi)."""
+    if not q:
+        return q
+    return {k: v for k, v in q.items() if k != "correct_index"}
+
+
 def _row_to_question(r):
     try:
         options = json.loads(r["options"])
@@ -1873,7 +1881,7 @@ async def get_user_tasks(user_id):
             conn.close()
             
         if has_daily:
-            dq = _daily_question(today_str)
+            dq = _public_question(_daily_question(today_str))
             if dq:
                 res.append({
                     "id": "daily",
@@ -1882,15 +1890,19 @@ async def get_user_tasks(user_id):
                     "questions": [dq]
                 })
                 
+        # Kino bali "1".."8" ko'rinishida yoziladi (hpbot.award_film_open); juda eski
+        # yozuvlar "hp1" bo'lishi mumkin. Ilgari faqat "hp1" tanilardi - natijada
+        # film imtihonlari ilovada UMUMAN chiqmasdi.
+        parts = set()
         for mov_id in opened_refs:
-            film_part = 0
-            if mov_id.startswith("hp"):
-                try:
-                    film_part = int(mov_id[2:])
-                except:
-                    pass
+            ref = str(mov_id)
+            ref = ref[2:] if ref.startswith("hp") else ref
+            if ref.isdigit() and 1 <= int(ref) <= FILM_PARTS:
+                parts.add(int(ref))
+        for film_part in sorted(parts):
+            mov_id = "hp%d" % film_part
             if film_part:
-                qs = _pick_film_questions(user_id, season["id"], film_part)
+                qs = [_public_question(q) for q in _pick_film_questions(user_id, season["id"], film_part)]
                 if qs:
                     res.append({
                         "id": f"quiz_{mov_id}",
@@ -1913,9 +1925,25 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
     def _check():
         conn = _connect()
         try:
-            q = conn.execute("SELECT correct_index FROM questions WHERE id=?", (int(question_id),)).fetchone()
+            q = conn.execute("SELECT kind, correct_index FROM questions WHERE id=?", (int(question_id),)).fetchone()
             if not q:
                 return {"ok": False, "error": "Question not found"}
+            # Faqat shu odamga HOZIR berilgan savolga javob qabul qilinadi:
+            # kunlik - bugungi savol, imtihon - shu mavsumda unga biriktirilgan savol
+            # (biriktirish faqat ochilgan filmlar uchun bo'ladi). Ilgari istalgan
+            # savol raqamini yuborib, film ko'rmasdan haftasiga 1080 ball olish mumkin edi.
+            if task_type == "daily":
+                allowed = q["kind"] == "daily" and conn.execute(
+                    "SELECT 1 FROM daily_schedule WHERE date=? AND question_id=?",
+                    (today_tk(), int(question_id))).fetchone()
+            elif task_type == "film_quiz":
+                allowed = q["kind"] == "film" and conn.execute(
+                    "SELECT 1 FROM question_assignments WHERE user_id=? AND season_id=? AND question_id=?",
+                    (int(user_id), season["id"], int(question_id))).fetchone()
+            else:
+                allowed = False
+            if not allowed:
+                return {"ok": False, "error": "not_assigned"}
                 
             ans = conn.execute("SELECT 1 FROM answers WHERE user_id=? AND season_id=? AND question_id=?", 
                                (int(user_id), season["id"], int(question_id))).fetchone()
@@ -1940,7 +1968,9 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
             pts = PTS_FILM_QUIZ
             
         if pts > 0:
-            await award(user_id, task_type, str(question_id), pts)
+            # Kunlik savol kuniga bir marta - bot yo'li bilan bir xil kalit (sana)
+            ref = today_tk() if task_type == "daily" else str(question_id)
+            await award(user_id, task_type, ref, pts)
             
     res["points"] = pts
     return res
