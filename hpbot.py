@@ -598,7 +598,9 @@ def register(dp, bot, app, cfg):
             return cors(web.json_response({"error": "unauthorized"}, status=403))
         uid = user["id"]
 
-        tasks_data = await hpcup.get_user_tasks(uid)
+        # Savollar ilovadagi tilda (?lang=uz|ru|en); tarjima bo'lmasa o'zbekcha
+        lang = request.query.get("lang") or ((body or {}).get("lang") if isinstance(body, dict) else None)
+        tasks_data = await hpcup.get_user_tasks(uid, lang or "uz")
         return cors(web.json_response(tasks_data))
 
     async def api_submit_task(request):

@@ -320,6 +320,15 @@ def _migrate(conn, users_json):
     """1.0 -> 2.0/3.0. Bir necha marta chaqirilsa ham xavfsiz."""
     stamp = _utc_iso(now_tk())
 
+    # Savollar: doimiy kalit (questions/*.json dagi "key") va tarjimalar (ru/en)
+    q_cols = [r[1] for r in conn.execute("PRAGMA table_info(questions)")]
+    if "qkey" not in q_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN qkey TEXT")
+    if "tr" not in q_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN tr TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_qkey ON questions(qkey) "
+                 "WHERE qkey IS NOT NULL")
+
     # 0) first_name ustunini users jadvaliga qo'shamiz (agar yo'q bo'lsa)
     user_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
     if "first_name" not in user_cols:
@@ -490,46 +499,134 @@ def _migrate(conn, users_json):
         logging.info("Kubok migratsiyasi: points cheklovi yangilandi (referral)")
 
 
-def _seed_questions(questions_dir=None):
-    """Bazada faol savollar bo'lmasa, questions/ papkasidan yuklaydi."""
+def _questions_dir():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    for c in (os.getenv("HP_QUESTIONS_DIR", "/app/questions"),
+              os.path.join(base_dir, "questions"),
+              os.path.join(base_dir, "data", "questions")):
+        if os.path.isdir(c):
+            return c
+    return None
+
+
+def _read_question_files(questions_dir):
+    """questions/*.json dagi savollar. Biror fayl buzuq bo'lsa - None
+    (shunda sinxronlash umuman bajarilmaydi, hech narsa o'chirilmaydi).
+
+    Fayl formati - ro'yxat:
+      {"key": "hp1-01", "kind": "film", "film_part": 1, "correct": 2,
+       "uz": {"q": "...", "a": ["", "", "", ""]}, "ru": {...}, "en": {...},
+       "was": "eski o'zbekcha matn"}   # ixtiyoriy: matn o'zgargan eski savol
+    `key` O'ZGARMAYDI - javoblar tarixi shu savolga bog'langan."""
+    items, keys = [], set()
+    for filename in sorted(os.listdir(questions_dir)):
+        if not filename.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(questions_dir, filename), encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            logging.error("Savollar fayli o'qilmadi (%s): %s", filename, e)
+            return None
+        for q in data:
+            key, kind, uz = q.get("key"), q.get("kind"), q.get("uz") or {}
+            ok = (isinstance(key, str) and key and key not in keys
+                  and kind in ("film", "daily")
+                  and (kind == "daily" or q.get("film_part") in range(1, FILM_PARTS + 1))
+                  and isinstance(q.get("correct"), int) and 0 <= q["correct"] <= 3
+                  and uz.get("q") and len(uz.get("a") or []) == 4
+                  and all(len((q.get(l) or {}).get("a") or [0] * 4) == 4 for l in ("ru", "en")))
+            if not ok:
+                logging.error("Savol yaroqsiz (%s): %s", filename, key or uz.get("q"))
+                return None
+            keys.add(key)
+            items.append(q)
+    return items
+
+
+def _dedupe_questions(conn):
+    """Kalitsiz AYNAN bir xil savollarni bittaga birlashtiradi.
+
+    Jonli bazada 108 ta savol ikki marta yuklangan edi (id 1-108 va 109-216):
+    bir odamga bir haftada bitta savol ikki marta tushardi, kunlik savollar
+    ham ikki barobar sekin almashardi. Havolalar (javoblar, biriktirishlar,
+    kunlik jadval) eng kichik id ga ko'chiriladi, takror qator o'chiriladi.
+    Ikkala nusxaga javob bergan bo'lsa - birinchisi qoladi (ball tarixiga
+    tegilmaydi)."""
+    pairs = conn.execute(
+        "SELECT q.id AS dup, (SELECT MIN(o.id) FROM questions o WHERE o.qkey IS NULL "
+        "  AND o.kind=q.kind AND IFNULL(o.film_part,0)=IFNULL(q.film_part,0) AND o.body=q.body "
+        "  AND o.options=q.options AND o.correct_index=q.correct_index) AS keep "
+        "FROM questions q WHERE q.qkey IS NULL").fetchall()
+    n = 0
+    for p in pairs:
+        dup, keep = p["dup"], p["keep"]
+        if dup == keep:
+            continue
+        for table in ("answers", "question_assignments"):
+            conn.execute("UPDATE OR IGNORE %s SET question_id=? WHERE question_id=?" % table, (keep, dup))
+            conn.execute("DELETE FROM %s WHERE question_id=?" % table, (dup,))
+        conn.execute("UPDATE daily_schedule SET question_id=? WHERE question_id=?", (keep, dup))
+        conn.execute("DELETE FROM questions WHERE id=?", (dup,))
+        n += 1
+    if n:
+        logging.info("Savollar: %d ta takror nusxa birlashtirildi", n)
+    return n
+
+
+def _sync_questions(questions_dir=None):
+    """Fayldagi savollarni bazaga moslaydi: yangisini qo'shadi, o'zgarganini
+    yangilaydi, fayldan olib tashlanganini o'chiradi (is_active=0).
+    Savol raqami (id) saqlanadi - javoblar va biriktirishlar buzilmaydi.
+    Kalitsiz eski savollar o'zbekcha matni (yoki "was") bo'yicha topiladi."""
+    questions_dir = questions_dir or _questions_dir()
+    if not questions_dir:
+        return None
+    items = _read_question_files(questions_dir)
+    if not items:
+        return None
     conn = _connect()
     try:
-        count = conn.execute("SELECT COUNT(*) FROM questions WHERE is_active=1").fetchone()[0]
+        _dedupe_questions(conn)
+        by_key = {r["qkey"]: r["id"] for r in conn.execute(
+            "SELECT id, qkey FROM questions WHERE qkey IS NOT NULL")}
+        legacy = {}
+        for r in conn.execute("SELECT id, kind, film_part, body FROM questions WHERE qkey IS NULL"):
+            legacy.setdefault((r["kind"], r["film_part"], r["body"]), r["id"])
+        added = matched = 0
+        for q in items:
+            part = q.get("film_part") if q["kind"] == "film" else None
+            tr = {l: q[l] for l in ("ru", "en") if q.get(l)}
+            vals = (q["kind"], part, q["uz"]["q"], json.dumps(q["uz"]["a"], ensure_ascii=False),
+                    q["correct"], json.dumps(tr, ensure_ascii=False) if tr else None)
+            qid = by_key.get(q["key"])
+            if qid is None:
+                was = q.get("was") or []
+                for body in [q["uz"]["q"]] + (was if isinstance(was, list) else [was]):
+                    qid = legacy.pop((q["kind"], part, body), None)
+                    if qid is not None:
+                        matched += 1
+                        break
+            if qid is None:
+                conn.execute(
+                    "INSERT INTO questions (kind, film_part, lang, body, options, correct_index, "
+                    "tr, qkey, is_active) VALUES (?,?,'uz',?,?,?,?,?,1)", vals + (q["key"],))
+                added += 1
+            else:
+                conn.execute(
+                    "UPDATE questions SET kind=?, film_part=?, body=?, options=?, correct_index=?, "
+                    "tr=?, qkey=?, is_active=1 WHERE id=?", vals + (q["key"], qid))
+        keys = [q["key"] for q in items]
+        off = conn.execute(
+            "UPDATE questions SET is_active=0 WHERE is_active=1 AND (qkey IS NULL OR qkey NOT IN (%s))"
+            % ",".join("?" * len(keys)), keys).rowcount
+        conn.commit()
+        res = {"total": len(items), "added": added, "matched": matched, "off": off}
+        logging.info("Savollar: %(total)d ta faylda, %(added)d yangi, %(matched)d eskisiga "
+                     "bog'landi, %(off)d o'chirildi", res)
+        return res
     finally:
         conn.close()
-
-    if count > 0:
-        return 0
-
-    if questions_dir is None:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        candidates = [
-            os.getenv("HP_QUESTIONS_DIR", "/app/questions"),
-            os.path.join(base_dir, "questions"),
-            os.path.join(base_dir, "data", "questions"),
-        ]
-        for c in candidates:
-            if os.path.isdir(c):
-                questions_dir = c
-                break
-
-    if not questions_dir or not os.path.isdir(questions_dir):
-        return 0
-
-    total_added = 0
-    for filename in sorted(os.listdir(questions_dir)):
-        if filename.endswith(".json"):
-            filepath = os.path.join(questions_dir, filename)
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    items = json.load(f)
-                    added = _load_questions(items, replace=False)
-                    total_added += added
-                    logging.info("Savollar yuklandi: %s (%d ta)", filename, added)
-            except Exception as e:
-                logging.error("Savollarni yuklashda xato (%s): %s", filename, e)
-
-    return total_added
 
 
 def _init(users_json):
@@ -542,7 +639,7 @@ def _init(users_json):
     finally:
         conn.close()
     try:
-        _seed_questions()
+        _sync_questions()
     except Exception as e:
         logging.error("Savollarni avtomatik yuklashda xato: %s", e)
 
@@ -1585,7 +1682,7 @@ def compute_gap(table, stats):
 
 # ---------------------------------------------------------------- savollar
 
-def _pick_film_questions(user_id, season_id, film_part):
+def _pick_film_questions(user_id, season_id, film_part, lang="uz"):
     conn = _connect()
     try:
         rows = conn.execute(
@@ -1594,17 +1691,22 @@ def _pick_film_questions(user_id, season_id, film_part):
             (int(user_id), season_id, film_part)).fetchall()
 
         if not rows:
+            # Oldingi haftalarda shu odamga necha marta berilgan - avval
+            # hali ko'rmaganlari, ular tugasa eng kam ko'rganlari.
             pool = conn.execute(
-                "SELECT * FROM questions "
-                "WHERE kind='film' AND film_part=? AND is_active=1",
-                (film_part,)).fetchall()
+                "SELECT q.*, (SELECT COUNT(*) FROM question_assignments a "
+                "             WHERE a.user_id=? AND a.question_id=q.id) AS seen "
+                "FROM questions q WHERE q.kind='film' AND q.film_part=? AND q.is_active=1",
+                (int(user_id), film_part)).fetchall()
             if not pool:
                 return []            # savollar hali yuklanmagan - jim o'tamiz
+            pool = list(pool)
+            random.shuffle(pool)
+            pool.sort(key=lambda r: r["seen"])
             # Tasodif - QAYSI savollar tanlanishida. Ko'rsatish tartibi esa
             # barqaror bo'lishi kerak: foydalanuvchi yarmida to'xtab, keyin
             # qaytsa, savollar o'sha tartibda davom etsin.
-            chosen = sorted(random.sample(list(pool), min(QUIZ_PER_FILM, len(pool))),
-                            key=lambda r: r["id"])
+            chosen = sorted(pool[:QUIZ_PER_FILM], key=lambda r: r["id"])
             conn.executemany(
                 "INSERT OR IGNORE INTO question_assignments "
                 "(user_id, season_id, film_part, question_id) VALUES (?,?,?,?)",
@@ -1616,15 +1718,15 @@ def _pick_film_questions(user_id, season_id, film_part):
             "SELECT question_id FROM answers WHERE user_id=? AND season_id=?",
             (int(user_id), season_id))}
 
-        return [_row_to_question(r) for r in rows if r["id"] not in answered]
+        return [_row_to_question(r, lang) for r in rows if r["id"] not in answered]
     finally:
         conn.close()
 
 
-async def film_questions(user_id, season_id, film_part):
+async def film_questions(user_id, season_id, film_part, lang="uz"):
     """Shu qism uchun biriktirilgan, hali javob berilmagan savollar."""
     return await asyncio.to_thread(
-        _pick_film_questions, user_id, season_id, film_part)
+        _pick_film_questions, user_id, season_id, film_part, lang)
 
 
 def _public_question(q):
@@ -1635,23 +1737,32 @@ def _public_question(q):
     return {k: v for k, v in q.items() if k != "correct_index"}
 
 
-def _row_to_question(r):
+def _row_to_question(r, lang="uz"):
+    """Savol so'ralgan tilda; tarjima bo'lmasa - o'zbekcha."""
     try:
         options = json.loads(r["options"])
     except (TypeError, ValueError):
         options = []
-    return {"id": r["id"], "body": r["body"], "options": options,
+    body = r["body"]
+    if lang and lang != "uz" and "tr" in r.keys() and r["tr"]:
+        try:
+            t = (json.loads(r["tr"]) or {}).get(lang) or {}
+            if t.get("q") and len(t.get("a") or []) == len(options):
+                body, options = t["q"], t["a"]
+        except (TypeError, ValueError):
+            pass
+    return {"id": r["id"], "body": body, "options": options,
             "correct_index": r["correct_index"]}
 
 
-def _daily_question(date_str):
+def _daily_question(date_str, lang="uz"):
     conn = _connect()
     try:
         row = conn.execute(
             "SELECT q.* FROM daily_schedule d JOIN questions q ON q.id=d.question_id "
             "WHERE d.date=?", (date_str,)).fetchone()
         if row:
-            return _row_to_question(row)
+            return _row_to_question(row, lang)
 
         row = conn.execute(
             "SELECT q.*, ("
@@ -1666,14 +1777,14 @@ def _daily_question(date_str):
             "INSERT OR IGNORE INTO daily_schedule (date, question_id) VALUES (?,?)",
             (date_str, row["id"]))
         conn.commit()
-        return _row_to_question(row)
+        return _row_to_question(row, lang)
     finally:
         conn.close()
 
 
-async def daily_question(date_str=None):
+async def daily_question(date_str=None, lang="uz"):
     """Shu kunning savoli. Belgilanmagan bo'lsa tanlab, jadvalga yozadi."""
-    return await asyncio.to_thread(_daily_question, date_str or today_tk())
+    return await asyncio.to_thread(_daily_question, date_str or today_tk(), lang)
 
 
 def _record_answer(user_id, season_id, question_id, is_correct):
@@ -1806,41 +1917,6 @@ async def recount_season(season_id):
     return await asyncio.to_thread(_recount, season_id)
 
 
-# ---------------------------------------------------------------- savol yuklash
-
-def _load_questions(items, replace=False):
-    conn = _connect()
-    try:
-        if replace:
-            conn.execute("UPDATE questions SET is_active=0")
-        added = 0
-        for q in items:
-            kind = q.get("kind")
-            if kind not in ("film", "daily"):
-                continue
-            options = q.get("options") or []
-            if len(options) != 4:
-                continue
-            ci = q.get("correct_index")
-            if not isinstance(ci, int) or not 0 <= ci <= 3:
-                continue
-            conn.execute(
-                "INSERT INTO questions (kind, film_part, lang, body, options, "
-                "correct_index, is_active) VALUES (?,?,?,?,?,?,1)",
-                (kind, q.get("film_part"), q.get("lang", "uz"), q["body"],
-                 json.dumps(options, ensure_ascii=False), ci))
-            added += 1
-        conn.commit()
-        return added
-    finally:
-        conn.close()
-
-
-async def load_questions(items, replace=False):
-    """JSON ro'yxatdan savollarni yuklaydi. Noto'g'ri yozuvlar o'tkaziladi."""
-    return await asyncio.to_thread(_load_questions, items, replace)
-
-
 def _counts():
     conn = _connect()
     try:
@@ -1864,7 +1940,16 @@ async def counts():
     return await asyncio.to_thread(_counts)
 
 
-async def get_user_tasks(user_id):
+TASK_TITLES = {
+    "daily": {"uz": "Kunlik savol", "ru": "Вопрос дня", "en": "Question of the day"},
+    "film": {"uz": "Garri Potter %d-qismi bo'yicha imtihon",
+             "ru": "Экзамен по %d-й части Гарри Поттера",
+             "en": "Harry Potter part %d exam"},
+}
+
+
+async def get_user_tasks(user_id, lang="uz"):
+    lang = lang if lang in ("uz", "ru", "en") else "uz"
     season = await current_season()
     if not season:
         return {"tasks": []}
@@ -1888,12 +1973,12 @@ async def get_user_tasks(user_id):
             conn.close()
             
         if has_daily:
-            dq = _public_question(_daily_question(today_str))
+            dq = _public_question(_daily_question(today_str, lang))
             if dq:
                 res.append({
                     "id": "daily",
                     "type": "daily",
-                    "title": "Kunlik savol",
+                    "title": TASK_TITLES["daily"][lang],
                     "questions": [dq]
                 })
                 
@@ -1909,13 +1994,13 @@ async def get_user_tasks(user_id):
         for film_part in sorted(parts):
             mov_id = "hp%d" % film_part
             if film_part:
-                qs = [_public_question(q) for q in _pick_film_questions(user_id, season["id"], film_part)]
+                qs = [_public_question(q) for q in _pick_film_questions(user_id, season["id"], film_part, lang)]
                 if qs:
                     res.append({
                         "id": f"quiz_{mov_id}",
                         "type": "film_quiz",
                         "film_id": mov_id,
-                        "title": f"Garri Potter {film_part}-qismi bo'yicha imtihon",
+                        "title": TASK_TITLES["film"][lang] % film_part,
                         "questions": qs
                     })
         return res

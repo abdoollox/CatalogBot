@@ -51,10 +51,12 @@ async def run_tests():
     
     counts = await hpcup.counts()
     print("Counts:", counts)
-    assert counts["questions"] == 108, f"Kutilgan 108 ta savol, topildi: {counts['questions']}"
+    import glob, json as _json
+    in_files = sum(len(_json.load(open(f, encoding="utf-8"))) for f in glob.glob(os.path.join(os.environ["HP_QUESTIONS_DIR"], "*.json")))
+    assert counts["questions"] == in_files, f"Kutilgan {in_files} ta savol, topildi: {counts['questions']}"
     assert counts["sorted_users"] == 2, f"Kutilgan 2 ta saralangan, topildi: {counts['sorted_users']}"
     assert counts["named_users"] == 2, f"Kutilgan 2 ta ismli, topildi: {counts['named_users']}"
-    print("✅ [1] Baza va savollar muvaffaqiyatli yuklandi (108 ta savol).")
+    print("✅ [1] Baza va savollar muvaffaqiyatli yuklandi (%d ta savol)." % in_files)
 
     # 2. Foydalanuvchilar ismlari va birinchi ism ajratilishi
     print("\n[2] Foydalanuvchi ismi va touch_user...")

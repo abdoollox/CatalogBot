@@ -94,6 +94,63 @@ async def test_small_points_count():
     check("0 balli a'zo sanalmaydi", huf.get("active_members") == 1)
 
 
+# ------------------------------------------------------------------ savollar bazasi
+async def test_questions():
+    """Savollar fayldan sinxronlanadi, takror nusxalar birlashadi, til tanlanadi,
+    imtihonda avval ko'rilmagan savollar beriladi."""
+    files = {}
+    for p in glob.glob(os.path.join(ROOT, "questions", "*.json")):
+        for q in json.load(open(p, encoding="utf-8")):
+            files[q["key"]] = q
+    conn = db()
+    check("fayldagi hamma savol bazada faol",
+          conn.execute("SELECT COUNT(*) FROM questions WHERE is_active=1 AND qkey IS NOT NULL").fetchone()[0] == len(files))
+    check("har savolda uch til", all(q.get("ru") and q.get("en") for q in files.values()))
+
+    # Jonli bazadagi holat: kalitsiz eski savol + uning aynan nusxasi, nusxaga havolalar
+    first = files["hp1-01"]
+    qid = conn.execute("SELECT id FROM questions WHERE qkey='hp1-01'").fetchone()[0]
+    conn.execute("UPDATE questions SET qkey=NULL, tr=NULL WHERE id=?", (qid,))
+    cur = conn.execute("INSERT INTO questions (kind, film_part, lang, body, options, correct_index, is_active) "
+                       "SELECT kind, film_part, lang, body, options, correct_index, 1 FROM questions WHERE id=?", (qid,))
+    dup = cur.lastrowid
+    season = (await hpcup.current_season())["id"]
+    conn.execute("INSERT INTO users (user_id, created_at) VALUES (901, '2026-01-01')")
+    conn.execute("INSERT INTO question_assignments VALUES (901, ?, 1, ?)", (season, dup))
+    conn.execute("INSERT INTO daily_schedule (date, question_id) VALUES ('2000-01-01', ?)", (dup,))
+    conn.commit()
+    res = hpcup._sync_questions()
+    check("sinx: eski savol kalitiga bog'landi", res["matched"] == 1 and res["added"] == 0)
+    check("takror nusxa o'chirildi", conn.execute("SELECT COUNT(*) FROM questions WHERE id=?", (dup,)).fetchone()[0] == 0)
+    check("havolalar asl savolga o'tdi",
+          conn.execute("SELECT question_id FROM question_assignments WHERE user_id=901").fetchone()[0] == qid
+          and conn.execute("SELECT question_id FROM daily_schedule WHERE date='2000-01-01'").fetchone()[0] == qid)
+    check("asl savol kaliti va tarjimasi qaytdi",
+          conn.execute("SELECT qkey FROM questions WHERE id=?", (qid,)).fetchone()[0] == "hp1-01")
+    check("qayta sinx hech narsa o'zgartirmaydi", hpcup._sync_questions() == {"total": len(files), "added": 0, "matched": 0, "off": 0})
+    conn.execute("DELETE FROM question_assignments WHERE user_id=901")
+    conn.commit()
+
+    # Til: ruscha/inglizcha matn, to'g'ri javob raqami bir xil
+    await hpcup.touch_user(902, "Til")
+    await hpcup.award(902, "film_open", "2", 5)
+    ru = [t for t in (await hpcup.get_user_tasks(902, "ru"))["tasks"] if t["type"] == "film_quiz"][0]
+    en = [t for t in (await hpcup.get_user_tasks(902, "en"))["tasks"] if t["type"] == "film_quiz"][0]
+    by_body = {files[k]["ru"]["q"]: k for k in files}
+    check("ruscha savol va sarlavha", ru["questions"][0]["body"] in by_body and ru["title"].startswith("Экзамен"))
+    check("inglizcha savol", en["questions"][0]["body"] == files[by_body[ru["questions"][0]["body"]]]["en"]["q"])
+    check("noma'lum til - o'zbekcha", (await hpcup.get_user_tasks(902, "xx"))["tasks"][0]["title"] == "Kunlik savol")
+
+    # Ko'rilmaganlar birinchi: 12 ta savol, har hafta 3 ta - 4 hafta takrorsiz
+    seen = []
+    for i in range(4):
+        conn.execute("INSERT INTO seasons (starts_at, ends_at, status) VALUES ('2000-01-0%d', '2000-01-0%d', 'closed')" % (i + 1, i + 2))
+        sid = conn.execute("SELECT MAX(id) FROM seasons").fetchone()[0]
+        conn.commit()
+        seen += [q["id"] for q in hpcup._pick_film_questions(903, sid, 3)]
+    check("4 haftada 12 xil savol (takrorsiz)", len(seen) == 12 and len(set(seen)) == 12)
+
+
 # ------------------------------------------------------------------ filmlar
 def V(name, cap=""):
     return {"mid": 0, "name": name, "cap": cap, "size": 1, "dur": 1}
@@ -235,6 +292,7 @@ def test_links_and_auth():
 async def amain():
     await test_exam()
     await test_small_points_count()
+    await test_questions()
     test_films_names()
     await test_films_scan()
     await test_send_film_without_source()
