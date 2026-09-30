@@ -34,6 +34,7 @@ import hpchess
 import hpleave
 import hpkanal
 import hpmusic
+import hpchatstat
 import hpfilms
 import hpevents
 import threading
@@ -2309,6 +2310,16 @@ async def main():
     except Exception as music_error:
         logging.error("Soundtrack ishga tushmadi: %s", music_error)
 
+    # --- Chat monitoringi (kuzatuv paneli) ---
+    try:
+        hpchatstat.register(app, {
+            "cors": _cors,
+            "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(
+                req.headers.get("X-Dash-Token", ""), DASH_TOKEN),
+        })
+    except Exception as chat_stat_error:
+        logging.error("Chat monitoringi ishga tushmadi: %s", chat_stat_error)
+
     # --- Filmlar bazasi guruhda ---
     # Musiqadan KEYIN (uning guruh o'qish vositalarini ishlatadi), hpleave dan OLDIN.
     try:
@@ -2336,6 +2347,7 @@ async def main():
     asyncio.create_task(wide_watcher())
     # Kanal soni - loglar to'g'ri tushayotganini tekshirish uchun
     asyncio.create_task(hpkanal.kuzatuvchi(bot, CHANNEL_ID))
+    asyncio.create_task(hpchatstat.kuzatuvchi())
     # Panel keshini oldindan to'ldiramiz: birinchi so'rov 15 soniya kutmasin.
     if DASH_TOKEN:
         asyncio.create_task(sheets.read_csv())

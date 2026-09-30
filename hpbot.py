@@ -755,7 +755,10 @@ def register(dp, bot, app, cfg):
         house = stats.get("house")
         admin = uid in (_cfg.get("admin_ids") or ())
         banned = await chat_banned(uid)
-        
+        # Panel uchun: chatni ochib turganlar (o'qilmaganlar sonini so'rash - chat emas)
+        if request.method == "POST" or not request.query.get("counts"):
+            hpcup.chat_seen_mark(uid)
+
         if request.method == "GET":
             hpcup.presence_mark(uid, house)
             if request.query.get("counts"):

@@ -1532,6 +1532,23 @@ def presence_online(user_id):
     return bool(seen) and time.monotonic() - seen[0] < PRESENCE_TTL
 
 
+_chat_wall = {}            # uid -> chatni oxirgi ochib turgan vaqt (time.time)
+
+
+def chat_seen_mark(user_id):
+    uid = int(user_id)
+    if uid > 0:
+        _chat_wall[uid] = time.time()
+
+
+def chat_seen_count(seconds):
+    """So'nggi `seconds` soniyada chatni ochib turganlar soni (eskilari tozalanadi)."""
+    now = time.time()
+    for k in [k for k, ts in _chat_wall.items() if now - ts > 3600]:
+        del _chat_wall[k]
+    return sum(1 for ts in _chat_wall.values() if now - ts <= seconds)
+
+
 def presence_count(house=None):
     """Hozir ilovada turganlar soni (house berilsa - shu fakultetdan)."""
     now = time.monotonic()

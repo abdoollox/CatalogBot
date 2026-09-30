@@ -289,6 +289,31 @@ def test_links_and_auth():
     check("soxta imzo rad etiladi", main.verify_init_data(urllib.parse.urlencode(data)) is None)
 
 
+# ------------------------------------------------------------------ chat monitoringi
+def test_chatstat():
+    import hpchatstat
+    conn = db()
+    conn.execute("INSERT INTO users (user_id, created_at, first_name, house) VALUES (951, '2026-01-01', 'Chat', 'ravenclaw')")
+    rows = [("global", 951, "salom hammaga", None, 0), ("ravenclaw", 951, "fakultet", None, 0),
+            ("dm:951:952", 951, "SIR matn", None, 0), ("global", 951, "o'chirdim", None, 1),
+            ("global", -951, "sinov hisobi", None, 0)]
+    for room, uid, text, reply, deleted in rows:
+        conn.execute("INSERT INTO chat_messages (house, user_id, message, created_at, deleted) VALUES (?,?,?,?,?)",
+                     (room, uid, text, "2026-09-30T10:00:00Z", deleted))
+    conn.execute("INSERT INTO chat_reads (user_id, room, last_id) VALUES (951, 'dm:951:952', 1)")
+    conn.commit()
+    d = hpchatstat._yig()
+    mine = [m for m in d["msgs"] if m[3] == "951"]
+    check("chat: sinov hisobi (manfiy id) chiqmaydi", not any(m[3] == "-951" for m in d["msgs"]))
+    check("chat: umumiy xona matni bor", any(m[7] == "salom hammaga" for m in mine))
+    check("chat: shaxsiy xabar matni YUBORILMAYDI", all(m[7] is None for m in mine if m[2] == "dm")
+          and not any("SIR" in (m[7] or "") for m in d["msgs"]))
+    check("chat: o'chirilgan xabar matni yuborilmaydi", [m[7] for m in mine if m[5] & 1] == [None])
+    check("chat: DM xonasi nomi yashirin", ["951", "dm"] in d["reads"] and d["users"]["951"][0] == "Chat")
+    hpchatstat._yoz(3, 1)
+    check("chat: onlayn o'lchovi yoziladi", hpchatstat._yig()["online"][-1][1:] == [3, 1])
+
+
 async def amain():
     await test_exam()
     await test_small_points_count()
@@ -304,5 +329,6 @@ if __name__ == "__main__":
     test_backup()
     test_watchdog()
     test_links_and_auth()
+    test_chatstat()
     print("O'tdi: %d, xato: %d" % (ok, fail))
     sys.exit(1 if fail else 0)
