@@ -6,7 +6,8 @@ WORKDIR /app
 
 # Kutubxonalar ro'yxatini serverga ko'chirish va o'rnatish
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Server interneti ba'zan uziladi: pip 15 soniyada voz kechib, "paket yo'q" deb yiqilardi
+RUN pip install --no-cache-dir --default-timeout=60 --retries 10 -r requirements.txt
 
 # Qolgan barcha kodlarni serverga ko'chirish
 COPY . .
