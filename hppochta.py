@@ -15,6 +15,12 @@ Qo'lda xat (egasi paneldan yozadi, 2026-10-01): kimga - hammaga, fakultetga,
 saralanmaganlarga yoki bitta odamga (til bo'yicha ham tanlasa bo'ladi);
 avval "o'zimga sinab ko'rish". Bot xabari yana faqat o'chirmaganlarga.
 
+Shaxsiy xabar (egasi so'radi, 2026-10-01): chatda kimdir shaxsiy yozsa va
+qabul qiluvchi uni 1 daqiqada o'qimasa - pochtaga "falonchi sizga yozdi" xati.
+Bitta suhbatdan o'qilmagan xat bo'lsa yangisi ochilmaydi, eskisining soni
+oshadi; bot xabari bitta suhbat uchun soatiga ko'pi bilan bir marta, tunda
+(22:00-08:00) ovozsiz. Suhbatni ochib o'qisa - xat o'zi o'qilgan bo'ladi.
+
 Qadamlar ilova (`/api/profile`) yuborganda shu yerga ham yoziladi. Shu
 modul paydo bo'lishidan oldingi qadamlar bir marta loglardan (Sheets) olinadi.
 """
@@ -60,6 +66,8 @@ MATN = {
         "open": "🦉 Xatni o'qish",
         "off": "🔕 Telegramda kerak emas",
         "offed": "Yaxshi, endi xatlar faqat ilova ichidagi 🦉 pochtada bo'ladi. U yerdan qayta yoqishingiz mumkin.",
+        "dm": "<b>%s</b> sizga shaxsiy xabar yozdi:", "dmN": "<b>%s</b> sizga %d ta shaxsiy xabar yozdi. Oxirgisi:",
+        "dmChess": "♟️ shaxmatga chaqirdi", "reply": "✉️ Javob yozish",
     },
     "ru": {
         "alley": ("Косой переулок ждёт вас", "Список из письма готов, кирпичная стена открыта. Путь в Хогвартс начинается здесь."),
@@ -74,6 +82,8 @@ MATN = {
         "open": "🦉 Прочитать письмо",
         "off": "🔕 Не нужно в Telegram",
         "offed": "Хорошо, теперь письма будут только в 🦉 почте внутри приложения. Там же можно включить снова.",
+        "dm": "<b>%s</b> написал(а) вам личное сообщение:", "dmN": "<b>%s</b> написал(а) вам %d личных сообщений. Последнее:",
+        "dmChess": "♟️ вызывает на шахматную дуэль", "reply": "✉️ Ответить",
     },
     "en": {
         "alley": ("Diagon Alley is waiting", "The list from your letter is ready and the brick wall is open. The road to Hogwarts starts here."),
@@ -88,6 +98,8 @@ MATN = {
         "open": "🦉 Read the letter",
         "off": "🔕 Not in Telegram",
         "offed": "Fine - letters will now arrive only in the 🦉 post inside the app. You can turn this back on there.",
+        "dm": "<b>%s</b> sent you a private message:", "dmN": "<b>%s</b> sent you %d private messages. The latest:",
+        "dmChess": "♟️ challenges you to wizard chess", "reply": "✉️ Reply",
     },
 }
 
@@ -129,6 +141,10 @@ def _ulan():
     ustun = {r["name"] for r in conn.execute("PRAGMA table_info(pochta)")}
     if "tarqatma_id" not in ustun:
         conn.execute("ALTER TABLE pochta ADD COLUMN tarqatma_id INTEGER")
+    # Shaxsiy xabar xati: kimdan (uid), ismi va oxirgi xabarning boshi
+    for nom, tur in (("kimdan", "INTEGER"), ("ism", "TEXT"), ("matn", "TEXT")):
+        if nom not in ustun:
+            conn.execute("ALTER TABLE pochta ADD COLUMN %s %s" % (nom, tur))
     return conn
 
 
@@ -314,21 +330,24 @@ def bot_matni(lang, keyingi, n):
     return bosh + "<b>" + sarlavha + "</b>\n" + matn
 
 
-async def _botga(bot, uid, pid, matn_ol):
-    """Bot xabari (o'chirmagan bo'lsa). matn_ol(lang) -> HTML matn. Holatni qaytaradi."""
+async def _botga(bot, uid, pid, matn_ol, tugma=None, ovozsiz=False):
+    """Bot xabari (o'chirmagan bo'lsa). matn_ol(lang) -> HTML matn. Holatni qaytaradi.
+    tugma: (kalit, havola qo'shimchasi) - masalan ("reply", "&dm=5")."""
     if not await asyncio.to_thread(_bot_yoqmi, uid):
         await asyncio.to_thread(_bot_holat, pid, "ochirilgan")
         return "ochirilgan"
     lang = (await hpcup.get_lang(uid)) or "uz"
     t = MATN.get(lang) or MATN["uz"]
+    kalit, qosh = tugma or ("open", "")
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=t["open"], web_app=WebAppInfo(
-            url="%s?lang=%s&owl=1" % (_cfg.get("webapp_url", ""), lang)))],
+        [InlineKeyboardButton(text=t[kalit], web_app=WebAppInfo(
+            url="%s?lang=%s&owl=1%s" % (_cfg.get("webapp_url", ""), lang, qosh)))],
         [InlineKeyboardButton(text=t["off"], callback_data="owl_off")]])
     holat = "xato"
     for urinish in range(2):
         try:
-            await bot.send_message(uid, matn_ol(lang), parse_mode="HTML", reply_markup=kb)
+            await bot.send_message(uid, matn_ol(lang), parse_mode="HTML", reply_markup=kb,
+                                   disable_notification=ovozsiz)
             holat = "yuborildi"
             break
         except TelegramRetryAfter as e:          # Telegram "sekinroq" desa - kutib, bir marta qayta
@@ -388,6 +407,7 @@ def _royxat(uid):
     conn = _ulan()
     try:
         rows = conn.execute("SELECT p.id, p.tur, p.qadam, p.n, p.yaratildi, p.oqildi, p.bajarildi, "
+                            "p.kimdan, p.ism, p.matn AS dm_matn, "
                             "t.sarlavha, t.matn FROM pochta p LEFT JOIN tarqatma t ON t.id = p.tarqatma_id "
                             "WHERE p.user_id=? ORDER BY p.id DESC LIMIT 50", (int(uid),)).fetchall()
     finally:
@@ -398,6 +418,8 @@ def _royxat(uid):
              "read": bool(r["oqildi"]), "done": bool(r["bajarildi"])}
         if r["tur"] == "xabar":
             x["title"], x["text"] = r["sarlavha"] or "", r["matn"] or ""
+        elif r["tur"] == "dm":
+            x["from"], x["name"], x["text"] = r["kimdan"], r["ism"] or "", r["dm_matn"] or ""
         items.append(x)
     return {"items": items, "unread": sum(1 for x in items if not x["read"]),
             "bot": _bot_yoqmi(uid)}
@@ -458,6 +480,100 @@ async def api_pochta(request):
     except Exception as e:
         logging.error("Pochta amalida xato (%s): %s", amal, e)
         return cors(web.json_response({"ok": False, "error": "server"}, status=500))
+
+
+# ---------------------------------------------------------------- shaxsiy xabar
+
+DM_KUT = 60                         # shuncha soniyada o'qilmasa - xat
+DM_BOT_ORALIQ = timedelta(hours=1)  # bitta suhbatdan bot xabari soatiga bir marta
+_dm_qulf = {}
+
+
+def _dm_oqildimi(room, uid, msg_id):
+    conn = _ulan()
+    try:
+        r = conn.execute("SELECT last_id FROM chat_reads WHERE user_id=? AND room=?", (int(uid), room)).fetchone()
+        return bool(r and r["last_id"] >= int(msg_id))
+    finally:
+        conn.close()
+
+
+def _dm_yoz(uid, kimdan, ism, matn, hozir):
+    """Xat yaratadi yoki o'qilmaganini yangilaydi. (pid, n, bot_kerakmi) qaytaradi."""
+    conn = _ulan()
+    try:
+        r = conn.execute("SELECT id, n FROM pochta WHERE user_id=? AND tur='dm' AND kimdan=? "
+                         "AND oqildi IS NULL AND bajarildi IS NULL ORDER BY id DESC LIMIT 1",
+                         (int(uid), int(kimdan))).fetchone()
+        if r:
+            conn.execute("UPDATE pochta SET n=n+1, ism=?, matn=? WHERE id=?", (ism, matn, r["id"]))
+            conn.commit()
+            return r["id"], r["n"] + 1, False
+        oxirgi = conn.execute("SELECT MAX(bot_vaqt) FROM pochta WHERE user_id=? AND tur='dm' AND kimdan=? "
+                              "AND bot_holat='yuborildi'", (int(uid), int(kimdan))).fetchone()[0]
+        cur = conn.execute("INSERT INTO pochta (user_id, tur, n, yaratildi, kimdan, ism, matn) VALUES (?,?,?,?,?,?,?)",
+                           (int(uid), "dm", 1, hpcup._utc_iso(hozir), int(kimdan), ism, matn))
+        conn.commit()
+        bot_kerak = not oxirgi or hozir - hpcup._parse_iso(oxirgi) >= DM_BOT_ORALIQ
+        return cur.lastrowid, 1, bot_kerak
+    finally:
+        conn.close()
+
+
+def dm_bot_matni(lang, ism, matn, n, chess=False):
+    t = MATN.get(lang) or MATN["uz"]
+    bosh = (t["dmN"] % (html.escape(ism), n)) if n > 1 else (t["dm"] % html.escape(ism))
+    return t["kick"] + "\n\n" + bosh + "\n<i>«" + html.escape(t["dmChess"] if chess else matn) + "»</i>"
+
+
+async def shaxsiy_ishla(peer, kimdan, ism, matn, room, msg_id, chess=False, kut=DM_KUT, hozir=None):
+    """Shaxsiy xabardan keyin chaqiriladi (fonda). O'qilmasa - xat va bot xabari."""
+    if int(peer) <= 0 or int(kimdan) <= 0:
+        return None
+    await asyncio.sleep(kut)
+    if await asyncio.to_thread(_dm_oqildimi, room, peer, msg_id):
+        return None                              # chatda turib o'qidi - xat kerak emas
+    matn = ("♟️" if chess else (matn or "").strip())[:140]
+    qulf = _dm_qulf.setdefault((int(peer), int(kimdan)), asyncio.Lock())
+    async with qulf:
+        hozir = hozir or hpcup.now_tk()
+        pid, n, bot_kerak = await asyncio.to_thread(_dm_yoz, peer, kimdan, ism or "Sehrgar", matn, hozir)
+    if not bot_kerak or not _cfg.get("bot"):
+        return "ilovada"
+    soat = hozir.astimezone(hpcup.TASHKENT).hour
+    return await _botga(_cfg["bot"], int(peer), pid,
+                        lambda lang: dm_bot_matni(lang, ism or "Sehrgar", matn, n, chess),
+                        tugma=("reply", "&dm=%d" % int(kimdan)), ovozsiz=not (8 <= soat < 22))
+
+
+def shaxsiy(peer, kimdan, ism, matn, room, msg_id, chess=False):
+    """hpbot shaxsiy xabar yozilganda chaqiradi - kutmaydi, fonda ishlaydi."""
+    try:
+        asyncio.get_running_loop().create_task(
+            shaxsiy_ishla(peer, kimdan, ism, matn, room, msg_id, chess))
+    except Exception as e:
+        logging.error("Shaxsiy xabar xatida xato: %s", e)
+
+
+def _dm_oqidi(uid, kimdan):
+    conn = _ulan()
+    try:
+        v = _hozir()
+        conn.execute("UPDATE pochta SET oqildi=COALESCE(oqildi, ?), bajarildi=? WHERE user_id=? AND tur='dm' "
+                     "AND kimdan=? AND bajarildi IS NULL", (v, v, int(uid), int(kimdan)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def dm_oqidi(uid, kimdan):
+    """Suhbatni ochib o'qidi yoki javob yozdi - o'sha odamdan kelgan xat yopiladi."""
+    if not kimdan or int(uid) <= 0:
+        return
+    try:
+        await asyncio.to_thread(_dm_oqidi, uid, kimdan)
+    except Exception as e:
+        logging.error("Shaxsiy xatni yopishda xato: %s", e)
 
 
 # ---------------------------------------------------------------- qo'lda xat (tarqatma)

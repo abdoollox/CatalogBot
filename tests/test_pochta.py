@@ -233,10 +233,60 @@ async def test_tarqatma():
     check("lekin ilovada bor", json.loads(r.body)["unread"] == 1)
 
 
+async def test_shaxsiy():
+    """Shaxsiy xabar: o'qilmasa xat + bot, takrorida son oshadi, o'qisa yopiladi."""
+    bot = FakeBot()
+    hppochta._cfg.update({"bot": bot})
+    for uid in (301, 302, 303):
+        await hpcup.touch_user(uid, "Dm %d" % uid)
+        await hpcup.set_house(uid, "ravenclaw", "Dm")
+    room = "dm:301:302"
+    kun = datetime(2026, 10, 5, 14, 0, tzinfo=hpcup.TASHKENT)
+    tun = datetime(2026, 10, 5, 23, 30, tzinfo=hpcup.TASHKENT)
+
+    m1 = await hpcup.post_chat_message(room, 301, "Salom, shaxmat o'ynaymizmi?", None)
+    r = await hppochta.shaxsiy_ishla(302, 301, "Dm", "Salom, shaxmat o'ynaymizmi?", room, m1["id"], kut=0, hozir=tun)
+    check("o'qilmadi - xat va bot xabari", r == "yuborildi")
+    t, kw = bot.sent[-1][1], bot.sent[-1][2]
+    check("bot xabarida ism va matn", "<b>Dm</b>" in t and "shaxmat" in t)
+    kb = bot.sent[-1][2]
+    check("tugma suhbatga olib boradi", "dm=301" in kb.inline_keyboard[0][0].web_app.url)
+
+    m2 = await hpcup.post_chat_message(room, 301, "Javob bering", None)
+    yuborildi = len(bot.sent)
+    r = await hppochta.shaxsiy_ishla(302, 301, "Dm", "Javob bering", room, m2["id"], kut=0, hozir=tun)
+    check("ikkinchisida yangi xat yo'q, bot jim", r == "ilovada" and len(bot.sent) == yuborildi)
+    res = json.loads((await hppochta.api_pochta(Req({"initData": "302"}))).body)
+    x = [i for i in res["items"] if i["tur"] == "dm"]
+    check("ilovada bitta xat, 2 ta xabar, oxirgisi", len(x) == 1 and x[0]["n"] == 2 and x[0]["text"] == "Javob bering"
+          and x[0]["from"] == 301 and x[0]["name"] == "Dm")
+
+    await hpcup.mark_chat_read(room, 302, m2["id"])
+    await hppochta.dm_oqidi(302, 301)
+    res = json.loads((await hppochta.api_pochta(Req({"initData": "302"}))).body)
+    check("suhbatni ochdi - xat yopildi", res["unread"] == 0)
+
+    m3 = await hpcup.post_chat_message(room, 301, "Rahmat", None)
+    await hpcup.mark_chat_read(room, 302, m3["id"])          # chatda turib o'qidi
+    check("darhol o'qisa - xat yo'q", await hppochta.shaxsiy_ishla(302, 301, "Dm", "Rahmat", room, m3["id"], kut=0) is None)
+
+    m4 = await hpcup.post_chat_message(room, 301, "Yana", None)
+    yuborildi = len(bot.sent)
+    r = await hppochta.shaxsiy_ishla(302, 301, "Dm", "Yana", room, m4["id"], kut=0)   # haqiqiy vaqt
+    check("bir soat ichida - yangi xat bor, lekin bot yozmaydi", r == "ilovada" and len(bot.sent) == yuborildi)
+    check("sinov o'quvchisiga yo'q", await hppochta.shaxsiy_ishla(-302, 301, "Dm", "x", room, 1, kut=0) is None)
+
+    room2 = "dm:302:303"
+    m5 = await hpcup.post_chat_message(room2, 303, "♟️ jang", None)
+    r = await hppochta.shaxsiy_ishla(302, 303, "Uchinchi", "♟️ jang", room2, m5["id"], chess=True, kut=0, hozir=kun)
+    check("shaxmat chaqiruvi alohida xat", r == "yuborildi" and "shaxmat" in bot.sent[-1][1].lower())
+
+
 YOL_BARI = list(hppochta.YOL)
 
 if __name__ == "__main__":
     asyncio.run(amain())
     asyncio.run(test_tarqatma())
+    asyncio.run(test_shaxsiy())
     print("O'tdi: %d, xato: %d" % (ok, fail))
     sys.exit(1 if fail else 0)

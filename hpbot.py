@@ -22,6 +22,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 import hpcup
 import hpchess
+import hppochta
 
 # main.py tomonidan to'ldiriladi
 _cfg = {
@@ -911,6 +912,9 @@ def register(dp, bot, app, cfg):
                 if msg_id is None:
                     return cors(web.json_response({"error": "invalid id"}, status=400))
                 await hpcup.mark_chat_read(target, uid, msg_id)
+                if target.startswith("dm:"):
+                    # Suhbatni ochdi - boyo'g'li pochtasidagi "falonchi yozdi" xati yopiladi
+                    await hppochta.dm_oqidi(uid, hpcup._dm_peer(target, uid))
                 return cors(web.json_response({"ok": True}))
             if banned is not False and action in ("send", "edit", "react", "chess"):
                 return cors(web.json_response({"error": "banned", "until": banned}, status=403))
@@ -962,6 +966,8 @@ def register(dp, bot, app, cfg):
                 message = await hpcup.post_chat_message(target, uid, text, None, chess=gid)
                 await hpcup.mark_chat_read(target, uid, message["id"])
                 chat_wake(target)
+                if target.startswith("dm:"):
+                    hppochta.shaxsiy(dm_peer, uid, user.get("first_name"), text, target, message["id"], chess=True)
                 return cors(web.json_response({"ok": True, "message": message, "game": game["game"]}))
 
             text = (body.get("text") or "").strip()
@@ -993,6 +999,10 @@ def register(dp, bot, app, cfg):
                 while len(chat_cid_of) > 500:
                     chat_cids.pop(chat_cid_of.pop(next(iter(chat_cid_of))), None)
             chat_wake(target)
+            if target.startswith("dm:"):
+                # 1 daqiqada o'qilmasa - boyo'g'li xat olib boradi; javob yozgan odamning o'z xati yopiladi
+                hppochta.shaxsiy(dm_peer, uid, user.get("first_name"), text, target, message["id"])
+                await hppochta.dm_oqidi(uid, dm_peer)
             result = {"ok": True, "message": message}
             if not body.get("v"):
                 # Eski ilova butun ro'yxatni kutadi.
