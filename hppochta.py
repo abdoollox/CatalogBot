@@ -11,18 +11,24 @@ Onboarding eslatmasi (egasi bilan kelishilgan, 2026-10-01):
     (birinchisidan kamida 2 kun keyin), shundan keyin boshqa yo'q;
   - 30 kundan beri jim odamga yozilmaydi; bot xabari faqat 10:00-21:00 da.
 
+Qo'lda xat (egasi paneldan yozadi, 2026-10-01): kimga - hammaga, fakultetga,
+saralanmaganlarga yoki bitta odamga (til bo'yicha ham tanlasa bo'ladi);
+avval "o'zimga sinab ko'rish". Bot xabari yana faqat o'chirmaganlarga.
+
 Qadamlar ilova (`/api/profile`) yuborganda shu yerga ham yoziladi. Shu
 modul paydo bo'lishidan oldingi qadamlar bir marta loglardan (Sheets) olinadi.
 """
 import asyncio
 import csv
+import html
+import json
 import io
 import logging
 from datetime import datetime, timedelta, timezone
 
 from aiogram import F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest, TelegramRetryAfter
 from aiohttp import web
 
 import hpcup
@@ -109,7 +115,20 @@ def _ulan():
         "CREATE INDEX IF NOT EXISTS pochta_user ON pochta(user_id, id);"
         "CREATE TABLE IF NOT EXISTS pochta_sozlama ("
         " user_id INTEGER PRIMARY KEY, bot INTEGER NOT NULL DEFAULT 1, vaqt TEXT NOT NULL);"
-        "CREATE TABLE IF NOT EXISTS pochta_meta (k TEXT PRIMARY KEY, v TEXT);")
+        "CREATE TABLE IF NOT EXISTS pochta_meta (k TEXT PRIMARY KEY, v TEXT);"
+        "CREATE TABLE IF NOT EXISTS tarqatma ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " sarlavha TEXT NOT NULL, matn TEXT NOT NULL DEFAULT '',"
+        " kimga TEXT NOT NULL,"          # JSON: {tur, fakultet, uid, til}
+        " bot INTEGER NOT NULL DEFAULT 1,"  # Telegramga ham yuborilsinmi
+        " sinov INTEGER NOT NULL DEFAULT 0,"
+        " yaratildi TEXT NOT NULL, tugadi TEXT,"
+        " jami INTEGER NOT NULL DEFAULT 0, yetdi INTEGER NOT NULL DEFAULT 0,"
+        " bloklagan INTEGER NOT NULL DEFAULT 0, ochirilgan INTEGER NOT NULL DEFAULT 0,"
+        " xato INTEGER NOT NULL DEFAULT 0);")
+    ustun = {r["name"] for r in conn.execute("PRAGMA table_info(pochta)")}
+    if "tarqatma_id" not in ustun:
+        conn.execute("ALTER TABLE pochta ADD COLUMN tarqatma_id INTEGER")
     return conn
 
 
@@ -295,7 +314,8 @@ def bot_matni(lang, keyingi, n):
     return bosh + "<b>" + sarlavha + "</b>\n" + matn
 
 
-async def _yubor(bot, uid, pid, keyingi, n):
+async def _botga(bot, uid, pid, matn_ol):
+    """Bot xabari (o'chirmagan bo'lsa). matn_ol(lang) -> HTML matn. Holatni qaytaradi."""
     if not await asyncio.to_thread(_bot_yoqmi, uid):
         await asyncio.to_thread(_bot_holat, pid, "ochirilgan")
         return "ochirilgan"
@@ -305,16 +325,26 @@ async def _yubor(bot, uid, pid, keyingi, n):
         [InlineKeyboardButton(text=t["open"], web_app=WebAppInfo(
             url="%s?lang=%s&owl=1" % (_cfg.get("webapp_url", ""), lang)))],
         [InlineKeyboardButton(text=t["off"], callback_data="owl_off")]])
-    try:
-        await bot.send_message(uid, bot_matni(lang, keyingi, n), parse_mode="HTML", reply_markup=kb)
-        holat = "yuborildi"
-    except TelegramForbiddenError:
-        holat = "bloklagan"
-    except Exception as e:
-        logging.error("Pochta xabarini yuborishda xato (%s): %s", uid, e)
-        holat = "xato"
+    holat = "xato"
+    for urinish in range(2):
+        try:
+            await bot.send_message(uid, matn_ol(lang), parse_mode="HTML", reply_markup=kb)
+            holat = "yuborildi"
+            break
+        except TelegramRetryAfter as e:          # Telegram "sekinroq" desa - kutib, bir marta qayta
+            await asyncio.sleep(min(int(e.retry_after) + 1, 60))
+        except TelegramForbiddenError:
+            holat = "bloklagan"
+            break
+        except Exception as e:
+            logging.error("Pochta xabarini yuborishda xato (%s): %s", uid, e)
+            break
     await asyncio.to_thread(_bot_holat, pid, holat)
     return holat
+
+
+async def _yubor(bot, uid, pid, keyingi, n):
+    return await _botga(bot, uid, pid, lambda lang: bot_matni(lang, keyingi, n))
 
 
 async def aylana(bot, hozir=None):
@@ -357,12 +387,18 @@ async def kuzatuvchi(bot, read_csv=None, interval=900):
 def _royxat(uid):
     conn = _ulan()
     try:
-        rows = conn.execute("SELECT id, tur, qadam, n, yaratildi, oqildi, bajarildi FROM pochta "
-                            "WHERE user_id=? ORDER BY id DESC LIMIT 50", (int(uid),)).fetchall()
+        rows = conn.execute("SELECT p.id, p.tur, p.qadam, p.n, p.yaratildi, p.oqildi, p.bajarildi, "
+                            "t.sarlavha, t.matn FROM pochta p LEFT JOIN tarqatma t ON t.id = p.tarqatma_id "
+                            "WHERE p.user_id=? ORDER BY p.id DESC LIMIT 50", (int(uid),)).fetchall()
     finally:
         conn.close()
-    items = [{"id": r["id"], "tur": r["tur"], "qadam": r["qadam"], "n": r["n"], "t": r["yaratildi"],
-              "read": bool(r["oqildi"]), "done": bool(r["bajarildi"])} for r in rows]
+    items = []
+    for r in rows:
+        x = {"id": r["id"], "tur": r["tur"], "qadam": r["qadam"], "n": r["n"], "t": r["yaratildi"],
+             "read": bool(r["oqildi"]), "done": bool(r["bajarildi"])}
+        if r["tur"] == "xabar":
+            x["title"], x["text"] = r["sarlavha"] or "", r["matn"] or ""
+        items.append(x)
     return {"items": items, "unread": sum(1 for x in items if not x["read"]),
             "bot": _bot_yoqmi(uid)}
 
@@ -424,6 +460,163 @@ async def api_pochta(request):
         return cors(web.json_response({"ok": False, "error": "server"}, status=500))
 
 
+# ---------------------------------------------------------------- qo'lda xat (tarqatma)
+
+TILLAR = ("uz", "ru", "en")
+FAKULTETLAR = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")
+_tarqatma_band = {"id": None}
+
+
+def _kimlar(kimga):
+    """Kimga qoidasi -> uid ro'yxati. Noto'g'ri qoida bo'lsa ValueError."""
+    tur = str(kimga.get("tur", ""))
+    til = str(kimga.get("til") or "")
+    if til and til not in TILLAR:
+        raise ValueError("til")
+    if tur == "men":
+        return sorted(int(i) for i in _cfg.get("admin_ids", ()) if int(i) > 0)
+    if tur == "odam":
+        try:
+            uid = int(kimga.get("uid"))
+        except (TypeError, ValueError):
+            raise ValueError("uid")
+        return [uid] if uid > 0 else []
+    sql, arg = "SELECT user_id FROM users WHERE user_id > 0", []
+    if tur == "fakultet":
+        if kimga.get("fakultet") not in FAKULTETLAR:
+            raise ValueError("fakultet")
+        sql += " AND house = ?"
+        arg.append(kimga["fakultet"])
+    elif tur == "saralanmagan":
+        sql += " AND house IS NULL"
+    elif tur != "hamma":
+        raise ValueError("tur")
+    if til:
+        sql += " AND COALESCE(lang, 'uz') = ?"
+        arg.append(til)
+    conn = _ulan()
+    try:
+        return [r[0] for r in conn.execute(sql + " ORDER BY user_id", arg)]
+    finally:
+        conn.close()
+
+
+def _tarqatma_yarat(sarlavha, matn, kimga, bot, sinov, uidlar):
+    conn = _ulan()
+    try:
+        cur = conn.execute("INSERT INTO tarqatma (sarlavha, matn, kimga, bot, sinov, yaratildi, jami) "
+                           "VALUES (?,?,?,?,?,?,?)",
+                           (sarlavha, matn, json.dumps(kimga, ensure_ascii=False), 1 if bot else 0,
+                            1 if sinov else 0, _hozir(), len(uidlar)))
+        tid = cur.lastrowid
+        conn.executemany("INSERT INTO pochta (user_id, tur, n, yaratildi, tarqatma_id) VALUES (?,?,?,?,?)",
+                         [(u, "xabar", 1, _hozir(), tid) for u in uidlar])
+        conn.commit()
+        pidlar = [(r["id"], r["user_id"]) for r in
+                  conn.execute("SELECT id, user_id FROM pochta WHERE tarqatma_id=? ORDER BY id", (tid,))]
+        return tid, pidlar
+    finally:
+        conn.close()
+
+
+def _tarqatma_sana(tid, tugadi=False):
+    conn = _ulan()
+    try:
+        s = {r["bot_holat"]: r["n"] for r in conn.execute(
+            "SELECT bot_holat, COUNT(*) AS n FROM pochta WHERE tarqatma_id=? GROUP BY bot_holat", (tid,))}
+        conn.execute("UPDATE tarqatma SET yetdi=?, bloklagan=?, ochirilgan=?, xato=?" +
+                     (", tugadi=?" if tugadi else "") + " WHERE id=?",
+                     [s.get("yuborildi", 0), s.get("bloklagan", 0), s.get("ochirilgan", 0), s.get("xato", 0)] +
+                     ([_hozir()] if tugadi else []) + [tid])
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def xabar_matni(sarlavha, matn, lang):
+    t = MATN.get(lang) or MATN["uz"]
+    return (t["kick"] + "\n\n<b>" + html.escape(sarlavha) + "</b>" +
+            ("\n" + html.escape(matn) if matn else ""))
+
+
+async def _tarqat(bot, tid, pidlar, sarlavha, matn, botga):
+    try:
+        if botga:
+            for i, (pid, uid) in enumerate(pidlar):
+                await _botga(bot, uid, pid, lambda lang: xabar_matni(sarlavha, matn, lang))
+                if i % 25 == 24:
+                    await asyncio.to_thread(_tarqatma_sana, tid)
+                await asyncio.sleep(0.05)     # Telegram chegarasi: soniyasiga ~20 ta
+        await asyncio.to_thread(_tarqatma_sana, tid, True)
+        logging.info("Tarqatma #%s tugadi: %d kishi", tid, len(pidlar))
+    except Exception as e:
+        logging.error("Tarqatma #%s da xato: %s", tid, e)
+        await asyncio.to_thread(_tarqatma_sana, tid, True)
+    finally:
+        _tarqatma_band["id"] = None
+
+
+def _tarqatmalar():
+    conn = _ulan()
+    try:
+        out = []
+        for r in conn.execute("SELECT * FROM tarqatma ORDER BY id DESC LIMIT 100"):
+            q = conn.execute("SELECT SUM(oqildi IS NOT NULL) AS oq, SUM(bosildi IS NOT NULL) AS bos "
+                             "FROM pochta WHERE tarqatma_id=?", (r["id"],)).fetchone()
+            out.append({"id": r["id"], "sarlavha": r["sarlavha"], "matn": r["matn"],
+                        "kimga": json.loads(r["kimga"]), "bot": bool(r["bot"]), "sinov": bool(r["sinov"]),
+                        "t": r["yaratildi"], "tugadi": r["tugadi"], "jami": r["jami"], "yetdi": r["yetdi"],
+                        "bloklagan": r["bloklagan"], "ochirilgan": r["ochirilgan"], "xato": r["xato"],
+                        "oqidi": q["oq"] or 0, "bosdi": q["bos"] or 0})
+        return out
+    finally:
+        conn.close()
+
+
+async def api_tarqatma(request):
+    """Panel: hisob (nechta odamga boradi), yubor, royxat. Kalit - X-Dash-Token."""
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+    if not _cfg["dash_ok"](request):
+        return cors(web.json_response({"ok": False}, status=403))
+    try:
+        body = await request.json() if request.method == "POST" else {}
+    except Exception:
+        body = {}
+    amal = str(body.get("action", "royxat"))
+    try:
+        if amal == "royxat":
+            return cors(web.json_response({"ok": True, "tarqatmalar": await asyncio.to_thread(_tarqatmalar),
+                                           "band": _tarqatma_band["id"]}))
+        kimga = body.get("kimga") if isinstance(body.get("kimga"), dict) else {}
+        try:
+            uidlar = await asyncio.to_thread(_kimlar, kimga)
+        except ValueError as e:
+            return cors(web.json_response({"ok": False, "error": "kimga_" + str(e)}, status=400))
+        if amal == "hisob":
+            return cors(web.json_response({"ok": True, "soni": len(uidlar)}))
+        if amal != "yubor":
+            return cors(web.json_response({"ok": False, "error": "amal"}, status=400))
+        sarlavha = str(body.get("sarlavha", "")).strip()[:120]
+        matn = str(body.get("matn", "")).strip()[:2000]
+        if not sarlavha:
+            return cors(web.json_response({"ok": False, "error": "sarlavha"}, status=400))
+        if not uidlar:
+            return cors(web.json_response({"ok": False, "error": "hech_kim"}, status=400))
+        if _tarqatma_band["id"]:
+            return cors(web.json_response({"ok": False, "error": "band", "band": _tarqatma_band["id"]}, status=409))
+        botga = bool(body.get("bot", True))
+        tid, pidlar = await asyncio.to_thread(_tarqatma_yarat, sarlavha, matn, kimga, botga,
+                                              kimga.get("tur") == "men", uidlar)
+        _tarqatma_band["id"] = tid
+        asyncio.create_task(_tarqat(_cfg["bot"], tid, pidlar, sarlavha, matn, botga))
+        return cors(web.json_response({"ok": True, "id": tid, "soni": len(uidlar)}))
+    except Exception as e:
+        logging.error("Tarqatma amalida xato (%s): %s", amal, e)
+        return cors(web.json_response({"ok": False, "error": "server"}, status=500))
+
+
 # ---------------------------------------------------------------- panel uchun
 
 def _panel():
@@ -469,9 +662,10 @@ async def owl_off(call):
 
 
 def register(dp, app, cfg):
-    """cfg: cors, verify_init_data, dash_ok, webapp_url."""
+    """cfg: bot, cors, verify_init_data, dash_ok, webapp_url, admin_ids."""
     _cfg.update(cfg)
     _ulan().close()
     app.router.add_route('*', '/api/pochta', api_pochta)
     app.router.add_route('*', '/api/pochtapanel', api_pochtapanel)
+    app.router.add_route('*', '/api/pochta/tarqatma', api_tarqatma)
     dp.callback_query.register(owl_off, F.data == "owl_off")

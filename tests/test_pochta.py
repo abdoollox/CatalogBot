@@ -165,9 +165,78 @@ async def amain():
     check("to'ldirildi belgisi", hppochta._toldirilganmi())
 
 
+async def test_tarqatma():
+    """Qo'lda xat: kimga hisobi, sinov (o'zimga), fakultetga, tarix."""
+    bot = FakeBot(blocked={202})
+    hppochta._cfg.update({"bot": bot, "admin_ids": {42}})
+    for uid, h, til in ((201, "gryffindor", "uz"), (202, "gryffindor", "ru"), (203, "slytherin", "uz"),
+                        (204, None, "en"), (42, None, "uz")):
+        await hpcup.touch_user(uid, "Odam %d" % uid)
+        if h:
+            await hpcup.set_house(uid, h, "Odam")
+        await hpcup.set_lang(uid, til)
+    hppochta._sozla(203, False)
+
+    async def so(body, token="k"):
+        r = await hppochta.api_tarqatma(Req(body, "POST", {"X-Dash-Token": token}))
+        return r.status, json.loads(r.body)
+
+    check("kalitsiz - 403", (await so({"action": "royxat"}, token=""))[0] == 403)
+    _, d = await so({"action": "hisob", "kimga": {"tur": "fakultet", "fakultet": "gryffindor"}})
+    check("grifindorda 2 kishi", d.get("soni") == 2)
+    _, d = await so({"action": "hisob", "kimga": {"tur": "fakultet", "fakultet": "gryffindor", "til": "ru"}})
+    check("grifindor + ruscha = 1", d.get("soni") == 1)
+    _, d = await so({"action": "hisob", "kimga": {"tur": "saralanmagan"}})
+    s1 = d.get("soni")
+    check("saralanmaganlar ichida 204 va admin", s1 is not None and s1 >= 2)
+    st, d = await so({"action": "hisob", "kimga": {"tur": "fakultet", "fakultet": "xogvarts"}})
+    check("noto'g'ri fakultet - 400", st == 400)
+    st, d = await so({"action": "yubor", "sarlavha": "  ", "kimga": {"tur": "men"}})
+    check("sarlavhasiz - 400", st == 400)
+
+    st, d = await so({"action": "yubor", "sarlavha": "Sinov <b>", "matn": "Salom & xayr", "kimga": {"tur": "men"}})
+    check("o'zimga yuborildi", st == 200 and d["soni"] == 1)
+    for _ in range(50):
+        if not hppochta._tarqatma_band["id"]:
+            break
+        await asyncio.sleep(0.05)
+    matn = [t for u, t, _ in bot.sent if u == 42]
+    check("admin bot xabarini oldi, HTML qochirilgan", matn and "Sinov &lt;b&gt;" in matn[-1] and "&amp;" in matn[-1])
+
+    st, d = await so({"action": "yubor", "sarlavha": "Grifindor, oldindasiz!", "matn": "Kubokda birinchi o'rin.",
+                      "kimga": {"tur": "fakultet", "fakultet": "gryffindor"}})
+    check("fakultetga yuborish boshlandi", st == 200 and d["soni"] == 2)
+    st2, d2 = await so({"action": "yubor", "sarlavha": "Yana", "kimga": {"tur": "men"}})
+    check("ikkinchisi kutadi - 409", st2 == 409)
+    for _ in range(50):
+        if not hppochta._tarqatma_band["id"]:
+            break
+        await asyncio.sleep(0.05)
+    _, d = await so({"action": "royxat"})
+    t = d["tarqatmalar"][0]
+    check("tarixda: 2 kishi, 1 yetdi, 1 bloklagan, tugagan",
+          t["jami"] == 2 and t["yetdi"] == 1 and t["bloklagan"] == 1 and t["tugadi"])
+    check("sinov tarixda belgilangan", d["tarqatmalar"][1]["sinov"] is True)
+
+    r = await hppochta.api_pochta(Req({"initData": "201", "action": "list"}))
+    x = json.loads(r.body)["items"][0]
+    check("ilovada xat matni bilan", x["tur"] == "xabar" and x["title"] == "Grifindor, oldindasiz!" and x["text"])
+
+    # Bot xabarini o'chirgan odamga faqat ilovada
+    _, d = await so({"action": "yubor", "sarlavha": "Sliterinlar", "kimga": {"tur": "odam", "uid": 203}})
+    for _ in range(50):
+        if not hppochta._tarqatma_band["id"]:
+            break
+        await asyncio.sleep(0.05)
+    check("o'chirganga botdan yo'q", not [1 for u, _, _ in bot.sent if u == 203])
+    r = await hppochta.api_pochta(Req({"initData": "203", "action": "list"}))
+    check("lekin ilovada bor", json.loads(r.body)["unread"] == 1)
+
+
 YOL_BARI = list(hppochta.YOL)
 
 if __name__ == "__main__":
     asyncio.run(amain())
+    asyncio.run(test_tarqatma())
     print("O'tdi: %d, xato: %d" % (ok, fail))
     sys.exit(1 if fail else 0)

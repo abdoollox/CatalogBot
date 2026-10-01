@@ -2315,6 +2315,8 @@ async def main():
     # --- Boyo'g'li pochtasi (ilovadagi bildirishnomalar) ---
     try:
         hppochta.register(dp, app, {
+            "bot": bot,
+            "admin_ids": ADMIN_IDS,
             "cors": _cors,
             "verify_init_data": verify_init_data,
             "webapp_url": WEBAPP_URL,
