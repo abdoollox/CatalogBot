@@ -21,6 +21,12 @@ Bitta suhbatdan o'qilmagan xat bo'lsa yangisi ochilmaydi, eskisining soni
 oshadi; bot xabari bitta suhbat uchun soatiga ko'pi bilan bir marta, tunda
 (22:00-08:00) ovozsiz. Suhbatni ochib o'qisa - xat o'zi o'qilgan bo'ladi.
 
+Kubok natijasi (egasi so'radi, 2026-10-01): hafta yopilgach har saralangan
+odamga o'z xati - g'olib, fakultetining o'rni, o'zi qo'shgan ball, yangi
+nishonlari. Ilovadagi xat darhol, bot xabari 10:00-21:00 da va faqat shu hafta
+ball to'plaganlarga (jim odamni har hafta bezovta qilmaslik uchun).
+Pochta paydo bo'lishidan oldin yopilgan haftalar uchun xat yozilmaydi.
+
 Qadamlar ilova (`/api/profile`) yuborganda shu yerga ham yoziladi. Shu
 modul paydo bo'lishidan oldingi qadamlar bir marta loglardan (Sheets) olinadi.
 """
@@ -68,6 +74,13 @@ MATN = {
         "offed": "Yaxshi, endi xatlar faqat ilova ichidagi 🦉 pochtada bo'ladi. U yerdan qayta yoqishingiz mumkin.",
         "dm": "<b>%s</b> sizga shaxsiy xabar yozdi:", "dmN": "<b>%s</b> sizga %d ta shaxsiy xabar yozdi. Oxirgisi:",
         "dmChess": "♟️ shaxmatga chaqirdi", "reply": "✉️ Javob yozish",
+        "cupWin": "🏆 %s kubokni oldi!", "cupWinYou": "Tabriklaymiz! Fakultetingiz hafta g'olibi: %s ball.",
+        "cupLost": "🏆 Hafta g'olibi — %s", "cupPlace": "%s %d-o'rinda: %s ball.",
+        "cupNone": "🏆 Hafta yakunlandi", "cupNoneB": "Bu hafta g'olib aniqlanmadi.",
+        "cupMe": "Siz %s ball qo'shdingiz.", "cupZero": "Siz bu hafta ball to'plamadingiz — yangi haftada fakultetingizga yordam bering.",
+        "cupBadge": "Yangi nishon: %s", "cupGo": "🏆 Kubokni ko'rish",
+        "houses": {"gryffindor": "Grifindor", "slytherin": "Sliterin", "ravenclaw": "Reyvenklo", "hufflepuff": "Xaffelpaff"},
+        "badges": {"all_films": "Sakkiz qism", "flawless_exam": "Benuqson imtihon", "perfect_week": "Mukammal hafta", "streak_7": "Yetti kun ketma-ket"},
     },
     "ru": {
         "alley": ("Косой переулок ждёт вас", "Список из письма готов, кирпичная стена открыта. Путь в Хогвартс начинается здесь."),
@@ -84,6 +97,13 @@ MATN = {
         "offed": "Хорошо, теперь письма будут только в 🦉 почте внутри приложения. Там же можно включить снова.",
         "dm": "<b>%s</b> написал(а) вам личное сообщение:", "dmN": "<b>%s</b> написал(а) вам %d личных сообщений. Последнее:",
         "dmChess": "♟️ вызывает на шахматную дуэль", "reply": "✉️ Ответить",
+        "cupWin": "🏆 %s забирает кубок!", "cupWinYou": "Поздравляем! Ваш факультет - победитель недели: %s очков.",
+        "cupLost": "🏆 Победитель недели — %s", "cupPlace": "%s на %d-м месте: %s очков.",
+        "cupNone": "🏆 Неделя завершена", "cupNoneB": "На этой неделе победитель не определён.",
+        "cupMe": "Вы принесли %s очков.", "cupZero": "На этой неделе у вас нет очков — помогите факультету в новой неделе.",
+        "cupBadge": "Новый значок: %s", "cupGo": "🏆 Открыть кубок",
+        "houses": {"gryffindor": "Гриффиндор", "slytherin": "Слизерин", "ravenclaw": "Когтевран", "hufflepuff": "Пуффендуй"},
+        "badges": {"all_films": "Восемь частей", "flawless_exam": "Безупречный экзамен", "perfect_week": "Идеальная неделя", "streak_7": "Семь дней подряд"},
     },
     "en": {
         "alley": ("Diagon Alley is waiting", "The list from your letter is ready and the brick wall is open. The road to Hogwarts starts here."),
@@ -100,6 +120,13 @@ MATN = {
         "offed": "Fine - letters will now arrive only in the 🦉 post inside the app. You can turn this back on there.",
         "dm": "<b>%s</b> sent you a private message:", "dmN": "<b>%s</b> sent you %d private messages. The latest:",
         "dmChess": "♟️ challenges you to wizard chess", "reply": "✉️ Reply",
+        "cupWin": "🏆 %s takes the Cup!", "cupWinYou": "Congratulations! Your house won the week: %s points.",
+        "cupLost": "🏆 House of the week — %s", "cupPlace": "%s is in place %d: %s points.",
+        "cupNone": "🏆 The week is over", "cupNoneB": "No winner this week.",
+        "cupMe": "You earned %s points.", "cupZero": "You earned no points this week — help your house in the new one.",
+        "cupBadge": "New badge: %s", "cupGo": "🏆 Open the Cup",
+        "houses": {"gryffindor": "Gryffindor", "slytherin": "Slytherin", "ravenclaw": "Ravenclaw", "hufflepuff": "Hufflepuff"},
+        "badges": {"all_films": "All eight parts", "flawless_exam": "Flawless exam", "perfect_week": "Perfect week", "streak_7": "Seven days in a row"},
     },
 }
 
@@ -398,6 +425,10 @@ async def kuzatuvchi(bot, read_csv=None, interval=900):
             await aylana(bot)
         except Exception as e:
             logging.error("Boyo'g'li pochtasi tekshiruvida xato: %s", e)
+        try:
+            await kubok_tekshir(bot)
+        except Exception as e:
+            logging.error("Kubok natijasi xatida xato: %s", e)
         await asyncio.sleep(interval)
 
 
@@ -418,6 +449,11 @@ def _royxat(uid):
              "read": bool(r["oqildi"]), "done": bool(r["bajarildi"])}
         if r["tur"] == "xabar":
             x["title"], x["text"] = r["sarlavha"] or "", r["matn"] or ""
+        elif r["tur"] == "kubok":
+            try:
+                x["cup"] = json.loads(r["dm_matn"] or "{}")
+            except ValueError:
+                x["cup"] = {}
         elif r["tur"] == "dm":
             x["from"], x["name"], x["text"] = r["kimdan"], r["ism"] or "", r["dm_matn"] or ""
         items.append(x)
@@ -522,8 +558,8 @@ def _dm_yoz(uid, kimdan, ism, matn, hozir):
 
 def dm_bot_matni(lang, ism, matn, n, chess=False):
     t = MATN.get(lang) or MATN["uz"]
-    bosh = (t["dmN"] % (html.escape(ism), n)) if n > 1 else (t["dm"] % html.escape(ism))
-    return t["kick"] + "\n\n" + bosh + "\n<i>«" + html.escape(t["dmChess"] if chess else matn) + "»</i>"
+    bosh = (t["dmN"] % (_esc(ism), n)) if n > 1 else (t["dm"] % _esc(ism))
+    return t["kick"] + "\n\n" + bosh + "\n<i>«" + _esc(t["dmChess"] if chess else matn) + "»</i>"
 
 
 async def shaxsiy_ishla(peer, kimdan, ism, matn, room, msg_id, chess=False, kut=DM_KUT, hozir=None):
@@ -574,6 +610,109 @@ async def dm_oqidi(uid, kimdan):
         await asyncio.to_thread(_dm_oqidi, uid, kimdan)
     except Exception as e:
         logging.error("Shaxsiy xatni yopishda xato: %s", e)
+
+
+# ---------------------------------------------------------------- kubok natijasi
+
+def _esc(x):
+    """HTML uchun: < > & qochiriladi, o'zbekcha tutuq belgisi (') o'z holicha qoladi."""
+    return html.escape(x, quote=False)
+
+
+def _son(n):
+    return "{:,}".format(int(n)).replace(",", " ")
+
+
+def kubok_matni(lang, d):
+    """d: {g: g'olib|None, uy, orin, uy_ball, ball, nish: [...]} -> (sarlavha, matn)."""
+    t = MATN.get(lang) or MATN["uz"]
+    uy = t["houses"].get(d.get("uy"), d.get("uy") or "")
+    if not d.get("g"):
+        sar, qator = t["cupNone"], [t["cupNoneB"]]
+    elif d.get("g") == d.get("uy"):
+        sar, qator = t["cupWin"] % uy, [t["cupWinYou"] % _son(d.get("uy_ball", 0))]
+    else:
+        sar = t["cupLost"] % t["houses"].get(d["g"], d["g"])
+        qator = [t["cupPlace"] % (uy, d.get("orin") or 0, _son(d.get("uy_ball", 0)))]
+    qator.append(t["cupMe"] % _son(d["ball"]) if d.get("ball") else t["cupZero"])
+    for b in d.get("nish") or []:
+        qator.append("🎖 " + t["cupBadge"] % t["badges"].get(b, b))
+    return sar, "\n".join(qator)
+
+
+def _kubok_yangi(birinchi=False):
+    """Hali xat yozilmagan yopiq mavsumlar. Birinchi ishga tushishda eskilari o'tkazib yuboriladi."""
+    conn = _ulan()
+    try:
+        r = conn.execute("SELECT v FROM pochta_meta WHERE k='kubok_oxirgi'").fetchone()
+        eng = conn.execute("SELECT COALESCE(MAX(id), 0) FROM seasons WHERE status='closed'").fetchone()[0]
+        if r is None:
+            conn.execute("INSERT OR REPLACE INTO pochta_meta (k, v) VALUES ('kubok_oxirgi', ?)", (str(eng),))
+            conn.commit()
+            return []
+        return [x[0] for x in conn.execute(
+            "SELECT id FROM seasons WHERE status='closed' AND id > ? ORDER BY id", (int(r["v"]),))]
+    finally:
+        conn.close()
+
+
+def _kubok_yoz(season_id):
+    """Mavsum uchun har saralangan odamga xat. Yozilgan xatlar soni."""
+    jadval = hpcup._leaderboard(season_id)
+    conn = _ulan()
+    try:
+        g = conn.execute("SELECT winner_house FROM seasons WHERE id=?", (season_id,)).fetchone()[0]
+        orin = {x["house"]: (i + 1, x["total_points"]) for i, x in enumerate(jadval)}
+        ball = {r[0]: r[1] for r in conn.execute(
+            "SELECT user_id, SUM(points) FROM points WHERE season_id=? GROUP BY user_id", (season_id,))}
+        nish = {}
+        for r in conn.execute("SELECT user_id, code FROM badges WHERE season_id=?", (season_id,)):
+            nish.setdefault(r[0], []).append(r[1])
+        v, n = _hozir(), 0
+        for uid, uy in conn.execute("SELECT user_id, house FROM users WHERE house IS NOT NULL AND user_id > 0"):
+            o, ub = orin.get(uy, (None, 0))
+            d = {"s": season_id, "g": g, "uy": uy, "orin": o, "uy_ball": ub,
+                 "ball": int(ball.get(uid) or 0), "nish": nish.get(uid, [])}
+            # Bot xabari faqat shu hafta ball to'plaganlarga; qolganlarga faqat ilovada
+            conn.execute("INSERT INTO pochta (user_id, tur, qadam, n, yaratildi, matn, bot_holat) VALUES (?,?,?,?,?,?,?)",
+                         (uid, "kubok", str(season_id), 1, v, json.dumps(d), None if d["ball"] else "jim"))
+            n += 1
+        conn.execute("INSERT OR REPLACE INTO pochta_meta (k, v) VALUES ('kubok_oxirgi', ?)", (str(season_id),))
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
+def _kubok_kutayotgan(limit=2000):
+    conn = _ulan()
+    try:
+        chegara = hpcup._utc_iso(hpcup.now_tk() - timedelta(days=2))
+        return [(r["id"], r["user_id"], json.loads(r["matn"])) for r in conn.execute(
+            "SELECT id, user_id, matn FROM pochta WHERE tur='kubok' AND bot_holat IS NULL AND yaratildi >= ? "
+            "ORDER BY id LIMIT ?", (chegara, limit))]
+    finally:
+        conn.close()
+
+
+async def kubok_tekshir(bot, hozir=None):
+    """Yangi yopilgan hafta bo'lsa - xatlar; kunduzi - kutib turgan bot xabarlari."""
+    for sid in await asyncio.to_thread(_kubok_yangi):
+        n = await asyncio.to_thread(_kubok_yoz, sid)
+        logging.info("Kubok natijasi pochtaga: mavsum %s, %d ta xat", sid, n)
+    tk = (hozir or hpcup.now_tk()).astimezone(hpcup.TASHKENT)
+    if not (SOAT_BOSH <= tk.hour < SOAT_OXIR):
+        return 0
+    yuborildi = 0
+    for pid, uid, d in await asyncio.to_thread(_kubok_kutayotgan):
+        def matn_ol(lang, d=d):
+            sar, m = kubok_matni(lang, d)
+            t = MATN.get(lang) or MATN["uz"]
+            return t["kick"] + "\n\n<b>" + _esc(sar) + "</b>\n" + _esc(m)
+        await _botga(bot, uid, pid, matn_ol, tugma=("cupGo", "&cup=1"))
+        yuborildi += 1
+        await asyncio.sleep(0.05)
+    return yuborildi
 
 
 # ---------------------------------------------------------------- qo'lda xat (tarqatma)
@@ -651,8 +790,8 @@ def _tarqatma_sana(tid, tugadi=False):
 
 def xabar_matni(sarlavha, matn, lang):
     t = MATN.get(lang) or MATN["uz"]
-    return (t["kick"] + "\n\n<b>" + html.escape(sarlavha) + "</b>" +
-            ("\n" + html.escape(matn) if matn else ""))
+    return (t["kick"] + "\n\n<b>" + _esc(sarlavha) + "</b>" +
+            ("\n" + _esc(matn) if matn else ""))
 
 
 async def _tarqat(bot, tid, pidlar, sarlavha, matn, botga):

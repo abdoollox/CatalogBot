@@ -282,11 +282,50 @@ async def test_shaxsiy():
     check("shaxmat chaqiruvi alohida xat", r == "yuborildi" and "shaxmat" in bot.sent[-1][1].lower())
 
 
+async def test_kubok():
+    """Kubok natijasi: hafta yopilgach har saralanganga xat, bot faqat ball to'plaganga, kunduzi."""
+    bot = FakeBot()
+    hppochta._cfg.update({"bot": bot})
+    check("birinchi ishga tushish - eski haftalar o'tkaziladi", hppochta._kubok_yangi() == [])
+    season = await hpcup.current_season()
+    sid = season["id"]
+    for uid, h in ((401, "slytherin"), (402, "slytherin"), (403, "hufflepuff"), (404, "hufflepuff")):
+        await hpcup.touch_user(uid, "Kubok %d" % uid)
+        await hpcup.set_house(uid, h, "Kubok")
+    conn = hpcup._connect()
+    for uid, pts in ((401, 300), (402, 200), (403, 50)):                 # 404 - ball yo'q
+        conn.execute("INSERT INTO points (user_id, season_id, source_type, source_ref, points, created_at) "
+                     "VALUES (?,?,?,?,?,?)", (uid, sid, "daily", "t%d" % uid, pts, "2026-10-01T10:00:00Z"))
+    conn.execute("INSERT OR IGNORE INTO badges (user_id, code, season_id, earned_at) VALUES (403,'streak_7',?,?)",
+                 (sid, "2026-10-01T10:00:00Z"))
+    conn.commit(); conn.close()
+    await hpcup.close_season(sid)
+
+    tun = datetime(2026, 10, 5, 0, 5, tzinfo=hpcup.TASHKENT)
+    kun = datetime(2026, 10, 5, 10, 15, tzinfo=hpcup.TASHKENT)
+    check("tunda xat yoziladi, bot jim", await hppochta.kubok_tekshir(bot, tun) == 0 and not bot.sent)
+    r = json.loads((await hppochta.api_pochta(Req({"initData": "404"}))).body)
+    x = [i for i in r["items"] if i["tur"] == "kubok"]
+    check("ball to'plamagan ham ilovada oladi", len(x) == 1 and x[0]["cup"]["ball"] == 0)
+    n = await hppochta.kubok_tekshir(bot, kun)
+    kimga = {u for u, _, _ in bot.sent}
+    check("kunduzi bot faqat ball to'plaganlarga", 401 in kimga and 403 in kimga and 404 not in kimga)
+    check("takror yuborilmaydi", await hppochta.kubok_tekshir(bot, kun) == 0)
+    t401 = [t for u, t, _ in bot.sent if u == 401][0]
+    check("g'olib fakultet a'zosiga tabrik", "kubokni oldi" in t401 and "300" in t401)
+    t403 = [t for u, t, _ in bot.sent if u == 403][0]
+    check("yutqazganga o'rni va nishoni", "Sliterin" in t403 and "2-o'rinda" in t403 and "Yetti kun" in t403)
+    kb = [k for u, _, k in bot.sent if u == 403][0]
+    check("tugma kubokka olib boradi", "cup=1" in kb.inline_keyboard[0][0].web_app.url)
+    check("yangi hafta hali yopilmagan - xat yo'q", hppochta._kubok_yangi() == [])
+
+
 YOL_BARI = list(hppochta.YOL)
 
 if __name__ == "__main__":
     asyncio.run(amain())
     asyncio.run(test_tarqatma())
     asyncio.run(test_shaxsiy())
+    asyncio.run(test_kubok())
     print("O'tdi: %d, xato: %d" % (ok, fail))
     sys.exit(1 if fail else 0)
