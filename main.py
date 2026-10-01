@@ -29,6 +29,7 @@ import sheets
 import catalog
 import emoji
 import hpcup
+import hppochta
 import hpbot
 import hpchess
 import hpleave
@@ -1378,6 +1379,8 @@ async def handle_house(request):
     except Exception as e:
         logging.error("Profil yozishda xato: %s", e)
         return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
+    # Boyo'g'li pochtasi qayerda to'xtaganini bilishi uchun (xato bo'lsa jim o'tadi)
+    await hppochta.qadam(user["id"], kind, value)
 
     return _cors(web.json_response({"ok": True, "cup": await _cup_block(user["id"])}))
 
@@ -2308,6 +2311,19 @@ async def main():
         })
     except Exception as chat_stat_error:
         logging.error("Chat monitoringi ishga tushmadi: %s", chat_stat_error)
+
+    # --- Boyo'g'li pochtasi (ilovadagi bildirishnomalar) ---
+    try:
+        hppochta.register(dp, app, {
+            "cors": _cors,
+            "verify_init_data": verify_init_data,
+            "webapp_url": WEBAPP_URL,
+            "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(
+                req.headers.get("X-Dash-Token", ""), DASH_TOKEN),
+        })
+        asyncio.create_task(hppochta.kuzatuvchi(bot, sheets.read_csv))
+    except Exception as pochta_error:
+        logging.error("Boyo'g'li pochtasi ishga tushmadi: %s", pochta_error)
 
     # --- Filmlar bazasi guruhda ---
     # Musiqadan KEYIN (uning guruh o'qish vositalarini ishlatadi), hpleave dan OLDIN.
