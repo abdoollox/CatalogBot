@@ -61,7 +61,7 @@ _cfg = {}
 MATN = {
     "uz": {
         "alley": ("Diagon xiyoboni sizni kutmoqda", "Xatdagi ro'yxat tayyor, g'isht devor ochiq. Xogvartsga yo'l shu yerdan boshlanadi."),
-        "gringotts": ("Gringotts eshiklari ochiq", "Ota-onangiz qoldirgan oltinlar bankda sizni kutib turibdi."),
+        "gringotts": ("Gringotts eshiklari ochiq", "Xogvarts sizga ajratgan galleonlar bankda kutib turibdi."),
         "wand": ("Olivander tayoqchangizni kutyapti", "Tayoqchani sehrgar emas, tayoqcha sehrgarni tanlaydi."),
         "ticket": ("Xagrid biletingizni ushlab turibdi", "9¾ platformaga bilet - Qovoqxonada, Xagridning qo'lida."),
         "train": ("Xogvarts ekspressi jo'nashga tayyor", "9¾ platformada poyezd sizsiz ketmaydi."),
@@ -84,7 +84,7 @@ MATN = {
     },
     "ru": {
         "alley": ("Косой переулок ждёт вас", "Список из письма готов, кирпичная стена открыта. Путь в Хогвартс начинается здесь."),
-        "gringotts": ("Двери Гринготтса открыты", "Золото, оставленное родителями, ждёт вас в банке."),
+        "gringotts": ("Двери Гринготтса открыты", "Галлеоны, которые выделил вам Хогвартс, ждут вас в банке."),
         "wand": ("Олливандер ждёт вас", "Не волшебник выбирает палочку, а палочка - волшебника."),
         "ticket": ("Хагрид держит ваш билет", "Билет на платформу 9¾ - в «Дырявом котле», у Хагрида."),
         "train": ("Хогвартс-экспресс готов к отправлению", "На платформе 9¾ поезд без вас не уйдёт."),
@@ -107,7 +107,7 @@ MATN = {
     },
     "en": {
         "alley": ("Diagon Alley is waiting", "The list from your letter is ready and the brick wall is open. The road to Hogwarts starts here."),
-        "gringotts": ("Gringotts doors are open", "The gold your parents left you is waiting at the bank."),
+        "gringotts": ("Gringotts doors are open", "The galleons Hogwarts set aside for you are waiting at the bank."),
         "wand": ("Ollivander is waiting for you", "The wand chooses the wizard, not the other way round."),
         "ticket": ("Hagrid is holding your ticket", "Your Platform 9¾ ticket is at the Leaky Cauldron, with Hagrid."),
         "train": ("The Hogwarts Express is ready to leave", "On Platform 9¾ the train won't leave without you."),
