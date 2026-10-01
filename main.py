@@ -1067,13 +1067,10 @@ VALID_WOODS = {"oak", "yew", "cherry", "holly", "aspen", "walnut"}
 VALID_CORES = {"phoenix", "dragon", "unicorn"}
 VALID_FLEX = {"rigid", "springy", "supple", "yielding"}
 # Onboarding qadamlari - asardagi yo'l tartibida. Panel voronkasi shulardan
-# yig'iladi: xat -> xiyobon -> Gringotts -> hayvon -> tayoqcha -> bilet ->
+# yig'iladi: xat -> xiyobon -> Gringotts -> tayoqcha -> bilet ->
 # poyezd -> saralanish. Tayoqcha (wand_*), saralash boshlanishi (sort_start)
 # va fakultet (house_*) allaqachon yoziladi, shuning uchun bu yerda yo'q.
 ONB_STEPS = {"letter", "alley", "gringotts", "ticket", "train"}
-# Uy hayvoni: xatdagi rasmiy ro'yxat (boyo'g'li, mushuk, qurbaqa) va kalamush -
-# ro'yxatda yo'q, lekin asarda uchraydi (Ronning Qorasochi).
-VALID_PETS = {"owl", "cat", "toad", "rat"}
 
 
 def check_value(kind, value):
@@ -1103,11 +1100,6 @@ def check_value(kind, value):
     if kind == "onb":
         if value in ONB_STEPS:
             return "onb_" + value
-        return None
-
-    if kind == "pet":
-        if value in VALID_PETS:
-            return "pet_" + value
         return None
 
     return None
@@ -2128,8 +2120,7 @@ async def api_xat_file(request):
 
 
 # --- GRINGOTTS HAMYONI VA XIYOBONDAGI XARIDLAR ---
-# Onboarding qadamlari shu yerdan o'tadi: xona ochish (pul), uy hayvoni,
-# tayoqcha, bilet. Har qadam logga ham yoziladi (panel voronkasi uchun).
+# Onboarding qadamlari shu yerdan o'tadi: xona ochish (pul), tayoqcha, bilet. Har qadam logga ham yoziladi (panel voronkasi uchun).
 _wallet_vaqt = {}
 
 
@@ -2174,8 +2165,6 @@ async def api_wallet(request):
         if amal == "buy":
             item = str(body.get("item", ""))
             holat, xato = await hpcup.buy(uid, item)
-            if not xato and uid > 0 and item in hpcup.PET_PRICES:
-                await log_user_action(_WebUser(user), "pet_" + item)
             return _cors(web.json_response({"ok": not xato, "error": xato, "wallet": holat}))
 
         if amal == "ticket":

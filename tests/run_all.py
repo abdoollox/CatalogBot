@@ -13,7 +13,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-TESTS = ["test_poydevor.py", "test_music.py", "test_v3.py", "test_http_api.py"]
+TESTS = ["test_poydevor.py", "test_music.py", "test_v3.py", "test_http_api.py", "test_hamyon.py"]
 
 natija = []
 for t in TESTS:

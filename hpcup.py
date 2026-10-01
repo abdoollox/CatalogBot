@@ -362,14 +362,12 @@ def _migrate(conn, users_json):
         conn.execute("ALTER TABLE users ADD COLUMN last_seen_at TEXT")
     # Gringotts hamyoni va Diagon xiyobonidagi xaridlar (onboarding).
     # galleons - qoldiq; vault_at - xona qachon ochilgan (bir marta pul beriladi);
-    # pet - tanlangan uy hayvoni; wand_at - tayoqcha qachon sotib olingan
+    # wand_at - tayoqcha qachon sotib olingan
     # (ikki marta pul yechilmasligi uchun); ticket_at - Hagrid biletni bergan vaqt.
     if "galleons" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN galleons INTEGER NOT NULL DEFAULT 0")
     if "vault_at" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN vault_at TEXT")
-    if "pet" not in user_cols:
-        conn.execute("ALTER TABLE users ADD COLUMN pet TEXT")
     if "wand_at" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN wand_at TEXT")
     if "ticket_at" not in user_cols:
@@ -2696,34 +2694,32 @@ async def test_reset(user_id):
 
 # ---------------------------------------------------------------- Gringotts hamyoni
 
-# Onboarding iqtisodi. Asardagi narx: tayoqcha 7 galleon. Boshlang'ich pul eng
-# qimmat yo'ldan borganda ham (boyo'g'li 10 + tayoqcha 7) ortib qoladi.
+# Onboarding iqtisodi. Asardagi narx: tayoqcha 7 galleon. Boshlang'ich puldan
+# tayoqchadan keyin ham ortib qoladi.
 START_GALLEONS = 25
 WAND_PRICE = 7
-PET_PRICES = {"owl": 10, "cat": 8, "toad": 2, "rat": 1}
 
 
 def _wallet_row(conn, user_id):
     return conn.execute(
-        "SELECT galleons, vault_at, pet, wand_at, ticket_at FROM users WHERE user_id=?",
+        "SELECT galleons, vault_at, wand_at, ticket_at FROM users WHERE user_id=?",
         (int(user_id),)).fetchone()
 
 
 def _wallet_out(row):
     if not row:
-        return {"galleons": 0, "vault": False, "pet": None, "wand": False, "ticket": False}
+        return {"galleons": 0, "vault": False, "wand": False, "ticket": False}
     return {
         "galleons": int(row["galleons"] or 0),
         "vault": bool(row["vault_at"]),
-        "pet": row["pet"],
         "wand": bool(row["wand_at"]),
         "ticket": bool(row["ticket_at"]),
-        "prices": {"wand": WAND_PRICE, "pets": PET_PRICES},
+        "prices": {"wand": WAND_PRICE},
     }
 
 
 async def wallet(user_id):
-    """Hamyon holati: qoldiq, xona ochilganmi, hayvon, tayoqcha, bilet."""
+    """Hamyon holati: qoldiq, xona ochilganmi, tayoqcha, bilet."""
     def _do():
         conn = _connect()
         try:
@@ -2754,7 +2750,7 @@ async def open_vault(user_id):
 
 
 async def buy(user_id, item):
-    """Xarid: item = "wand" yoki hayvon nomi. (holat, xato) qaytaradi.
+    """Xarid: hozircha faqat item = "wand". (holat, xato) qaytaradi.
 
     Xatolar: "yoq" (noma'lum narsa), "vault" (xona ochilmagan),
     "pul" (yetmaydi), "bor" (allaqachon olingan).
@@ -2771,10 +2767,6 @@ async def buy(user_id, item):
                 if row["wand_at"]:
                     return _wallet_out(row), "bor"
                 narx, ustun, qiymat = WAND_PRICE, "wand_at", _utc_iso(now_tk())
-            elif item in PET_PRICES:
-                if row["pet"]:
-                    return _wallet_out(row), "bor"
-                narx, ustun, qiymat = PET_PRICES[item], "pet", item
             else:
                 return _wallet_out(row), "yoq"
 
