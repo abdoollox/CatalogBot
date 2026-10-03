@@ -37,6 +37,7 @@ import hpkanal
 import hpmusic
 import hpchatstat
 import hpfilms
+import hpserial
 import hpevents
 import threading
 try:
@@ -2326,6 +2327,24 @@ async def main():
         asyncio.create_task(hppochta.kuzatuvchi(bot, sheets.read_csv))
     except Exception as pochta_error:
         logging.error("Boyo'g'li pochtasi ishga tushmadi: %s", pochta_error)
+
+    # --- Serial (qismlar guruhdan, hpserial) ---
+    # Alohida try: serial ishlamasa ham filmlar tarqatilaversin.
+    try:
+        async def _serial_log(user, payload):
+            await log_user_action(_WebUser(user), payload)
+        hpserial.register(dp, bot, app, {
+            "admin_ids": ADMIN_IDS,
+            "verify_init_data": verify_init_data,
+            "cors": _cors,
+            "is_subscribed": is_subscribed,
+            "tg_chat_id": tg_chat_id,
+            "log": _serial_log,
+            "brand": lambda lang: T(lang)["brand"],
+            "elon": hppochta.tilda_tarqat,
+        })
+    except Exception as serial_error:
+        logging.error("Serial moduli ishga tushmadi: %s", serial_error)
 
     # --- Filmlar bazasi guruhda ---
     # Musiqadan KEYIN (uning guruh o'qish vositalarini ishlatadi), hpleave dan OLDIN.

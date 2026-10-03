@@ -834,6 +834,21 @@ async def _tarqat(bot, tid, pidlar, sarlavha, matn, botga):
         _tarqatma_band["id"] = None
 
 
+async def tilda_tarqat(matnlar, botga=True):
+    """{til: (sarlavha, matn)} - har tildagi odamlarga o'z tilida xat (va bot xabari).
+    Ketma-ket yuboradi; boshqa tarqatma ketayotgan bo'lsa navbat kutadi. Serial e'loni uchun."""
+    for til, (sarlavha, matn) in matnlar.items():
+        while _tarqatma_band["id"]:
+            await asyncio.sleep(2)
+        kimga = {"tur": "hamma", "til": til}
+        uidlar = await asyncio.to_thread(_kimlar, kimga)
+        if not uidlar:
+            continue
+        tid, pidlar = await asyncio.to_thread(_tarqatma_yarat, sarlavha, matn, kimga, botga, False, uidlar)
+        _tarqatma_band["id"] = tid
+        await _tarqat(_cfg["bot"], tid, pidlar, sarlavha, matn, botga)
+
+
 def _tarqatmalar():
     conn = _ulan()
     try:
