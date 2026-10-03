@@ -23,6 +23,10 @@ Adminning bot bilan shaxsiy chatida:
     /qism s1e3_uz 1234    - 1-fasl 3-qism o'zbekchasi guruhdagi 1234-xabar
     /qism s1e3_uz -       - bog'lanishni olib tashlash
 
+Qism RASMI: shu mavzuga rasm tashlanadi, izohiga qism raqami yoziladi ("1-fasl 3-qism").
+Rasm hamma til uchun bitta; /data/serial/s1e3.jpg, ilovaga /api/serial/cover/s1e3.jpg.
+Rasmi yo'q qismda ilova umumiy serial rasmini ko'rsatadi.
+
 Yangi qism haqida xabar (boyo'g'li pochtasi + bot): o'zi KETMAYDI. Rejim "ochiq"
 bo'lsa, admin qism bog'langani haqidagi xabar ostidagi tugmani bosadi - noto'g'ri
 fayl tashlansa hammaga xabar ketib qolmasin.
@@ -43,6 +47,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import hpfilms          # video ajratish (_video, _item) - bir xil usul
 import hpmusic          # _tg: sekinlash va tarmoq uzilishiga chidamli so'rov
 
+COVER_DIR = "/data/serial"     # qism rasmlari: s1e3.jpg (til farq qilmaydi)
 STORE = "/data/serial.json"    # MUTLAQ yo'l: faqat /data konteynerdan tashqarida yashaydi
 LANGS = ("uz", "ru", "en")
 SEND_GAP = 4                   # bir odam qism so'rashi orasidagi soniya
@@ -151,6 +156,23 @@ def public_list(uid=None):
     return out
 
 
+def cover_path(s, e):
+    return os.path.join(COVER_DIR, "s%de%d.jpg" % (s, e))
+
+
+def covers():
+    """{"s1e3": versiya} - rasmi bor qismlar (versiya = fayl vaqti, keshni yangilash uchun)."""
+    out = {}
+    try:
+        for f in os.listdir(COVER_DIR):
+            m = re.match(r"^(s\d{1,2}e\d{1,3})\.jpg$", f)
+            if m:
+                out[m.group(1)] = int(os.path.getmtime(os.path.join(COVER_DIR, f)))
+    except FileNotFoundError:
+        pass
+    return out
+
+
 def table_text():
     if not _data["eps"]:
         qism = "Hali bitta ham qism yo'q."
@@ -164,7 +186,8 @@ def table_text():
                          for (s, e), t in sorted(qator.items()))
     mavzu = ", ".join(sorted(_data["topics"].values())) or "yo'q"
     rejim = "OCHIQ (hamma ko'radi)" if _data.get("ochiq") else "SINOV (faqat adminlar ko'radi)"
-    return "📺 Serial\nRejim: %s\nMavzular: %s\n\n%s" % (rejim, mavzu, qism)
+    rasm = ", ".join(sorted(covers())) or "yo'q"
+    return "📺 Serial\nRejim: %s\nMavzular: %s\nRasmi bor qismlar: %s\n\n%s" % (rejim, mavzu, rasm, qism)
 
 
 # --- ADMIN ---
@@ -263,6 +286,10 @@ def _in_serial_topic(message):
     return hpfilms._topic_of(message) in _data["topics"]
 
 
+def _in_serial_photo(message):
+    return _in_serial_topic(message) and _photo(message) is not None
+
+
 async def on_group_video(message: types.Message):
     """Serial mavzusiga video tashlandi - qism o'zi taniladi."""
     v = hpfilms._video(message)
@@ -286,6 +313,47 @@ async def on_group_video(message: types.Message):
                     "(boshqa tillarni ham tashlab bo'lgach).", _elon_tugma(*se))
     else:
         await _tell(matn)
+
+
+def _photo(m):
+    """Xabardagi rasm (yoki rasm hujjat) file_id si - bo'lmasa None."""
+    if getattr(m, "photo", None):
+        return max(m.photo, key=lambda x: (x.width or 0) * (x.height or 0)).file_id
+    doc = getattr(m, "document", None)
+    if doc and (doc.mime_type or "").startswith("image/"):
+        return doc.file_id
+    return None
+
+
+async def on_group_photo(message: types.Message):
+    """Serial mavzusiga RASM tashlandi, izohida qism raqami bor - o'sha qismning rasmi bo'ladi.
+    Rasm hamma til uchun bitta (qaysi til mavzusiga tashlansa ham)."""
+    fid = _photo(message)
+    if not fid:
+        return
+    se = ep_of(message.caption or "")
+    if not se:
+        await _tell("🖼 Rasm tanilmadi (%d-xabar): izohiga qism raqamini yozing, masalan «1-fasl 3-qism»."
+                    % message.message_id)
+        return
+    try:
+        os.makedirs(COVER_DIR, exist_ok=True)
+        tmp = cover_path(*se) + ".tmp"
+        await _cfg["bot"].download(fid, destination=tmp)
+        os.replace(tmp, cover_path(*se))
+    except Exception as e:
+        logging.error("Serial rasmi saqlanmadi (%s): %s", se, e)
+        await _tell("⚠️ %d-fasl %d-qism rasmi saqlanmadi: %s" % (se[0], se[1], e))
+        return
+    await _tell("🖼 %d-fasl %d-qism rasmi saqlandi." % se)
+
+
+async def api_cover(request):
+    m = re.match(r"^s(\d{1,2})e(\d{1,3})$", request.match_info.get("key", ""))
+    path = cover_path(int(m.group(1)), int(m.group(2))) if m else None
+    if not path or not os.path.isfile(path):
+        return _cfg["cors"](web.Response(status=404))
+    return _cfg["cors"](web.FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable"}))
 
 
 # --- YANGI QISM E'LONI (boyo'g'li pochtasi + bot) ---
@@ -352,7 +420,8 @@ async def api_list(request):
         return cors(web.Response(status=204))
     user = _cfg["verify_init_data"](request.headers.get("X-Telegram-Init-Data", ""))
     uid = int(user["id"]) if user else None
-    return cors(web.json_response({"ok": True, "eps": public_list(uid),
+    eps = public_list(uid)
+    return cors(web.json_response({"ok": True, "eps": eps, "covers": covers() if eps else {},
                                    "test": not _data.get("ochiq") and _is_admin_id(uid)}))
 
 
@@ -416,9 +485,11 @@ def register(dp, bot, app, cfg):
     load()
     dp.message.register(on_serial_command, Command("serial"))
     dp.message.register(on_qism_command, Command("qism"))
+    dp.message.register(on_group_photo, _in_serial_photo)
     dp.message.register(on_group_video, _in_serial_topic)
     dp.callback_query.register(on_elon, F.data.startswith("srl_elon:"))
     app.router.add_route("*", "/api/serial", api_list)
     app.router.add_route("*", "/api/serial/send", api_send)
+    app.router.add_get("/api/serial/cover/{key}.jpg", api_cover)
     logging.info("Serial: %d ta qism-til, %d mavzu, rejim %s", len(_data["eps"]), len(_data["topics"]),
                  "ochiq" if _data.get("ochiq") else "sinov")

@@ -19,6 +19,7 @@ os.environ["BOT_TOKEN"] = "123456:TEST-token"
 import hpserial   # noqa: E402
 
 hpserial.STORE = os.path.join(TMP, "serial.json")
+hpserial.COVER_DIR = os.path.join(TMP, "rasm")
 
 ok = fail = 0
 def check(name, cond):
@@ -43,6 +44,9 @@ class FakeBot:
         self.sent, self.copied = [], []
     async def send_message(self, uid, text, **kw):
         self.sent.append((uid, text, kw.get("reply_markup")))
+    async def download(self, fid, destination=None):
+        with open(destination, "wb") as f:
+            f.write(b"jpg:" + fid.encode())
     async def copy_message(self, **kw):
         self.copied.append(kw)
         return types.SimpleNamespace(message_id=777)
@@ -54,7 +58,7 @@ class Msg:
         self.message_id, self.message_thread_id, self.is_topic_message = mid, thread, True
         self.chat = types.SimpleNamespace(id=-100, type="supergroup")
         self.video = types.SimpleNamespace(file_name=name, file_size=10, duration=dur)
-        self.document, self.caption = None, cap
+        self.document, self.caption, self.photo = None, cap, None
 
 
 async def main():
@@ -90,7 +94,7 @@ async def main():
     check("sinovda oddiy odam ko'rmaydi", hpserial.public_list(5) == [])
     check("sinovda admin ko'radi", [x["e"] for x in hpserial.public_list(42)] == [1])
     r = await hpserial.api_list(Req(init="5", method="GET"))
-    check("api: oddiy odamga bo'sh", json.loads(r.body) == {"ok": True, "eps": [], "test": False})
+    check("api: oddiy odamga bo'sh", json.loads(r.body) == {"ok": True, "eps": [], "covers": {}, "test": False})
     r = await hpserial.api_list(Req(init="42", method="GET"))
     check("api: adminga qism va sinov belgisi", json.loads(r.body)["test"] and len(json.loads(r.body)["eps"]) == 1)
     r = await hpserial.api_send(Req({"s": 1, "e": 1, "lang": "uz"}, init="5"))
@@ -134,6 +138,22 @@ async def main():
     await hpserial.on_elon(Call(42, "srl_elon:1:2"))
     await asyncio.sleep(0)
     check("bir qism ikki marta e'lon qilinmaydi", len(elonlar) == 1)
+
+    # Qism rasmi: mavzuga rasm + izoh
+    rasm = Msg(80, 9, cap="1-fasl 2-qism")
+    rasm.video = None
+    rasm.photo = [types.SimpleNamespace(file_id="kichik", width=90, height=50),
+                  types.SimpleNamespace(file_id="katta", width=1280, height=720)]
+    check("rasm filtri: rasm ha, video yo'q", hpserial._in_serial_photo(rasm) and not hpserial._in_serial_photo(Msg(81, 7)))
+    await hpserial.on_group_photo(rasm)
+    check("rasm saqlandi (eng kattasi)", open(hpserial.cover_path(1, 2), "rb").read() == b"jpg:katta"
+          and "s1e2" in hpserial.covers())
+    r = await hpserial.api_list(Req(init="5", method="GET"))
+    check("api: rasm versiyasi beriladi", "s1e2" in json.loads(r.body)["covers"])
+    rasm2 = Msg(82, 7, cap="chiroyli rasm")
+    rasm2.video, rasm2.photo = None, rasm.photo
+    await hpserial.on_group_photo(rasm2)
+    check("raqamsiz rasm - adminga aytiladi", "tanilmadi" in bot.sent[-1][1])
 
     hpserial._place({"mid": 99}, 1, 2, "uz", "qolda")
     await hpserial.on_group_video(Msg(70, 7, cap="1-fasl 2-qism"))
