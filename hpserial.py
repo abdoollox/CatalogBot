@@ -42,7 +42,10 @@ import time
 from aiohttp import web
 from aiogram import F, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+import emoji
 
 import hpfilms          # video ajratish (_video, _item) - bir xil usul
 import hpmusic          # _tg: sekinlash va tarmoq uzilishiga chidamli so'rov
@@ -296,6 +299,7 @@ async def on_group_video(message: types.Message):
     if v is None:
         return
     it = hpfilms._item(message.message_id, message, v)
+    it["h"] = int(getattr(v, "height", 0) or 0)       # sifat yozuvi uchun
     lang = _data["topics"].get(hpfilms._topic_of(message))
     se = ep_of("%s\n%s" % (it["name"], it["cap"]))
     if not se or not lang:
@@ -399,19 +403,62 @@ async def on_elon(call: types.CallbackQuery):
 
 # --- HTTP ---
 
-CAP = {
-    "uz": ("Garri Potter · serial", "%d-fasl, %d-qism", "Til", "O'zbekcha"),
-    "ru": ("Гарри Поттер · сериал", "Сезон %d, серия %d", "Язык", "Русский"),
-    "en": ("Harry Potter · the series", "Season %d, Episode %d", "Language", "English"),
+# Qism kartasi film kartasi uslubida (main.share_caption): sarlavha, chiziq, belgili qatorlar,
+# oxirida kolleksiya havolasi. Karta QISM tilida yoziladi (filmlardagi kabi).
+YIL = 2026
+KARTA = {
+    "uz": {"nom": "Garri Potter: %d-fasl, %d-qism", "ost": "HBO seriali", "yil": "Yil", "vaqt": "Davomiyligi",
+           "til": "Til", "sifat": "Sifat", "soat": "%d soat %d daqiqa", "daq": "%d daqiqa",
+           "tilnom": "🇺🇿 O'zbekcha", "hamma": "Barcha qismlar", "koll": "Kolleksiya"},
+    "ru": {"nom": "Гарри Поттер: сезон %d, серия %d", "ost": "Сериал HBO", "yil": "Год", "vaqt": "Длительность",
+           "til": "Язык", "sifat": "Качество", "soat": "%d ч %d мин", "daq": "%d мин",
+           "tilnom": "🇷🇺 Русский", "hamma": "Все серии", "koll": "Коллекция"},
+    "en": {"nom": "Harry Potter: Season %d, Episode %d", "ost": "HBO series", "yil": "Year", "vaqt": "Runtime",
+           "til": "Language", "sifat": "Quality", "soat": "%d h %d min", "daq": "%d min",
+           "tilnom": "🇬🇧 English", "hamma": "All episodes", "koll": "Collection"},
 }
 APP_LINK = "https://t.me/garripotterkinobot/catalog?startapp=serial"
 
 
-def caption(s, e, lang, ui):
-    c = CAP.get(ui) or CAP["uz"]
-    brand = _cfg["brand"](ui) if _cfg.get("brand") else "GARRI POTTER"
-    return "<b>%s</b>\n%s\n\n%s: %s\n\n✅ <b><a href=\"%s\">%s</a></b>" % (
-        c[0], c[1] % (s, e), c[2], (CAP.get(lang) or c)[3], APP_LINK, brand)
+def _sifat(h):
+    """Video balandligidan sifat yozuvi ("1080p"). Noma'lum bo'lsa None."""
+    h = int(h or 0)
+    for chegara, nom in ((1800, "2160p"), (900, "1080p"), (600, "720p"), (400, "480p")):
+        if h >= chegara:
+            return nom
+    return None
+
+
+def caption(s, e, lang):
+    k = KARTA.get(lang) or KARTA["uz"]
+    it = _data["eps"].get(key(s, e, lang)) or {}
+    brand = _cfg["brand"](lang) if _cfg.get("brand") else "GARRI POTTER KOLLEKSIYA"
+    lines = ["<b>%s</b>" % (k["nom"] % (s, e)), k["ost"], "— — — — — — — — — —",
+             "%s %s: %s" % (emoji.tag("yil"), k["yil"], YIL)]
+    daq = int(round((it.get("dur") or 0) / 60))
+    if daq:
+        lines.append("%s %s: %s" % (emoji.tag("vaqt"), k["vaqt"],
+                                    k["soat"] % divmod(daq, 60) if daq >= 60 else k["daq"] % daq))
+    sifat = _sifat(it.get("h"))
+    if sifat:
+        lines.append("%s %s: %s" % (emoji.tag("sifat"), k["sifat"], sifat))
+    lines.append("%s %s: %s" % (emoji.tag("til"), k["til"], k["tilnom"]))
+    lines += ["", '%s <b><a href="%s">%s</a></b>' % (emoji.tag("tasdiq"), APP_LINK, brand)]
+    return "\n".join(lines)
+
+
+def keyboard(lang):
+    """Qism ostidagi tugmalar: barcha qismlar (ilovadagi serial sahifasi) va kolleksiya."""
+    k = KARTA.get(lang) or KARTA["uz"]
+    url = _cfg["webapp_url"](lang) if _cfg.get("webapp_url") else None
+    if not url:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=k["hamma"], web_app=WebAppInfo(url=url + "&serial=1"),
+                              icon_custom_emoji_id=emoji.icon("tomosha"))],
+        [InlineKeyboardButton(text=k["koll"], web_app=WebAppInfo(url=url),
+                              icon_custom_emoji_id=emoji.icon("kolleksiya"))],
+    ])
 
 
 async def api_list(request):
@@ -444,7 +491,6 @@ async def api_send(request):
     except (TypeError, ValueError):
         s = e = 0
     lang = str(body.get("lang", "uz"))
-    ui = str(body.get("ui", lang))
     if not _data.get("ochiq") and not _is_admin_id(uid):
         return cors(web.json_response({"ok": False, "error": "not_ready"}))
     manba = source(s, e, lang) if lang in LANGS else None
@@ -457,10 +503,18 @@ async def api_send(request):
     chat = _cfg["tg_chat_id"](uid)
     if await _cfg["is_subscribed"](chat) is False:
         return cors(web.json_response({"ok": False, "error": "not_subscribed"}))
+    matn = caption(s, e, lang)
+    kw = dict(chat_id=chat, from_chat_id=manba[0], message_id=manba[1], parse_mode="HTML",
+              reply_markup=keyboard(lang), protect_content=True)
     try:
-        sent = await _cfg["bot"].copy_message(chat_id=chat, from_chat_id=manba[0], message_id=manba[1],
-                                              caption=caption(s, e, lang, ui), parse_mode="HTML",
-                                              protect_content=True)
+        try:
+            sent = await _cfg["bot"].copy_message(caption=matn, **kw)
+        except TelegramBadRequest as err:
+            if "not found" in str(err).lower():
+                raise
+            # Custom emoji rad etilsa - oddiy belgilar bilan: qism yetkazish shu sababdan to'xtamasin
+            logging.warning("Serial custom emoji bilan yuborilmadi (%s): %s", chat, err)
+            sent = await _cfg["bot"].copy_message(caption=emoji.strip_tags(matn), **kw)
     except Exception as err:
         logging.error("Serial qismi yuborilmadi (%s): %s", key(s, e, lang), err)
         if "not found" in str(err).lower():

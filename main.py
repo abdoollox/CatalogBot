@@ -2342,6 +2342,7 @@ async def main():
             "log": _serial_log,
             "brand": lambda lang: T(lang)["brand"],
             "elon": hppochta.tilda_tarqat,
+            "webapp_url": webapp_url,
         })
     except Exception as serial_error:
         logging.error("Serial moduli ishga tushmadi: %s", serial_error)

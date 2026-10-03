@@ -57,7 +57,7 @@ class Msg:
     def __init__(self, mid, thread, name="", cap="", dur=3600):
         self.message_id, self.message_thread_id, self.is_topic_message = mid, thread, True
         self.chat = types.SimpleNamespace(id=-100, type="supergroup")
-        self.video = types.SimpleNamespace(file_name=name, file_size=10, duration=dur)
+        self.video = types.SimpleNamespace(file_name=name, file_size=10, duration=dur, height=1080)
         self.document, self.caption, self.photo = None, cap, None
 
 
@@ -85,7 +85,8 @@ async def main():
         return True
     hpserial._cfg.update({"bot": bot, "admin_ids": {42}, "cors": lambda r: r, "elon": elon,
                           "verify_init_data": lambda d: {"id": int(d)} if d.lstrip("-").isdigit() else None,
-                          "is_subscribed": sub, "tg_chat_id": lambda u: u})
+                          "is_subscribed": sub, "tg_chat_id": lambda u: u,
+                          "webapp_url": lambda l: "https://x.test/?lang=" + l})
     hpserial._data.update({"group": -100, "topics": {"7": "uz", "9": "ru"}})
 
     await hpserial.on_group_video(Msg(50, 7, name="HP.S01E01.mp4"))
@@ -115,6 +116,14 @@ async def main():
     r = await hpserial.api_send(Req({"s": 1, "e": 2, "lang": "uz", "ui": "uz"}, init="5"))
     check("qism yuborildi (himoyalangan nusxa)", json.loads(r.body)["ok"] and bot.copied[-1]["message_id"] == 62
           and bot.copied[-1]["protect_content"] and "1-fasl, 2-qism" in bot.copied[-1]["caption"])
+    cap = bot.copied[-1]["caption"]
+    check("karta film kartasi uslubida", "— — —" in cap and "Yil" in cap and "1 soat 0 daqiqa" in cap
+          and "Sifat" in cap and "1080p" in cap and "🇺🇿 O'zbekcha" in cap and "startapp=serial" in cap)
+    kb = bot.copied[-1]["reply_markup"].inline_keyboard
+    check("tugmalar: barcha qismlar va kolleksiya", len(kb) == 2 and kb[0][0].web_app.url.endswith("&serial=1")
+          and kb[0][0].text == "Barcha qismlar")
+    check("sifat balandlikdan", hpserial._sifat(2160) == "2160p" and hpserial._sifat(720) == "720p"
+          and hpserial._sifat(0) is None)
     r = await hpserial.api_send(Req({"s": 1, "e": 2, "lang": "uz"}, init="5"))
     check("ketma-ket bosish - slow", json.loads(r.body)["error"] == "slow")
     r = await hpserial.api_send(Req({"s": 1, "e": 9, "lang": "uz"}, init="6"))
