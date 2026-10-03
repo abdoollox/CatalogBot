@@ -28,8 +28,8 @@ Tinglash ikki yo'l bilan:
     * Telegramga — `POST /api/music/send` albomni yoki bitta trekni fayl
       raqami (file_id) bilan chatga yuboradi (filmlar kabi protect_content).
 
-NARX: HOZIRCHA BEPUL (galleon tizimi tayyor emas). Keyin butun albom
-galleonga bir marta sotib olinadi — tekshiruv `album_open()` da bo'ladi.
+NARX (2026-10-04 dan): birinchi albom bepul, qolganlari galleonga bir marta ochiladi
+(ALBUM_PRICE) va doim ochiq qoladi — `album_open()`, `POST /api/music/buy`.
 """
 
 import asyncio
@@ -186,13 +186,99 @@ def tracks(album):
     return _data["albums"].get(album, [])
 
 
-def album_open(user_id, album):
-    """Albom shu odamga ochiqmi. HOZIRCHA hammaga bepul.
+# Narx (egasi, 2026-10-04): albom galleonga bir marta ochiladi va doim ochiq qoladi.
+# Birinchi albom hammaga bepul (tatib ko'rish uchun). Galleon - hafta yakunidagi kubok
+# mukofotidan (hpcup._galleon_mukofot) va Gringottsdagi boshlang'ich puldan.
+ALBUM_PRICE = 30
+FREE_ALBUMS = ("hp1",)
+_owned = {}                  # user_id -> {albom} (bazadan bir marta o'qiladi)
 
-    Galleon tizimi tayyor bo'lganda shu yerda sotib olinganini tekshiramiz
-    (butun albom bir marta sotiladi, trek alohida emas).
-    """
-    return album in ALBUMS
+
+def owned(user_id):
+    uid = int(user_id)
+    if uid not in _owned:
+        conn = _db()
+        try:
+            _owned[uid] = {r[0] for r in conn.execute(
+                "SELECT album FROM album_egasi WHERE user_id=?", (uid,))}
+        except sqlite3.OperationalError:
+            return set()                 # jadval hali yo'q (ishga tushish payti)
+        finally:
+            conn.close()
+    return _owned[uid]
+
+
+def album_open(user_id, album):
+    """Albom shu odamga ochiqmi: bepul albom, sotib olingan yoki sinov o'quvchisi (manfiy id)."""
+    if album not in ALBUMS:
+        return False
+    if album in FREE_ALBUMS or user_id is None:
+        return album in FREE_ALBUMS
+    return int(user_id) < 0 or album in owned(user_id)
+
+
+def _galleons(uid):
+    conn = _db()
+    try:
+        r = conn.execute("SELECT galleons FROM users WHERE user_id=?", (int(uid),)).fetchone()
+        return int(r[0] or 0) if r else 0
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        conn.close()
+
+
+def _buy(uid, album):
+    """Albomni galleonga ochadi. (holat, qoldiq): "ok" | "bor" | "pul"."""
+    uid = int(uid)
+    conn = _db()
+    try:
+        if conn.execute("SELECT 1 FROM album_egasi WHERE user_id=? AND album=?", (uid, album)).fetchone():
+            return "bor", _galleons(uid)
+        # Bitta so'rovda tekshirib yechamiz: ikki marta bosilsa ham pul ikki marta ketmaydi
+        cur = conn.execute("UPDATE users SET galleons = galleons - ? WHERE user_id = ? AND galleons >= ?",
+                           (ALBUM_PRICE, uid, ALBUM_PRICE))
+        if cur.rowcount < 1:
+            conn.rollback()
+            return "pul", _galleons(uid)
+        conn.execute("INSERT INTO album_egasi (user_id, album, narx, vaqt) VALUES (?,?,?,?)",
+                     (uid, album, ALBUM_PRICE, int(time.time())))
+        conn.commit()
+        _owned.setdefault(uid, set()).add(album)
+        r = conn.execute("SELECT galleons FROM users WHERE user_id=?", (uid,)).fetchone()
+        return "ok", int(r[0] or 0)
+    finally:
+        conn.close()
+
+
+async def api_buy(request):
+    """Ilova: albomni galleonga ochish. {album} -> {ok, gal} yoki {error: "pul", gal, price}."""
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+    try:
+        body = await request.json()
+    except Exception:
+        return cors(web.json_response({"ok": False, "error": "bad_json"}, status=400))
+    user = _cfg["verify_init_data"](request.headers.get("X-Telegram-Init-Data", "")
+                                    or str(body.get("initData", "")))
+    if not user:
+        return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+    uid = int(user["id"])
+    album = str(body.get("album", ""))
+    if album not in ALBUMS or not tracks(album):
+        return cors(web.json_response({"ok": False, "error": "unknown"}, status=404))
+    if album_open(uid, album):
+        return cors(web.json_response({"ok": True, "gal": await asyncio.to_thread(_galleons, uid)}))
+    holat, gal = await asyncio.to_thread(_buy, uid, album)
+    if holat == "pul":
+        return cors(web.json_response({"ok": False, "error": "pul", "gal": gal, "price": ALBUM_PRICE}))
+    if holat == "ok" and _cfg.get("log"):
+        try:
+            await _cfg["log"](user, "buy_ost_" + album)
+        except Exception as e:
+            logging.error("Albom xaridi logi yozilmadi: %s", e)
+    return cors(web.json_response({"ok": True, "gal": gal}))
 
 
 # --- MATNDAN ALBOM ---
@@ -857,6 +943,10 @@ def _init_likes():
         conn.execute("CREATE TABLE IF NOT EXISTS music_plays ("
                      "fuid TEXT NOT NULL, user_id INTEGER NOT NULL, ts INTEGER NOT NULL)")
         conn.execute("CREATE INDEX IF NOT EXISTS music_plays_ts ON music_plays(ts)")
+        # Galleonga ochilgan albomlar (bir marta sotiladi, doim ochiq)
+        conn.execute("CREATE TABLE IF NOT EXISTS album_egasi ("
+                     "user_id INTEGER NOT NULL, album TEXT NOT NULL, narx INTEGER NOT NULL, "
+                     "vaqt INTEGER NOT NULL, PRIMARY KEY (user_id, album))")
         conn.commit()
         rows = conn.execute("SELECT fuid, COUNT(*) FROM music_likes WHERE user_id > 0 "
                             "GROUP BY fuid").fetchall()
@@ -982,6 +1072,7 @@ def _public_list(uid=None, mine=frozenset()):
             "year": ALBUMS[key]["year"],
             "composer": ALBUMS[key]["composer"],
             "cv": _cover_ver(key),
+            "open": album_open(uid, key),
             "tracks": [{"t": x["t"], "d": x["d"], "big": x["s"] > BOT_API_LIMIT,
                         "l": _shown(x["fuid"], uid, x["fuid"] in mine),
                         "me": x["fuid"] in mine} for x in lst],
@@ -1001,9 +1092,10 @@ async def api_list(request):
             mine = await asyncio.to_thread(_my_likes, uid)
         except Exception as e:
             logging.error("Musiqa like'lari o'qilmadi: %s", e)
-    body = {"ok": True, "albums": _public_list(uid, mine), "price": 0}
+    body = {"ok": True, "albums": _public_list(uid, mine), "price": ALBUM_PRICE}
     if user:
         body["key"] = make_key(uid)
+        body["gal"] = await asyncio.to_thread(_galleons, uid)
     return cors(web.json_response(body))
 
 
@@ -1241,6 +1333,7 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/music", api_list)
     app.router.add_route("*", "/api/music/send", api_send)
     app.router.add_route("*", "/api/music/like", api_like)
+    app.router.add_route("*", "/api/music/buy", api_buy)
     app.router.add_route("*", "/api/musiqa", api_stat)       # kuzatuv paneli (X-Dash-Token)
     app.router.add_get("/api/music/a/{album}/{n}", api_stream)
     app.router.add_get("/api/music/cover/{album}.jpg", api_cover)

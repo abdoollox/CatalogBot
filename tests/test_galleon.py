@@ -109,6 +109,39 @@ async def amain():
     c.close()
     check("imtihon bali o'chdi, kunlik qoldi, arxivda nusxa bor", qoldi == ["daily"] and arxiv == 1)
 
+    # ---- Albomni galleonga ochish
+    import hpmusic
+    hpmusic.DB_PATH = os.environ["HP_DB_PATH"]
+    hpmusic._init_likes()
+    hpmusic._data["albums"] = {"hp1": [{"t": "a", "d": 1, "s": 1, "fuid": "f1"}],
+                               "hp2": [{"t": "b", "d": 1, "s": 1, "fuid": "f2"}]}
+    hpmusic._cfg.update({"cors": lambda r: r, "log": None,
+                         "verify_init_data": lambda d: {"id": int(d)} if d.lstrip("-").isdigit() else None})
+
+    class Req:
+        def __init__(self, body, init):
+            self._b, self.method, self.headers = body, "POST", {"X-Telegram-Init-Data": init}
+        async def json(self):
+            return self._b
+
+    check("birinchi albom hammaga ochiq, ikkinchisi yopiq", hpmusic.album_open(1, "hp1") and not hpmusic.album_open(1, "hp2"))
+    check("sinov o'quvchisiga hammasi ochiq", hpmusic.album_open(-9, "hp2"))
+    check("ro'yxatda open belgisi", hpmusic._public_list(1)["hp2"]["open"] is False
+          and hpmusic._public_list(1)["hp1"]["open"] is True)
+    r = json.loads((await hpmusic.api_buy(Req({"album": "hp2"}, "3"))).body)          # 3 da 13 galleon
+    check("galleon yetmasa - pul xatosi, qoldiq o'zgarmaydi", r == {"ok": False, "error": "pul", "gal": 13, "price": 30}
+          and gal(3) == 13)
+    r = json.loads((await hpmusic.api_buy(Req({"album": "hp2"}, "1"))).body)          # 1 da 39
+    check("sotib olindi: 39 - 30 = 9", r == {"ok": True, "gal": 9} and gal(1) == 9 and hpmusic.album_open(1, "hp2"))
+    r = json.loads((await hpmusic.api_buy(Req({"album": "hp2"}, "1"))).body)
+    check("qayta bosilsa pul ikki marta yechilmaydi", r == {"ok": True, "gal": 9} and gal(1) == 9)
+    hpmusic._owned.clear()
+    check("qayta ishga tushgandan keyin ham ochiq (bazadan)", hpmusic.album_open(1, "hp2"))
+    r = await hpmusic.api_buy(Req({"album": "yoq"}, "1"))
+    check("noma'lum albom - 404", r.status == 404)
+    r = await hpmusic.api_buy(Req({"album": "hp2"}, "yolgon"))
+    check("imzosiz - 403", r.status == 403)
+
     print("O'tdi: %d, xato: %d" % (ok, fail))
     return fail
 
