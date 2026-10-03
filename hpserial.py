@@ -409,13 +409,16 @@ YIL = 2026
 KARTA = {
     "uz": {"nom": "Garri Potter: %d-fasl, %d-qism", "ost": "HBO seriali", "yil": "Yil", "vaqt": "Davomiyligi",
            "til": "Til", "sifat": "Sifat", "soat": "%d soat %d daqiqa", "daq": "%d daqiqa",
-           "tilnom": "🇺🇿 O'zbekcha", "hamma": "Barcha qismlar", "koll": "Kolleksiya"},
+           "tilnom": "🇺🇿 O'zbekcha", "hamma": "Barcha qismlar", "koll": "Kolleksiya",
+           "ulash": "Ulashish", "korish": "▶️ Tomosha qilish"},
     "ru": {"nom": "Гарри Поттер: сезон %d, серия %d", "ost": "Сериал HBO", "yil": "Год", "vaqt": "Длительность",
            "til": "Язык", "sifat": "Качество", "soat": "%d ч %d мин", "daq": "%d мин",
-           "tilnom": "🇷🇺 Русский", "hamma": "Все серии", "koll": "Коллекция"},
+           "tilnom": "🇷🇺 Русский", "hamma": "Все серии", "koll": "Коллекция",
+           "ulash": "Поделиться", "korish": "▶️ Смотреть"},
     "en": {"nom": "Harry Potter: Season %d, Episode %d", "ost": "HBO series", "yil": "Year", "vaqt": "Runtime",
            "til": "Language", "sifat": "Quality", "soat": "%d h %d min", "daq": "%d min",
-           "tilnom": "🇬🇧 English", "hamma": "All episodes", "koll": "Collection"},
+           "tilnom": "🇬🇧 English", "hamma": "All episodes", "koll": "Collection",
+           "ulash": "Share", "korish": "▶️ Watch"},
 }
 APP_LINK = "https://t.me/garripotterkinobot/catalog?startapp=serial"
 
@@ -447,7 +450,7 @@ def caption(s, e, lang):
     return "\n".join(lines)
 
 
-def keyboard(lang):
+def keyboard(s, e, lang):
     """Qism ostidagi tugmalar: barcha qismlar (ilovadagi serial sahifasi) va kolleksiya."""
     k = KARTA.get(lang) or KARTA["uz"]
     url = _cfg["webapp_url"](lang) if _cfg.get("webapp_url") else None
@@ -455,10 +458,35 @@ def keyboard(lang):
         return None
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=k["hamma"], web_app=WebAppInfo(url=url + "&serial=1"),
-                              icon_custom_emoji_id=emoji.icon("tomosha"))],
+                              icon_custom_emoji_id=emoji.icon("tomosha")),
+         # Chat tanlatadi va o'sha chatga shu qismning kartasi tushadi (filmlardagi kabi)
+         InlineKeyboardButton(text=k["ulash"], switch_inline_query="sr_" + key(s, e, lang),
+                              icon_custom_emoji_id=emoji.icon("dostlar"))],
         [InlineKeyboardButton(text=k["koll"], web_app=WebAppInfo(url=url),
                               icon_custom_emoji_id=emoji.icon("kolleksiya"))],
     ])
+
+
+def inline_result(raw, uid):
+    """"sr_s1e3_uz" so'rovi uchun ulashiladigan karta (yoki None). Sinov rejimida faqat admin ulasha oladi."""
+    raw = (raw or "").strip().lower()
+    p = parse_key(raw[3:]) if raw.startswith("sr_") else None
+    if not p or key(*p) not in _data["eps"]:
+        return None
+    if not _data.get("ochiq") and not _is_admin_id(uid):
+        return None
+    s, e, lang = p
+    k = KARTA[lang]
+    return types.InlineQueryResultArticle(
+        id="sr_" + key(s, e, lang),
+        title=k["nom"] % (s, e),
+        description="%s · %s" % (k["ost"], k["tilnom"]),
+        input_message_content=types.InputTextMessageContent(
+            message_text=caption(s, e, lang), parse_mode="HTML",
+            link_preview_options=types.LinkPreviewOptions(is_disabled=True)),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            text=k["korish"], url=APP_LINK)]]),
+    )
 
 
 async def api_list(request):
@@ -505,7 +533,7 @@ async def api_send(request):
         return cors(web.json_response({"ok": False, "error": "not_subscribed"}))
     matn = caption(s, e, lang)
     kw = dict(chat_id=chat, from_chat_id=manba[0], message_id=manba[1], parse_mode="HTML",
-              reply_markup=keyboard(lang), protect_content=True)
+              reply_markup=keyboard(s, e, lang), protect_content=True)
     try:
         try:
             sent = await _cfg["bot"].copy_message(caption=matn, **kw)

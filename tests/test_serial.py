@@ -120,8 +120,17 @@ async def main():
     check("karta film kartasi uslubida", "— — —" in cap and "Yil" in cap and "1 soat 0 daqiqa" in cap
           and "Sifat" in cap and "1080p" in cap and "🇺🇿 O'zbekcha" in cap and "startapp=serial" in cap)
     kb = bot.copied[-1]["reply_markup"].inline_keyboard
-    check("tugmalar: barcha qismlar va kolleksiya", len(kb) == 2 and kb[0][0].web_app.url.endswith("&serial=1")
-          and kb[0][0].text == "Barcha qismlar")
+    check("tugmalar: barcha qismlar, ulashish va kolleksiya", len(kb) == 2 and kb[0][0].web_app.url.endswith("&serial=1")
+          and kb[0][0].text == "Barcha qismlar" and kb[0][1].switch_inline_query == "sr_s1e2_uz")
+    kr = hpserial.inline_result("sr_s1e2_uz", 5)
+    check("ulashish kartasi", kr is not None and kr.id == "sr_s1e2_uz" and "1-fasl, 2-qism" in kr.title
+          and "startapp=serial" in kr.reply_markup.inline_keyboard[0][0].url)
+    check("yo'q qism yoki boshqa so'rov - karta yo'q", hpserial.inline_result("sr_s1e9_uz", 5) is None
+          and hpserial.inline_result("azkaban", 5) is None)
+    hpserial._data["ochiq"] = False
+    check("sinovda faqat admin ulasha oladi", hpserial.inline_result("sr_s1e2_uz", 5) is None
+          and hpserial.inline_result("sr_s1e2_uz", 42) is not None)
+    hpserial._data["ochiq"] = True
     check("sifat balandlikdan", hpserial._sifat(2160) == "2160p" and hpserial._sifat(720) == "720p"
           and hpserial._sifat(0) is None)
     r = await hpserial.api_send(Req({"s": 1, "e": 2, "lang": "uz"}, init="5"))

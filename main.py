@@ -42,8 +42,10 @@ import hpevents
 import threading
 try:
     import hpxat            # xat rasmi (Pillow kerak)
+    import hpuy             # fakultet rasmi (ulashish uchun)
 except Exception as _xat_error:   # kutubxona yo'q bo'lsa bot baribir ishlasin
     hpxat = None
+    hpuy = None
     logging.error("Xat rasmi moduli yuklanmadi: %s", _xat_error)
 from datetime import datetime
 from dotenv import load_dotenv
@@ -846,6 +848,15 @@ async def inline_search(query: types.InlineQuery):
     m = CHESS_QUERY.match(raw.lower())
     if m:
         await answer_chess(query, lang, m.group(1))
+        return
+
+    # "sr_s1e3_uz" - serial qismi ostidagi "Ulashish" tugmasi: o'sha qismning kartasi.
+    qism = hpserial.inline_result(raw, query.from_user.id)
+    if qism:
+        try:
+            await query.answer([qism], cache_time=30, is_personal=True)
+        except Exception as e:
+            logging.error("Serial inline javobida xato: %s", e)
         return
 
     # "taklif" - film emas, butun kolleksiyaning reklama kartasi.
@@ -2036,14 +2047,15 @@ PUBLIC_BASE = "https://bot.tizimshunos.uz"
 _xat_vaqt = {}          # {uid: oxirgi so'rov} - daqiqada bir necha marta bosilmasin
 
 
-async def prepare_xat_share(user_id, lang, url):
-    """Chatga ulashish uchun tayyor xabar (shaxmat kartasi bilan bir xil usul)."""
-    matn = {"uz": "Menga Xogvartsdan maktub keldi!",
-            "ru": "Мне пришло письмо из Хогвартса!",
-            "en": "My Hogwarts letter has arrived!"}.get(lang, "Xogvartsdan maktub")
-    tugma = {"uz": "Menga ham maktub kelsin",
-             "ru": "Хочу своё письмо",
-             "en": "Get my own letter"}.get(lang, "Xogvartsga kirish")
+async def prepare_xat_share(user_id, lang, url, matn=None, tugma=None):
+    """Chatga ulashish uchun tayyor xabar (shaxmat kartasi bilan bir xil usul).
+    matn/tugma berilmasa - Xogvarts maktubi uchun; fakultet rasmi o'zinikini beradi."""
+    matn = matn or {"uz": "Menga Xogvartsdan maktub keldi!",
+                    "ru": "Мне пришло письмо из Хогвартса!",
+                    "en": "My Hogwarts letter has arrived!"}.get(lang, "Xogvartsdan maktub")
+    tugma = tugma or {"uz": "Menga ham maktub kelsin",
+                      "ru": "Хочу своё письмо",
+                      "en": "Get my own letter"}.get(lang, "Xogvartsga kirish")
     result = {
         "type": "photo", "id": "xat_%s" % int(time.time()),
         "caption": matn,
@@ -2107,6 +2119,71 @@ async def api_xat(request):
     if uid > 0:          # sinov o'quvchisiga Telegram xabari tayyorlanmaydi
         share_id = await prepare_xat_share(uid, lang, url)
     return _cors(web.json_response({"ok": True, "url": url, "share_id": share_id}))
+
+
+UY_MATN = {"uz": "Saralovchi qalpoq meni %s fakultetiga yubordi!",
+           "ru": "Распределяющая шляпа отправила меня на факультет %s!",
+           "en": "The Sorting Hat has put me in %s!"}
+UY_TUGMA = {"uz": "Men ham saralanaman", "ru": "Пройти распределение", "en": "Get sorted too"}
+
+
+async def api_uy(request):
+    """Fakultet rasmini yasaydi va manzilini qaytaradi (ulashish uchun). Fakultet bazadan olinadi."""
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+    if request.method != "POST":
+        return _cors(web.json_response({"ok": False, "error": "method"}, status=405))
+    if not hpuy:
+        return _cors(web.json_response({"ok": False, "error": "yoq"}, status=503))
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    user = verify_init_data(request.headers.get("X-Telegram-Init-Data", "")
+                            or str(body.get("initData", "")))
+    if not user:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+    uid = int(user["id"])
+    hozir = time.time()
+    if hozir - _xat_vaqt.get(("uy", uid), 0) < 3:
+        return _cors(web.json_response({"ok": False, "error": "tez"}, status=429))
+    _xat_vaqt[("uy", uid)] = hozir
+
+    lang = str(body.get("lang", "uz"))
+    lang = lang if lang in catalog.LANGS else "uz"
+    try:
+        house = await hpcup.get_house(uid)
+    except Exception:
+        house = None
+    if not house and uid < 0:        # sinov o'quvchisi: fakulteti bazada bo'lmasligi mumkin
+        house = str(body.get("house", ""))
+    if house not in hpuy.HOUSES:
+        return _cors(web.json_response({"ok": False, "error": "no_house"}))
+    try:
+        token = await asyncio.to_thread(hpuy.ensure, uid, user.get("first_name"), lang, house)
+    except Exception as e:
+        logging.error("Fakultet rasmini yasashda xato: %s", e)
+        return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
+
+    url = "%s/api/uy/%s.jpg" % (PUBLIC_BASE, token)
+    share_id = None
+    if uid > 0:
+        share_id = await prepare_xat_share(uid, lang, url, UY_MATN[lang] % hpuy.HOUSES[house][lang],
+                                           UY_TUGMA[lang])
+    return _cors(web.json_response({"ok": True, "url": url, "share_id": share_id, "house": house}))
+
+
+async def api_uy_file(request):
+    if not hpuy:
+        return web.Response(status=404, text="yoq")
+    token = request.match_info.get("token", "")
+    if not re.fullmatch(r"[0-9a-f]{20}", token):
+        return web.Response(status=404, text="yoq")
+    yol = hpuy.path_of(token)
+    if not os.path.exists(yol):
+        return web.Response(status=404, text="yoq")
+    return web.FileResponse(yol, headers={"Cache-Control": "public, max-age=604800",
+                                          "Access-Control-Allow-Origin": "*"})
 
 
 async def api_xat_file(request):
@@ -2256,6 +2333,8 @@ async def main():
     app.router.add_route('*', '/api/kanal', api_kanal)
     app.router.add_route('*', '/api/test/reset', api_test_reset)
     app.router.add_route('*', '/api/xat', api_xat)
+    app.router.add_route('*', '/api/uy', api_uy)
+    app.router.add_get('/api/uy/{token}.jpg', api_uy_file)
     app.router.add_route('*', '/api/wallet', api_wallet)
     app.router.add_get('/api/xat/{token}.jpg', api_xat_file)
 
