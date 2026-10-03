@@ -111,8 +111,8 @@ async def amain():
     matn102 = [t for u, t, _ in bot.sent if u == 102][0]
     check("102 ga ruscha matn", "Олливандер" in matn102)
     kb = [k for u, _, k in bot.sent if u == 101][0]
-    check("tugmada ilova havolasi va owl=1",
-          "owl=1" in kb.inline_keyboard[0][0].web_app.url and kb.inline_keyboard[1][0].callback_data == "owl_off")
+    check("tugmada ilova havolasi va owl=1", "owl=1" in kb.inline_keyboard[0][0].web_app.url)
+    check("bot xabarida o'chirish tugmasi yo'q (faqat ilovadan)", len(kb.inline_keyboard) == 1)
 
     check("darhol qayta - takror yo'q", await hppochta.aylana(bot, tush + timedelta(minutes=15)) == [])
     ikki = {u: n for u, _, n, _ in await hppochta.aylana(bot, tush + timedelta(days=2))}
@@ -128,6 +128,16 @@ async def amain():
     await hppochta.api_pochta(Req({"initData": "101", "action": "came"}))
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "read"}))
     check("o'qildi", json.loads(r.body)["unread"] == 0)
+    # Xatni o'chirish: faqat o'ziniki, ro'yxatdan yo'qoladi, panel hisobida qoladi
+    bir = d["items"][0]["id"]
+    r = await hppochta.api_pochta(Req({"initData": "102", "action": "delete", "ids": [bir]}))
+    r = await hppochta.api_pochta(Req({"initData": "101", "action": "list"}))
+    check("birovning xatini o'chirib bo'lmaydi", len(json.loads(r.body)["items"]) == 2)
+    r = await hppochta.api_pochta(Req({"initData": "101", "action": "delete", "ids": [bir]}))
+    d2 = json.loads(r.body)
+    check("xat o'chirildi", len(d2["items"]) == 1 and all(x["id"] != bir for x in d2["items"]))
+    r = await hppochta.api_pochta(Req({"initData": "101", "action": "delete", "ids": "yolgon"}))
+    check("noto'g'ri ids - jim o'tadi", len(json.loads(r.body)["items"]) == 1)
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "bot", "on": False}))
     check("bot xabari o'chirildi", json.loads(r.body)["bot"] is False)
     r = await hppochta.api_pochta(Req({"initData": "abc", "action": "list"}))

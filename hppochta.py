@@ -169,7 +169,8 @@ def _ulan():
     if "tarqatma_id" not in ustun:
         conn.execute("ALTER TABLE pochta ADD COLUMN tarqatma_id INTEGER")
     # Shaxsiy xabar xati: kimdan (uid), ismi va oxirgi xabarning boshi
-    for nom, tur in (("kimdan", "INTEGER"), ("ism", "TEXT"), ("matn", "TEXT")):
+    # ochirildi: odam xatni ilovadagi pochtadan o'chirgan (panel hisobida qoladi, ro'yxatda ko'rinmaydi)
+    for nom, tur in (("kimdan", "INTEGER"), ("ism", "TEXT"), ("matn", "TEXT"), ("ochirildi", "TEXT")):
         if nom not in ustun:
             conn.execute("ALTER TABLE pochta ADD COLUMN %s %s" % (nom, tur))
     return conn
@@ -366,10 +367,11 @@ async def _botga(bot, uid, pid, matn_ol, tugma=None, ovozsiz=False):
     lang = (await hpcup.get_lang(uid)) or "uz"
     t = MATN.get(lang) or MATN["uz"]
     kalit, qosh = tugma or ("open", "")
+    # Bot xabarida "Telegramda kerak emas" tugmasi YO'Q (egasi, 2026-10-03): o'chirish faqat
+    # ilovadagi pochta sozlamasidan. Eski xabarlardagi tugma ishlayveradi (owl_off).
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t[kalit], web_app=WebAppInfo(
-            url="%s?lang=%s&owl=1%s" % (_cfg.get("webapp_url", ""), lang, qosh)))],
-        [InlineKeyboardButton(text=t["off"], callback_data="owl_off")]])
+            url="%s?lang=%s&owl=1%s" % (_cfg.get("webapp_url", ""), lang, qosh)))]])
     holat = "xato"
     for urinish in range(2):
         try:
@@ -440,7 +442,8 @@ def _royxat(uid):
         rows = conn.execute("SELECT p.id, p.tur, p.qadam, p.n, p.yaratildi, p.oqildi, p.bajarildi, "
                             "p.kimdan, p.ism, p.matn AS dm_matn, "
                             "t.sarlavha, t.matn FROM pochta p LEFT JOIN tarqatma t ON t.id = p.tarqatma_id "
-                            "WHERE p.user_id=? ORDER BY p.id DESC LIMIT 50", (int(uid),)).fetchall()
+                            "WHERE p.user_id=? AND p.ochirildi IS NULL ORDER BY p.id DESC LIMIT 50",
+                            (int(uid),)).fetchall()
     finally:
         conn.close()
     items = []
@@ -470,6 +473,22 @@ def _oqildi(uid, ids=None):
                          [_hozir(), int(uid)] + [int(i) for i in ids])
         else:
             conn.execute("UPDATE pochta SET oqildi=? WHERE user_id=? AND oqildi IS NULL", (_hozir(), int(uid)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _ochir(uid, ids):
+    """Odam o'z xatlarini pochtadan o'chiradi (yumshoq: qator qoladi, ro'yxatda ko'rinmaydi)."""
+    if not ids:
+        return
+    conn = _ulan()
+    try:
+        v = _hozir()
+        q = ",".join("?" * len(ids))
+        conn.execute("UPDATE pochta SET ochirildi=?, oqildi=COALESCE(oqildi, ?) "
+                     "WHERE user_id=? AND ochirildi IS NULL AND id IN (%s)" % q,
+                     [v, v, int(uid)] + [int(i) for i in ids])
         conn.commit()
     finally:
         conn.close()
@@ -506,6 +525,10 @@ async def api_pochta(request):
             ids = body.get("ids")
             ids = [int(i) for i in ids][:100] if isinstance(ids, list) else None
             await asyncio.to_thread(_oqildi, uid, ids)
+        elif amal == "delete":
+            ids = body.get("ids")
+            ids = [int(i) for i in ids][:100] if isinstance(ids, list) else []
+            await asyncio.to_thread(_ochir, uid, ids)
         elif amal == "bot":
             await asyncio.to_thread(_sozla, uid, bool(body.get("on")))
         elif amal == "came":
@@ -539,7 +562,7 @@ def _dm_yoz(uid, kimdan, ism, matn, hozir):
     conn = _ulan()
     try:
         r = conn.execute("SELECT id, n FROM pochta WHERE user_id=? AND tur='dm' AND kimdan=? "
-                         "AND oqildi IS NULL AND bajarildi IS NULL ORDER BY id DESC LIMIT 1",
+                         "AND oqildi IS NULL AND bajarildi IS NULL AND ochirildi IS NULL ORDER BY id DESC LIMIT 1",
                          (int(uid), int(kimdan))).fetchone()
         if r:
             conn.execute("UPDATE pochta SET n=n+1, ism=?, matn=? WHERE id=?", (ism, matn, r["id"]))
