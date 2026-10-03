@@ -31,7 +31,11 @@ TASHKENT = timezone(timedelta(hours=5))
 
 # --- Ball qiymatlari ---
 PTS_FILM_OPEN = 5     # har qism uchun mavsumda 1 marta   -> 8 * 5  = 40
-PTS_FILM_QUIZ = 10    # har to'g'ri javob                 -> 24 * 10 = 240
+# Kino imtihoni 2026-10-04 da O'CHIRILDI (egasi): haftalik 400 balldan 240 tasini berib,
+# kubok muvozanatini buzardi; kunlik savol shundoq ham bor. Savollar bazada qoladi,
+# lekin berilmaydi va ball yozilmaydi. Qayta yoqish kerak bo'lsa - EXAM_ON.
+EXAM_ON = False
+PTS_FILM_QUIZ = 10    # (o'chirilgan) har to'g'ri javob
 PTS_DAILY = 10        # kuniga 1 marta                    -> 7 * 10  = 70
 
 # Shaxmat FAQAT jonli o'yinda (PvP) ballanadi. Bot bilan o'ynash ball
@@ -55,9 +59,16 @@ DAILY_PER_WEEK = 7
 
 # Bir mavsumda olish mumkin bo'lgan eng ko'p ball
 MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
-              + PTS_FILM_QUIZ * FILM_PARTS * QUIZ_PER_FILM
               + PTS_DAILY * DAILY_PER_WEEK
-              + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON)   # = 400
+              + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON)   # = 160
+
+# --- Hafta yakunidagi galleon mukofoti (egasi, 2026-10-04) ---
+# Faqat SARALANGAN o'quvchilarga, o'z balidan: har GAL_PER_POINTS ball uchun 1 galleon;
+# g'olib fakultet a'zolariga GAL_WIN_MULT baravar; barcha fakultetlar ichida eng ko'p ball
+# to'plagan uch kishiga qo'shimcha GAL_TOP.
+GAL_PER_POINTS = 10
+GAL_WIN_MULT = 2
+GAL_TOP = (15, 10, 5)
 
 # Fakultet baliga kirish uchun kerak ball. 1 = ball to'plagan HAR KIM hisobga
 # kiradi (eng kichik ball - 5). Ilgari 30 edi: 5-25 ball to'plaganlar hissasi yo'qolardi.
@@ -66,14 +77,13 @@ ACTIVE_MIN_POINTS = 1
 # Ball manbalari - ilovadagi "ballar qayerdan keldi" bo'limi uchun guruhlar.
 # Kalitlar ilovadagi CUP_SRC bilan bir xil.
 SOURCE_GROUP = {
-    "film_open": "film", "film_quiz": "exam", "daily": "daily",
+    "film_open": "film", "daily": "daily",
     "chess_win": "chess", "chess_draw": "chess", "referral": "friends",
 }
-SOURCE_KEYS = ("film", "exam", "daily", "chess", "friends")
+SOURCE_KEYS = ("film", "daily", "chess", "friends")
 # Mavsumda har manbadan olish mumkin bo'lgan eng ko'p ball (do'stlar - cheksiz)
 SOURCE_CAPS = {
     "film": PTS_FILM_OPEN * FILM_PARTS,
-    "exam": PTS_FILM_QUIZ * FILM_PARTS * QUIZ_PER_FILM,
     "daily": PTS_DAILY * DAILY_PER_WEEK,
     "chess": PTS_CHESS_WIN * CHESS_MAX_PER_SEASON,
 }
@@ -372,6 +382,30 @@ def _migrate(conn, users_json):
         conn.execute("ALTER TABLE users ADD COLUMN wand_at TEXT")
     if "ticket_at" not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN ticket_at TEXT")
+
+    # Hafta yakunidagi galleon mukofoti: kim, qaysi mavsum uchun, qancha (takror berilmasin).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS galleon_mukofot ("
+        " user_id INTEGER NOT NULL, season_id INTEGER NOT NULL, ball INTEGER NOT NULL,"
+        " asos INTEGER NOT NULL, golib INTEGER NOT NULL, top INTEGER NOT NULL,"
+        " jami INTEGER NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (user_id, season_id))")
+
+    # Imtihon ballari kubokdan chiqarildi (egasi, 2026-10-04: "shu haftadan ta'sir qilsin").
+    # FAOL mavsumdagi film_quiz ballari arxiv jadvaliga ko'chiriladi (qaytarish mumkin) va
+    # points dan o'chiriladi. Yopilgan mavsumlarga tegilmaydi. Bir marta ishlaydi.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS points_arxiv ("
+        " user_id INTEGER, season_id INTEGER, source_type TEXT, source_ref TEXT,"
+        " points INTEGER, created_at TEXT, sabab TEXT)")
+    if not conn.execute("SELECT 1 FROM settings WHERE key='exam_olib_tashlandi'").fetchone():
+        faol = [r[0] for r in conn.execute("SELECT id FROM seasons WHERE status='active'")]
+        for sid in faol:
+            conn.execute(
+                "INSERT INTO points_arxiv SELECT user_id, season_id, source_type, source_ref, points, "
+                "created_at, 'imtihon_ochirildi' FROM points WHERE season_id=? AND source_type='film_quiz'", (sid,))
+            conn.execute("DELETE FROM points WHERE season_id=? AND source_type='film_quiz'", (sid,))
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('exam_olib_tashlandi', ?)",
+                     (_utc_iso(now_tk()),))
 
     # Chat: javob, tahrir, o'chirish. `rev` - o'zgarish raqami: yangi xabar,
     # tahrir, o'chirish va reaksiya uni oshiradi; ilova "shu raqamdan keyin
@@ -1352,8 +1386,8 @@ def _remaining_today(conn, user_id, season_id):
         if any_daily:
             total += PTS_DAILY
 
-    # 2. Imtihon savollari (barcha 8 qism bo'yicha qolgan savollar)
-    for part in range(1, FILM_PARTS + 1):
+    # 2. Imtihon savollari (o'chirilgan - EXAM_ON)
+    for part in (range(1, FILM_PARTS + 1) if EXAM_ON else ()):
         has_qs = conn.execute(
             "SELECT 1 FROM questions WHERE kind='film' AND film_part=? AND is_active=1 LIMIT 1",
             (part,)).fetchone()
@@ -1372,6 +1406,8 @@ def _remaining_today(conn, user_id, season_id):
 def _exam_pending(conn, user_id, season_id):
     """Joriy mavsumda imtihoni topshirilmagan qism raqamlari (1..8)."""
     pending = []
+    if not EXAM_ON:
+        return pending
     for part in range(1, FILM_PARTS + 1):
         has_qs = conn.execute(
             "SELECT 1 FROM questions WHERE kind='film' AND film_part=? AND is_active=1 LIMIT 1",
@@ -1698,6 +1734,8 @@ def compute_gap(table, stats):
 # ---------------------------------------------------------------- savollar
 
 def _pick_film_questions(user_id, season_id, film_part, lang="uz"):
+    if not EXAM_ON:
+        return []            # imtihon o'chirilgan - savol berilmaydi
     conn = _connect()
     try:
         rows = conn.execute(
@@ -1849,12 +1887,7 @@ def _earned_badges(conn, season_id):
             (season_id, FILM_PARTS)):
         found.append((r["user_id"], "all_films"))
 
-    for r in conn.execute(
-            "SELECT a.user_id FROM answers a JOIN questions q ON q.id=a.question_id "
-            "WHERE a.season_id=? AND q.kind='film' GROUP BY a.user_id "
-            "HAVING COUNT(*) >= ? AND SUM(a.is_correct) = COUNT(*)",
-            (season_id, FILM_PARTS * QUIZ_PER_FILM)):
-        found.append((r["user_id"], "flawless_exam"))
+    # "flawless_exam" nishoni endi berilmaydi (imtihon o'chirilgan); eski nishonlar qoladi.
 
     for r in conn.execute(
             "SELECT a.user_id FROM answers a JOIN questions q ON q.id=a.question_id "
@@ -1869,6 +1902,39 @@ def _earned_badges(conn, season_id):
         found.append((r["user_id"], "streak_7"))
 
     return found
+
+
+def _galleon_hisob(rows, winner):
+    """rows: [(user_id, house, ball)] ball kamayish tartibida -> [(uid, ball, asos, golib, top, jami)]."""
+    out = []
+    for i, (uid, house, pts) in enumerate(rows):
+        asos = int(pts) // GAL_PER_POINTS
+        golib = bool(winner) and house == winner
+        top = GAL_TOP[i] if i < len(GAL_TOP) else 0
+        jami = asos * (GAL_WIN_MULT if golib else 1) + top
+        if jami > 0:
+            out.append((uid, int(pts), asos, 1 if golib else 0, top, jami))
+    return out
+
+
+def _galleon_mukofot(conn, season_id, winner, stamp):
+    """Hafta yakunida saralangan o'quvchilarga galleon beradi. Bir mavsum uchun bir marta
+    (galleon_mukofot jadvalidagi (user_id, season_id) kaliti takrorni to'sadi - _finalize
+    qayta chaqirilsa ham ikki marta berilmaydi). {user_id: jami} qaytaradi."""
+    rows = [(r["user_id"], r["house"], r["pts"]) for r in conn.execute(
+        "SELECT p.user_id, u.house, SUM(p.points) AS pts, MAX(p.created_at) AS oxir "
+        "FROM points p JOIN users u ON u.user_id = p.user_id "
+        "WHERE p.season_id = ? AND p.user_id > 0 AND u.house IS NOT NULL "
+        "GROUP BY p.user_id HAVING pts > 0 ORDER BY pts DESC, oxir ASC, p.user_id ASC", (season_id,))]
+    berildi = {}
+    for uid, pts, asos, golib, top, jami in _galleon_hisob(rows, winner):
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO galleon_mukofot (user_id, season_id, ball, asos, golib, top, jami, vaqt) "
+            "VALUES (?,?,?,?,?,?,?,?)", (uid, season_id, pts, asos, golib, top, jami, stamp))
+        if cur.rowcount > 0:
+            conn.execute("UPDATE users SET galleons = galleons + ? WHERE user_id = ?", (jami, uid))
+            berildi[uid] = jami
+    return berildi
 
 
 def _finalize(conn, season_id):
@@ -1888,12 +1954,14 @@ def _finalize(conn, season_id):
         "VALUES (?,?,?,?)",
         [(uid, code, season_id, stamp) for uid, code in badges])
 
+    galleons = _galleon_mukofot(conn, season_id, winner, stamp)
+
     conn.execute("UPDATE seasons SET status='closed', winner_house=? WHERE id=?",
                  (winner, season_id))
     _history_cache.pop(season_id, None)
     conn.commit()
     return {"closed_id": season_id, "winner_house": winner,
-            "badges": badges, "table": _leaderboard(season_id)}
+            "badges": badges, "galleons": galleons, "table": _leaderboard(season_id)}
 
 
 def _close_season(season_id=None):
@@ -2044,7 +2112,7 @@ async def submit_task_answer(user_id, task_type, question_id, selected_index):
                     "SELECT 1 FROM daily_schedule WHERE date=? AND question_id=?",
                     (today_tk(), int(question_id))).fetchone()
             elif task_type == "film_quiz":
-                allowed = q["kind"] == "film" and conn.execute(
+                allowed = EXAM_ON and q["kind"] == "film" and conn.execute(
                     "SELECT 1 FROM question_assignments WHERE user_id=? AND season_id=? AND question_id=?",
                     (int(user_id), season["id"], int(question_id))).fetchone()
             else:

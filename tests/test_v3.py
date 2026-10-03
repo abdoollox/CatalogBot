@@ -76,21 +76,14 @@ async def run_tests():
     season = await hpcup.current_season()
     pending = await hpcup.exam_pending(1003, season["id"])
     print("Dastlabki exam_pending (1003):", pending)
-    assert pending == [1, 2, 3, 4, 5, 6, 7, 8], f"Kutilgan barcha 8 ta film, topildi: {pending}"
-
-    # 1-qism savollarini olamiz va 3 tasiga ham javob beramiz
+    # Imtihon 2026-10-04 da o'chirilgan: hech narsa kutilmaydi, savol berilmaydi
+    assert pending == [], f"Imtihon o'chirilgan, kutilgan bo'sh ro'yxat, topildi: {pending}"
     qs = await hpcup.film_questions(1003, season["id"], 1)
-    assert len(qs) == 3, f"Kutilgan 3 ta savol, topildi: {len(qs)}"
-    for q in qs:
-        # Javob beramiz
-        await hpcup.record_answer(1003, season["id"], q["id"], True)
-        await hpcup.award(1003, "film_quiz", str(q["id"]), hpcup.PTS_FILM_QUIZ)
-
-    pending_after = await hpcup.exam_pending(1003, season["id"])
-    print("1-qism topshirilgandan keyingi exam_pending:", pending_after)
-    assert 1 not in pending_after, "1-qism exam_pending dan chiqishi kerak edi!"
-    assert pending_after == [2, 3, 4, 5, 6, 7, 8]
-    print("✅ [3] exam_pending to'g'ri hisoblanmoqda.")
+    assert qs == [], f"Imtihon savoli berilmasligi kerak, topildi: {len(qs)}"
+    # Keyingi tekshiruvlar uchun 30 ball - endi kunlik savoldan
+    for kun in ("k1", "k2", "k3"):
+        await hpcup.award(1003, "daily", kun, hpcup.PTS_DAILY)
+    print("✅ [3] imtihon o'chirilgan: exam_pending bo'sh, savol yo'q.")
 
     # 4. Ballar va Faol a'zo (ball to'plagan har kim)
     print("\n[4] Faol a'zo va reyting...")
@@ -151,8 +144,8 @@ async def run_tests():
     print("\n[8] remaining_today va closable...")
     rem = stats["remaining_today"]
     print("1003 uchun bugun qolgan olinishi mumkin bo'lgan ballar:", rem)
-    # 7 ta film imtihoni (7 * 3 * 10 = 210) + kunlik savol (10) = 220 ball
-    assert rem == 220, f"Kutilgan 220 ball, topildi: {rem}"
+    # Imtihon o'chirilgan: faqat kunlik savol (10)
+    assert rem == 10, f"Kutilgan 10 ball, topildi: {rem}"
     print("✅ [8] remaining_today to'g'ri hisoblandi.")
 
     # Tozalash

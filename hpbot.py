@@ -519,7 +519,7 @@ def register(dp, bot, app, cfg):
         correct = (choice == target["correct_index"])
         fresh = await hpcup.record_answer(uid, season["id"], qid, correct)
 
-        if correct and fresh:
+        if correct and fresh and hpcup.EXAM_ON:
             await hpcup.award(uid, "film_quiz", str(qid), hpcup.PTS_FILM_QUIZ)
             await callback.answer("To'g'ri! +%d ball" % hpcup.PTS_FILM_QUIZ)
         else:

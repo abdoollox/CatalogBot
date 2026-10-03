@@ -64,7 +64,7 @@ async def test_exam():
     await hpcup.award(uid, "film_open", "1", 5)         # hpbot.award_film_open shunday yozadi
     t = await hpcup.get_user_tasks(uid)
     ids = [x["id"] for x in t["tasks"]]
-    check("1-film ochilgach imtihon chiqadi (\"1\" ham tanilsin)", "quiz_hp1" in ids)
+    check("imtihon o'chirilgan: film ochilsa ham vazifa chiqmaydi", ids == ["daily"])
     check("to'g'ri javob ilovaga yuborilmaydi",
           not any("correct_index" in q for x in t["tasks"] for q in x["questions"]))
     right = dict(db().execute("SELECT id, correct_index FROM questions"))
@@ -72,7 +72,7 @@ async def test_exam():
         for tt in ("film_quiz", "daily", "chess_win"):
             await hpcup.submit_task_answer(uid, tt, qid, right[qid])
     st = await hpcup.user_stats(uid, season["id"])
-    check("hamma savolni urinish - faqat qonuniy ball (5+30+10)", st["points"] == 45)
+    check("hamma savolni urinish - faqat qonuniy ball (5+10, imtihonsiz)", st["points"] == 15)
     r = await hpcup.submit_task_answer(uid, "film_quiz", 99999, 0)
     check("yo'q savol rad etiladi", r.get("ok") is False)
 
@@ -134,6 +134,8 @@ async def test_questions():
     # Til: ruscha/inglizcha matn, to'g'ri javob raqami bir xil
     await hpcup.touch_user(902, "Til")
     await hpcup.award(902, "film_open", "2", 5)
+    # Imtihon savollari mexanizmi saqlangan (EXAM_ON), sinov uchun vaqtincha yoqamiz
+    hpcup.EXAM_ON = True
     ru = [t for t in (await hpcup.get_user_tasks(902, "ru"))["tasks"] if t["type"] == "film_quiz"][0]
     en = [t for t in (await hpcup.get_user_tasks(902, "en"))["tasks"] if t["type"] == "film_quiz"][0]
     by_body = {files[k]["ru"]["q"]: k for k in files}
@@ -149,6 +151,7 @@ async def test_questions():
         conn.commit()
         seen += [q["id"] for q in hpcup._pick_film_questions(903, sid, 3)]
     check("4 haftada 12 xil savol (takrorsiz)", len(seen) == 12 and len(set(seen)) == 12)
+    hpcup.EXAM_ON = False
 
 
 # ------------------------------------------------------------------ filmlar

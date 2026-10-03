@@ -93,10 +93,9 @@ async def run_http_tests():
     season = await hpcup.current_season()
     
     # 1-qism imtihonini yechamiz va 30 ball qilamiz
-    qs = await hpcup.film_questions(777001, season["id"], 1)
-    for q in qs:
-        await hpcup.record_answer(777001, season["id"], q["id"], True)
-        await hpcup.award(777001, "film_quiz", str(q["id"]), hpcup.PTS_FILM_QUIZ)
+    # Imtihon o'chirilgan (2026-10-04) - ball kunlik savoldan
+    for kun in ("k1", "k2", "k3"):
+        await hpcup.award(777001, "daily", kun, hpcup.PTS_DAILY)
 
     # aiohttp test serverini ishga tushiramiz
     runner = web.AppRunner(app)
@@ -119,7 +118,7 @@ async def run_http_tests():
             assert "houses" in data
             assert "me" in data
             assert "exam_pending" in data["me"]
-            assert data["me"]["exam_pending"] == [2, 3, 4, 5, 6, 7, 8], f"exam_pending xato: {data['me']['exam_pending']}"
+            assert data["me"]["exam_pending"] == [], f"exam_pending xato: {data['me']['exam_pending']}"
             assert "hall" in data, "hall bloki yo'q!"
             assert data["hall"]["total"] >= 1
             assert data["hall"]["active"] == 1
@@ -136,7 +135,7 @@ async def run_http_tests():
         async with session.post("http://127.0.0.1:8899/api/leaderboard", json=payload) as resp:
             assert resp.status == 200
             data2 = await resp.json()
-            assert data2["me"]["exam_pending"] == [2, 3, 4, 5, 6, 7, 8]
+            assert data2["me"]["exam_pending"] == []
             print("вњ… POST /api/leaderboard ham to'liq ishladi.")
 
     await runner.cleanup()
