@@ -101,13 +101,13 @@ async def amain():
     check("101 xiyobon haqida 1-eslatma", nat.get(101) == ("alley", 1, "yuborildi"))
     check("102 tayoqcha haqida", nat.get(102, ("",))[0] == "wand")
     check("103 hali erta", 103 not in nat)
-    check("104 juda eski - yozilmaydi", 104 not in nat)
+    check("104 eski bo'lsa ham eslatma oladi (30 kun chegarasi yo'q)", nat.get(104, ("", 0))[1] == 1)
     check("105 tugatgan - yozilmaydi", 105 not in nat)
     check("sinov o'quvchisiga yo'q", -5 not in nat)
     check("106 bloklagan deb yozildi", nat.get(106, ("", 0, ""))[2] == "bloklagan")
     check("107 ilovada xat bor, botdan yo'q", nat.get(107, ("", 0, ""))[2] == "ochirilgan")
     yuborilgan = {u for u, _, _ in bot.sent}
-    check("botdan faqat 101 va 102 ga", yuborilgan == {101, 102})
+    check("botdan 101, 102 va 104 ga", yuborilgan == {101, 102, 104})
     matn102 = [t for u, t, _ in bot.sent if u == 102][0]
     check("102 ga ruscha matn", "Олливандер" in matn102)
     kb = [k for u, _, k in bot.sent if u == 101][0]
@@ -117,14 +117,19 @@ async def amain():
     check("darhol qayta - takror yo'q", await hppochta.aylana(bot, tush + timedelta(minutes=15)) == [])
     ikki = {u: n for u, _, n, _ in await hppochta.aylana(bot, tush + timedelta(days=2))}
     check("3 kun jimlikdan keyin 2-eslatma", ikki.get(101) == 2)
-    keyin = await hppochta.aylana(bot, tush + timedelta(days=9))
-    check("3-eslatma hech qachon yo'q", all(n <= 2 for _, _, n, _ in keyin) and
-          not any(u in (101, 102) for u, _, _, _ in keyin))
+    erta = await hppochta.aylana(bot, tush + timedelta(days=5))
+    check("2-eslatmadan keyin hafta o'tmaguncha yo'q", not any(u == 101 for u, _, _, _ in erta))
+    keyin = {u: n for u, _, n, _ in await hppochta.aylana(bot, tush + timedelta(days=9, hours=1))}
+    check("hafta o'tgach 3-eslatma (umumiy chegara yo'q)", keyin.get(101) == 3)
+    # Yangi qadamda to'xtasa, sanoq qaytadan: 104 bankka kirdi va yana jim qoldi
+    hppochta._qadam_yoz(104, "alley", hpcup._utc_iso(tush + timedelta(days=10)))
+    yangi = {u: (q, n) for u, q, n, _ in await hppochta.aylana(bot, tush + timedelta(days=11, hours=2))}
+    check("yangi qadamda to'xtasa yana 1-eslatma", yangi.get(104) == ("gringotts", 1))
 
     # Ilova ro'yxati va o'qish
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "list"}))
     d = json.loads(r.body)
-    check("ilovada 2 ta xat, 2 ta o'qilmagan", len(d["items"]) == 2 and d["unread"] == 2 and d["bot"])
+    check("ilovada 3 ta xat, 3 ta o'qilmagan", len(d["items"]) == 3 and d["unread"] == 3 and d["bot"])
     await hppochta.api_pochta(Req({"initData": "101", "action": "came"}))
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "read"}))
     check("o'qildi", json.loads(r.body)["unread"] == 0)
@@ -132,12 +137,12 @@ async def amain():
     bir = d["items"][0]["id"]
     r = await hppochta.api_pochta(Req({"initData": "102", "action": "delete", "ids": [bir]}))
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "list"}))
-    check("birovning xatini o'chirib bo'lmaydi", len(json.loads(r.body)["items"]) == 2)
+    check("birovning xatini o'chirib bo'lmaydi", len(json.loads(r.body)["items"]) == 3)
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "delete", "ids": [bir]}))
     d2 = json.loads(r.body)
-    check("xat o'chirildi", len(d2["items"]) == 1 and all(x["id"] != bir for x in d2["items"]))
+    check("xat o'chirildi", len(d2["items"]) == 2 and all(x["id"] != bir for x in d2["items"]))
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "delete", "ids": "yolgon"}))
-    check("noto'g'ri ids - jim o'tadi", len(json.loads(r.body)["items"]) == 1)
+    check("noto'g'ri ids - jim o'tadi", len(json.loads(r.body)["items"]) == 2)
     r = await hppochta.api_pochta(Req({"initData": "101", "action": "bot", "on": False}))
     check("bot xabari o'chirildi", json.loads(r.body)["bot"] is False)
     r = await hppochta.api_pochta(Req({"initData": "abc", "action": "list"}))

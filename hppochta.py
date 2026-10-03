@@ -8,8 +8,9 @@ bilan ham o'chiriladi). Hozircha bitta tur bor: onboarding eslatmasi.
 Onboarding eslatmasi (egasi bilan kelishilgan, 2026-10-01):
   - xatni ochib, fakultetga yetmagan odam;
   - oxirgi qadamidan 1 kun o'tsa - birinchi eslatma, 3 kun o'tsa - ikkinchisi
-    (birinchisidan kamida 2 kun keyin), shundan keyin boshqa yo'q;
-  - 30 kundan beri jim odamga yozilmaydi; bot xabari faqat 10:00-21:00 da.
+    (birinchisidan kamida 2 kun keyin);
+  - 2-eslatmadan keyin ham shu qadamda tursa - haftada bir marta (chegarasiz; egasi, 2026-10-03);
+    sanoq to'xtagan qadam bo'yicha; bot xabari faqat 10:00-21:00 da.
 
 Qo'lda xat (egasi paneldan yozadi, 2026-10-01): kimga - hammaga, fakultetga,
 saralanmaganlarga yoki bitta odamga (til bo'yicha ham tanlasa bo'ladi);
@@ -51,8 +52,9 @@ YOL = ["letter", "alley", "gringotts", "wand", "ticket", "train", "sortst", "hou
 BIRINCHI = timedelta(days=1)
 IKKINCHI = timedelta(days=3)
 ORALIQ = timedelta(days=2)       # ikki eslatma orasida kamida
-JIM_CHEGARA = timedelta(days=30)
-MAX_ESLATMA = 2
+HAFTA = timedelta(days=7)        # 2-eslatmadan keyin: shu qadamda turgan bo'lsa haftada bir marta
+# Egasi (2026-10-03): umumiy "jami 2 ta" va "30 kun jim" chegaralari olib tashlandi.
+# Sanoq endi odam TO'XTAGAN QADAM bo'yicha: yangi qadamda to'xtasa, yana 1-eslatmadan boshlanadi.
 SOAT_BOSH, SOAT_OXIR = 10, 21    # bot xabari shu oraliqda (Toshkent)
 
 _cfg = {}
@@ -60,10 +62,10 @@ _cfg = {}
 # Bot xabari: sarlavha va matn keyingi qadamga qarab (ilovadagi matnlar bilan bir xil ruhda)
 MATN = {
     "uz": {
-        "alley": ("Diagon xiyoboni sizni kutmoqda", "Xatdagi ro'yxat tayyor, g'isht devor ochiq. Xogvartsga yo'l shu yerdan boshlanadi."),
+        "alley": ("Gringotts sizni kutmoqda", "Xogvartsga yo'l sehrgarlar bankidan boshlanadi: goblin kalitingizni ko'zdan kechirmoqchi."),
         "gringotts": ("Gringotts eshiklari ochiq", "Xogvarts sizga ajratgan galleonlar bankda kutib turibdi."),
         "wand": ("Olivander tayoqchangizni kutyapti", "Tayoqchani sehrgar emas, tayoqcha sehrgarni tanlaydi."),
-        "ticket": ("Xagrid biletingizni ushlab turibdi", "9¾ platformaga bilet - Qovoqxonada, Xagridning qo'lida."),
+        "ticket": ("Xagrid 9¾ platformada kutmoqda", "Biletingiz Xagridning qo'lida - Kings Kross vokzalida, g'isht ustun yonida."),
         "train": ("Xogvarts ekspressi jo'nashga tayyor", "9¾ platformada poyezd sizsiz ketmaydi."),
         "sortst": ("Katta zalda Saralovchi qalpoq kutmoqda", "Bir qadam qoldi - qaysi fakultetga tushasiz?"),
         "house": ("Saralovchi qalpoq hali qaror qilmadi", "Savollarni oxirigacha javob bering - fakultetingiz e'lon qilinadi."),
@@ -83,10 +85,10 @@ MATN = {
         "badges": {"all_films": "Sakkiz qism", "flawless_exam": "Benuqson imtihon", "perfect_week": "Mukammal hafta", "streak_7": "Yetti kun ketma-ket"},
     },
     "ru": {
-        "alley": ("Косой переулок ждёт вас", "Список из письма готов, кирпичная стена открыта. Путь в Хогвартс начинается здесь."),
+        "alley": ("Гринготтс ждёт вас", "Путь в Хогвартс начинается с банка волшебников: гоблин хочет осмотреть ваш ключ."),
         "gringotts": ("Двери Гринготтса открыты", "Галлеоны, которые выделил вам Хогвартс, ждут вас в банке."),
         "wand": ("Олливандер ждёт вас", "Не волшебник выбирает палочку, а палочка - волшебника."),
-        "ticket": ("Хагрид держит ваш билет", "Билет на платформу 9¾ - в «Дырявом котле», у Хагрида."),
+        "ticket": ("Хагрид ждёт на платформе 9¾", "Ваш билет у Хагрида - на вокзале Кингс-Кросс, у кирпичной колонны."),
         "train": ("Хогвартс-экспресс готов к отправлению", "На платформе 9¾ поезд без вас не уйдёт."),
         "sortst": ("Распределяющая шляпа ждёт в Большом зале", "Остался один шаг - на какой факультет вы попадёте?"),
         "house": ("Шляпа ещё не приняла решение", "Ответьте на вопросы до конца - и факультет будет объявлен."),
@@ -106,10 +108,10 @@ MATN = {
         "badges": {"all_films": "Восемь частей", "flawless_exam": "Безупречный экзамен", "perfect_week": "Идеальная неделя", "streak_7": "Семь дней подряд"},
     },
     "en": {
-        "alley": ("Diagon Alley is waiting", "The list from your letter is ready and the brick wall is open. The road to Hogwarts starts here."),
+        "alley": ("Gringotts is waiting", "The road to Hogwarts starts at the wizarding bank: a goblin wants to examine your key."),
         "gringotts": ("Gringotts doors are open", "The galleons Hogwarts set aside for you are waiting at the bank."),
         "wand": ("Ollivander is waiting for you", "The wand chooses the wizard, not the other way round."),
-        "ticket": ("Hagrid is holding your ticket", "Your Platform 9¾ ticket is at the Leaky Cauldron, with Hagrid."),
+        "ticket": ("Hagrid is waiting at Platform 9¾", "Hagrid has your ticket - at King's Cross, by the brick pillar."),
         "train": ("The Hogwarts Express is ready to leave", "On Platform 9¾ the train won't leave without you."),
         "sortst": ("The Sorting Hat is waiting in the Great Hall", "One step left - which house will you join?"),
         "house": ("The Sorting Hat hasn't decided yet", "Answer the questions to the end and your house will be announced."),
@@ -283,10 +285,10 @@ def _nomzodlar(hozir):
         qadamlar = {}
         for r in conn.execute("SELECT user_id, qadam, vaqt FROM onb_qadam"):
             qadamlar.setdefault(r["user_id"], {})[r["qadam"]] = r["vaqt"]
-        eslatma = {}
-        for r in conn.execute("SELECT user_id, COUNT(*) AS n, MAX(yaratildi) AS oxiri FROM pochta "
-                              "WHERE tur='onb' GROUP BY user_id"):
-            eslatma[r["user_id"]] = (r["n"], r["oxiri"])
+        eslatma = {}     # (odam, kutilayotgan qadam) -> (nechta eslatma, oxirgisi qachon)
+        for r in conn.execute("SELECT user_id, qadam, COUNT(*) AS n, MAX(yaratildi) AS oxiri FROM pochta "
+                              "WHERE tur='onb' GROUP BY user_id, qadam"):
+            eslatma[(r["user_id"], r["qadam"])] = (r["n"], r["oxiri"])
         uylar = {r["user_id"] for r in conn.execute("SELECT user_id FROM users WHERE house IS NOT NULL")}
     finally:
         conn.close()
@@ -295,27 +297,25 @@ def _nomzodlar(hozir):
     for uid, q in qadamlar.items():
         if uid <= 0 or "letter" not in q or "house" in q or uid in uylar:
             continue
-        n, oxiri = eslatma.get(uid, (0, None))
-        if n >= MAX_ESLATMA:
-            continue
         keyingi = next((s for s in YOL if s not in q), None)
         if not keyingi:
             continue
+        n, oxiri = eslatma.get((uid, keyingi), (0, None))
         jim = hozir - max(hpcup._parse_iso(v) for v in q.values())
-        if jim > JIM_CHEGARA:
-            continue
         if n == 0 and jim >= BIRINCHI:
             out.append((uid, keyingi, 1))
         elif n == 1 and jim >= IKKINCHI and hozir - hpcup._parse_iso(oxiri) >= ORALIQ:
             out.append((uid, keyingi, 2))
+        elif n >= 2 and hozir - hpcup._parse_iso(oxiri) >= HAFTA:
+            out.append((uid, keyingi, n + 1))
     return out
 
 
-def _yarat(uid, keyingi, n):
+def _yarat(uid, keyingi, n, vaqt=None):
     conn = _ulan()
     try:
         cur = conn.execute("INSERT INTO pochta (user_id, tur, qadam, n, yaratildi) VALUES (?,?,?,?,?)",
-                           (uid, "onb", keyingi, n, _hozir()))
+                           (uid, "onb", keyingi, n, vaqt or _hozir()))
         conn.commit()
         return cur.lastrowid
     finally:
@@ -403,7 +403,7 @@ async def aylana(bot, hozir=None):
         return []
     natija = []
     for uid, keyingi, n in await asyncio.to_thread(_nomzodlar, hozir.astimezone(timezone.utc)):
-        pid = await asyncio.to_thread(_yarat, uid, keyingi, n)
+        pid = await asyncio.to_thread(_yarat, uid, keyingi, n, hpcup._utc_iso(hozir))
         natija.append((uid, keyingi, n, await _yubor(bot, uid, pid, keyingi, n)))
         await asyncio.sleep(0.2)
     if natija:
