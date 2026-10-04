@@ -12,6 +12,7 @@ API: /api/nishon
 """
 
 import asyncio
+import datetime as _dt
 import logging
 import os
 import re
@@ -28,7 +29,7 @@ NISHONLAR = (
     ("film_1", "kino"), ("film_8", "kino"), ("fb_3", "kino"), ("poliglot", "kino"),
     ("oquvchi", "yol"), ("tayoqcha", "yol"), ("patronus", "yol"),
     ("ball_1", "kubok"), ("streak_7", "kubok"), ("perfect_week", "kubok"),
-    ("kubok_golib", "kubok"), ("top_3", "kubok"),
+    ("kubok_golib", "kubok"), ("top_3", "kubok"), ("sandiq_1", "kubok"), ("sandiq_7", "kubok"),
     ("dost_1", "dostlik"), ("dost_5", "dostlik"), ("shaxmat", "dostlik"),
     ("albom", "kolleksiya"), ("serial_1", "kolleksiya"),
 )
@@ -123,6 +124,19 @@ def hisob(conn, uid):
                    or _one(conn, "SELECT 1 FROM chess_ratings WHERE user_id=? AND wins>0", (uid,)))
     albom = bool(_one(conn, "SELECT 1 FROM album_egasi WHERE user_id=? LIMIT 1", (uid,)))
 
+    # Kunlik sandiq: nechta ochilgan va eng uzun ketma-ketlik
+    kunlar = sorted(r[0] for r in _all(conn, "SELECT kun FROM sandiq WHERE user_id=? AND ochildi IS NOT NULL", (uid,)))
+    uzun = joriy = 0
+    oldingi = None
+    for k in kunlar:
+        try:
+            d = _dt.date(*(int(x) for x in k.split("-")))
+        except ValueError:
+            continue
+        joriy = joriy + 1 if (oldingi and (d - oldingi).days == 1) else 1
+        uzun = max(uzun, joriy)
+        oldingi = d
+
     return {
         "film_1": (min(len(filmlar), 1), 1),
         "film_8": (hp, 8),
@@ -136,6 +150,8 @@ def hisob(conn, uid):
         "perfect_week": (1 if "perfect_week" in eski else 0, 1),
         "kubok_golib": (1 if golib else 0, 1),
         "top_3": (1 if _top3(conn, uid) else 0, 1),
+        "sandiq_1": (min(len(kunlar), 1), 1),
+        "sandiq_7": (min(uzun, 7), 7),
         "dost_1": (min(refs, 1), 1),
         "dost_5": (min(refs, 5), 5),
         "shaxmat": (1 if shaxmat else 0, 1),

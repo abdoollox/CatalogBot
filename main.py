@@ -40,6 +40,7 @@ import hpfilms
 import hpserial
 import hpnishon
 import hppatronus
+import hpsandiq
 import hpevents
 import threading
 try:
@@ -2532,6 +2533,14 @@ async def main():
                                   "public_base": PUBLIC_BASE, "share": prepare_xat_share})
     except Exception as patronus_error:
         logging.error("Patronus moduli ishga tushmadi: %s", patronus_error)
+
+    # --- Kunlik sandiq (topshiriqlar, ketma-ketlik) ---
+    try:
+        async def _sandiq_log(user, payload):
+            await log_user_action(_WebUser(user), payload)
+        hpsandiq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _sandiq_log})
+    except Exception as sandiq_error:
+        logging.error("Sandiq moduli ishga tushmadi: %s", sandiq_error)
 
     # --- Nishonlar (profildagi yutuqlar) ---
     try:

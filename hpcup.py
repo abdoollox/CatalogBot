@@ -60,7 +60,8 @@ DAILY_PER_WEEK = 7
 # Bir mavsumda olish mumkin bo'lgan eng ko'p ball
 MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_DAILY * DAILY_PER_WEEK
-              + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON)   # = 160
+              + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON
+              + 20 * 7)                                  # kunlik sandiq: kuniga 20  -> jami 300
 
 # --- Hafta yakunidagi galleon mukofoti (egasi, 2026-10-04) ---
 # Faqat SARALANGAN o'quvchilarga, o'z balidan: har GAL_PER_POINTS ball uchun 1 galleon;
@@ -79,13 +80,15 @@ ACTIVE_MIN_POINTS = 1
 SOURCE_GROUP = {
     "film_open": "film", "daily": "daily",
     "chess_win": "chess", "chess_draw": "chess", "referral": "friends",
+    "sandiq": "chest",
 }
-SOURCE_KEYS = ("film", "daily", "chess", "friends")
+SOURCE_KEYS = ("film", "daily", "chess", "chest", "friends")
 # Mavsumda har manbadan olish mumkin bo'lgan eng ko'p ball (do'stlar - cheksiz)
 SOURCE_CAPS = {
     "film": PTS_FILM_OPEN * FILM_PARTS,
     "daily": PTS_DAILY * DAILY_PER_WEEK,
     "chess": PTS_CHESS_WIN * CHESS_MAX_PER_SEASON,
+    "chest": 20 * 7,
 }
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")
@@ -115,7 +118,7 @@ CREATE TABLE IF NOT EXISTS points (
     season_id   INTEGER NOT NULL REFERENCES seasons(id),
     source_type TEXT NOT NULL CHECK (source_type IN
                     ('film_open','film_quiz','daily','chess_win','chess_draw',
-                     'referral')),
+                     'referral','sandiq')),
     source_ref  TEXT NOT NULL,
     points      INTEGER NOT NULL,
     created_at  TEXT NOT NULL,
@@ -529,6 +532,37 @@ def _migrate(conn, users_json):
                      "ON points(season_id, user_id)")
         conn.execute("PRAGMA foreign_keys = ON")
         logging.info("Kubok migratsiyasi: points cheklovi yangilandi (referral)")
+
+    # 4) Kunlik sandiq ballari ('sandiq', 2026-10-05) - cheklovga yangi tur qo'shiladi (xuddi shu usul).
+    ddl = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='points'"
+    ).fetchone()
+    if ddl and "'sandiq'" not in (ddl[0] or ""):
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("""
+            CREATE TABLE points_v4 (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(user_id),
+                season_id   INTEGER NOT NULL REFERENCES seasons(id),
+                source_type TEXT NOT NULL CHECK (source_type IN
+                                ('film_open','film_quiz','daily',
+                                 'chess_win','chess_draw','referral','sandiq')),
+                source_ref  TEXT NOT NULL,
+                points      INTEGER NOT NULL,
+                created_at  TEXT NOT NULL,
+                UNIQUE (user_id, season_id, source_type, source_ref)
+            )""")
+        conn.execute(
+            "INSERT INTO points_v4 (id, user_id, season_id, source_type, "
+            "source_ref, points, created_at) "
+            "SELECT id, user_id, season_id, source_type, source_ref, points, "
+            "created_at FROM points")
+        conn.execute("DROP TABLE points")
+        conn.execute("ALTER TABLE points_v4 RENAME TO points")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_points_season_user "
+                     "ON points(season_id, user_id)")
+        conn.execute("PRAGMA foreign_keys = ON")
+        logging.info("Kubok migratsiyasi: points cheklovi yangilandi (sandiq)")
 
 
 def _questions_dir():
@@ -2744,6 +2778,7 @@ async def test_reset(user_id):
                     "DELETE FROM question_assignments WHERE user_id=?",
                     "DELETE FROM badges WHERE user_id=?",
                     "DELETE FROM nishon WHERE user_id=?",
+                    "DELETE FROM sandiq WHERE user_id=?",
                     "DELETE FROM chess_games WHERE white_uid=? OR black_uid=?",
                     "DELETE FROM chess_ratings WHERE user_id=?",
                     "DELETE FROM chess_bot_results WHERE user_id=?",

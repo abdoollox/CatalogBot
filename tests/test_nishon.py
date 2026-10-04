@@ -79,8 +79,8 @@ async def amain():
     await hpcup.touch_user(1, "Garri")
     await hpcup.touch_user(2, "Ron")
     d = await ask(1)
-    check("yangi odamda nishon yo'q, 17 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 17
-          and len(d["list"]) == 17 and d["new"] == [])
+    check("yangi odamda nishon yo'q, 19 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 19
+          and len(d["list"]) == 19 and d["new"] == [])
 
     # Filmlar: botdan, ilovadan (web_ va sifat bilan), 3 tilda
     for p in ("hp1_uz", "web_hp2_uz@hd", "hp3_ru", "hp4_en", "hp1_uz", "fb1_uz", "start", "share_hp1"):
@@ -130,21 +130,28 @@ async def amain():
         (season["id"], season["id"]))
     d = await ask(1, seen=True)
     check("o'quvchi, tayoqcha, ball, hafta, do'stlar, shaxmat, albom",
-          set(got(d)) == set(hpnishon.KODLAR) - {"kubok_golib", "top_3"})
+          set(got(d)) == set(hpnishon.KODLAR) - {"kubok_golib", "top_3", "sandiq_1", "sandiq_7"})
+
+    # Kunlik sandiq: 7 kun ketma-ket
+    sql("CREATE TABLE IF NOT EXISTS sandiq (user_id INTEGER, kun TEXT, done TEXT, bosqich INTEGER, ochildi TEXT)")
+    for i in range(1, 8):
+        sql("INSERT INTO sandiq VALUES (1, ?, '[]', 2, 'x')", ("2026-10-%02d" % i,))
+    d = await ask(1, seen=True)
+    check("sandiq nishonlari", "sandiq_1" in got(d) and "sandiq_7" in got(d))
 
     # Hafta yopildi: fakulteti g'olib, o'zi eng ko'p ball to'plagan
     sql("UPDATE seasons SET status='closed', winner_house='gryffindor' WHERE id=?", (season["id"],))
     d = await ask(1)
-    check("g'olib fakultet va top-3", d["new"] == ["kubok_golib", "top_3"] and d["count"] == 17)
+    check("g'olib fakultet va top-3", d["new"] == ["kubok_golib", "top_3"] and d["count"] == 19)
 
     # Nishon qaytib olinmaydi
     sql("UPDATE users SET refs=0, wand_at=NULL WHERE user_id=1")
     d = await ask(1)
-    check("olingan nishon yo'qolmaydi", d["count"] == 17)
+    check("olingan nishon yo'qolmaydi", d["count"] == 19)
 
     # Boshqa odam ko'radi: faqat olinganlari
     d = await ask(2, uid=1)
-    check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 17 and all(x["got"] for x in d["list"]) and "new" not in d)
+    check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 19 and all(x["got"] for x in d["list"]) and "new" not in d)
     d = await ask(1, uid=2)
     check("nishoni yo'q odam - bo'sh ro'yxat", d["list"] == [] and d["count"] == 0)
     check("yo'q odam - bo'sh ro'yxat", (await ask(1, uid=999))["list"] == [])
