@@ -50,6 +50,8 @@ LETTERS = ["A", "B", "C", "D"]
 # Mavsum yopilishini e'lon qilish. HP_ANNOUNCE=0 bo'lsa kanalga yozilmaydi.
 ANNOUNCE = os.getenv("HP_ANNOUNCE", "1") != "0"
 
+FEED_FULL_LIMIT = 3000      # to'liq tasma sahifasi: eng ko'pi shuncha yozuv
+
 
 # ---------------------------------------------------------- fakultet
 
@@ -402,6 +404,20 @@ async def api_cup_house(request):
     return cors(web.json_response(board))
 
 
+async def api_cup_feed(request):
+    """Saralanishlar tarixi to'liq (ilovadagi "Barcha tasmani ko'rish" sahifasi)."""
+    web = _web()
+    cors = _cfg["cors"]
+    if request.method == "OPTIONS":
+        return cors(web.Response(status=204))
+
+    user = _cfg["verify_init_data"](_init_data_from(request))
+    if not user:
+        return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+
+    return cors(web.json_response({"ok": True, "feed": await hpcup.feed(limit=FEED_FULL_LIMIT)}))
+
+
 async def api_cup_history(request):
     """Kubok tarixi: barcha haftalar va har fakultet nechta kubok olgani."""
     web = _web()
@@ -636,6 +652,7 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/referrals", api_referrals)
     app.router.add_route("*", "/api/cup/house", api_cup_house)
     app.router.add_route("*", "/api/cup/history", api_cup_history)
+    app.router.add_route("*", "/api/cup/feed", api_cup_feed)
     app.router.add_route("*", "/api/presence", api_presence)
 
     # Chat "jonli": ilova "shu id dan keyingi xabar bormi?" deb so'raydi va

@@ -66,6 +66,9 @@ async def amain():
             await hpcup.award(uid, "daily", "k%d" % i, 10)
     await hpcup.award(2, "film_open", "1", 5)
 
+    tasma = await hpcup.feed(limit=3000)
+    check("to'liq tasma: saralanganlarning hammasi, sinov o'quvchisisiz",
+          sorted(x["house"] for x in tasma) == ["gryffindor", "gryffindor", "slytherin"])
     check("imtihon savoli berilmaydi", await hpcup.film_questions(1, season["id"], 1) == [])
     check("imtihon kutilmaydi", await hpcup.exam_pending(1, season["id"]) == [])
 
