@@ -85,6 +85,7 @@ async def amain():
     d = await ask(1)
     kun = d["kun"]
     kodlar = [x["code"] for x in d["tasks"]]
+    check("bugungi kartochka ochilmaguncha sir", d["card"] is None)
     check("boshida 0 / 6, ochib bo'lmaydi", d["ok"] and d["n"] == 0 and d["total"] == 6 and not d["can_open"] and d["streak"] == 0)
 
     boshqa = [k for k in kodlar if k != "daily"]

@@ -19,7 +19,9 @@ API: /api/sandiq
 
 import asyncio
 import datetime as _dt
+import hashlib
 import json
+import os
 import logging
 import random
 import sqlite3
@@ -49,7 +51,10 @@ def kun_kartasi(kun):
     n = (_dt.date(y, m, d) - _dt.date(*KARTA_BOSHI)).days
     if n < 0:
         n = 0
-    tartib = random.Random("qurbaqa:%d" % (n // len(KARTALAR))).sample(KARTALAR, len(KARTALAR))
+    # Tartib SIR (egasi, 2026-10-05): ertaga kim chiqishini hech kim bilmasin. Repo ochiq, shuning uchun
+    # urug'ga serverdagi maxfiy qiymat (bot tokeni) qo'shiladi - koddan hisoblab bo'lmaydi.
+    sir = hashlib.sha256(("qurbaqa|" + os.getenv("BOT_TOKEN", "")).encode()).hexdigest()
+    tartib = random.Random("%s:%d" % (sir, n // len(KARTALAR))).sample(KARTALAR, len(KARTALAR))
     return tartib[n % len(KARTALAR)]
 
 
@@ -138,7 +143,8 @@ def _holat(conn, uid, kun, mukofot=None):
         "big": (not ochildi) and (streak + 1) % KATTA_HAR == 0,
         "prizes": {"steps": [list(b) for b in BOSQICH], "ball": SANDIQ_BALL, "gal": SANDIQ_GALLEON,
                    "big_every": KATTA_HAR, "big_gal": KATTA_GALLEON},
-        "card": kun_kartasi(kun),
+        # Bugungi kartochka SIR: faqat quti ochilgandan keyin aytiladi
+        "card": kun_kartasi(kun) if ochildi else None,
         "cards": {r[0]: r[1] for r in conn.execute("SELECT card, soni FROM qurbaqa WHERE user_id=?", (uid,))},
         "cards_total": len(KARTALAR),
         "reward": mukofot,
