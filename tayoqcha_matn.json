@@ -1,0 +1,104 @@
+{
+ "woods": {
+  "oak": {
+   "uz": "Eman",
+   "ru": "Дуб",
+   "en": "Oak",
+   "t_uz": "jasorat va sadoqat yog'ochi",
+   "t_ru": "дерево храбрости и верности",
+   "t_en": "a wood of courage and loyalty"
+  },
+  "yew": {
+   "uz": "Tis",
+   "ru": "Тис",
+   "en": "Yew",
+   "t_uz": "kuch va hokimiyat yog'ochi",
+   "t_ru": "дерево силы и власти",
+   "t_en": "a wood of power and dominion"
+  },
+  "cherry": {
+   "uz": "Olcha",
+   "ru": "Вишня",
+   "en": "Cherry",
+   "t_uz": "g'ayrioddiy kuch yog'ochi",
+   "t_ru": "дерево необычайной силы",
+   "t_en": "a wood of uncommon strength"
+  },
+  "holly": {
+   "uz": "Padub",
+   "ru": "Остролист",
+   "en": "Holly",
+   "t_uz": "himoya yog'ochi",
+   "t_ru": "дерево защиты",
+   "t_en": "a wood of protection"
+  },
+  "aspen": {
+   "uz": "Terak",
+   "ru": "Осина",
+   "en": "Aspen",
+   "t_uz": "jangchi ruhi yog'ochi",
+   "t_ru": "дерево воинского духа",
+   "t_en": "a wood of the warrior spirit"
+  },
+  "walnut": {
+   "uz": "Yong'oq",
+   "ru": "Орех",
+   "en": "Walnut",
+   "t_uz": "zukkolik yog'ochi",
+   "t_ru": "дерево изобретательности",
+   "t_en": "a wood of ingenuity"
+  }
+ },
+ "cores": {
+  "phoenix": {
+   "uz": "feniks pati",
+   "ru": "перо феникса",
+   "en": "phoenix feather",
+   "note_uz": "Eng tanlovchan o'zak. U kamdan-kam sehrgarga bo'ysunadi, lekin bo'ysunsa — imkoniyatlari cheksiz.",
+   "note_ru": "Самая разборчивая сердцевина. Подчиняется немногим, но если подчинилась — предела нет.",
+   "note_en": "The most selective core. It yields to few, but where it does, there is no limit."
+  },
+  "dragon": {
+   "uz": "ajdaho yuragi tolasi",
+   "ru": "жила дракона",
+   "en": "dragon heartstring",
+   "note_uz": "Eng kuchli o'zak. Tez o'rganadi va tez bog'lanadi, lekin jangovar tabiati bor.",
+   "note_ru": "Самая мощная сердцевина. Быстро учится и привязывается, но нрав у неё боевой.",
+   "note_en": "The most powerful core. It learns fast and bonds fast, but its temper is fierce."
+  },
+  "unicorn": {
+   "uz": "yakkashox yeli",
+   "ru": "волос единорога",
+   "en": "unicorn hair",
+   "note_uz": "Eng sodiq o'zak. Boshqa egaga o'tishni istamaydi va hech qachon tashlab ketmaydi.",
+   "note_ru": "Самая верная сердцевина. Не желает менять хозяина и не предаёт.",
+   "note_en": "The most loyal core. It will not change hands, and it never betrays."
+  }
+ },
+ "flex": {
+  "rigid": {
+   "uz": "qattiq",
+   "ru": "жёсткая",
+   "en": "unyielding",
+   "len": "13"
+  },
+  "springy": {
+   "uz": "egiluvchan",
+   "ru": "гибкая",
+   "en": "springy",
+   "len": "9¾"
+  },
+  "supple": {
+   "uz": "moslashuvchan",
+   "ru": "податливая",
+   "en": "supple",
+   "len": "11¾"
+  },
+  "yielding": {
+   "uz": "yumshoq",
+   "ru": "мягкая",
+   "en": "yielding",
+   "len": "12½"
+  }
+ }
+}

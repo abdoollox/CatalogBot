@@ -119,6 +119,16 @@ async def amain():
     r = await hppatronus.api_share(Req({"lang": "ru"}, init="1"))
     d = json.loads(r.body)
     check("patronus: ulashish manzili bazadagi Patronus bilan", d["ok"] and d["code"] == "stag" and "/api/patronus/img/" in d["url"])
+    import hptayoq
+    hptayoq.OUT_DIR = os.path.join(TMP, "tq")
+    hptayoq.register(app, {"cors": lambda r: r, "verify_init_data": lambda s: {"id": int(s)} if s.lstrip("-").isdigit() else None,
+                           "public_base": "https://x"})
+    r = await hptayoq.api_share(Req({"lang": "uz", "wood": "holly", "core": "phoenix", "flex": "rigid"}, init="1"))
+    d = json.loads(r.body)
+    check("tayoqcha: ulashish rasmi yasaldi", d["ok"] and "/api/tayoqcha/img/" in d["url"]
+          and os.path.getsize(hptayoq.path_of(d["url"].split("/")[-1][:-4])) > 20000)
+    r = await hptayoq.api_share(Req({"wood": "plastik", "core": "phoenix", "flex": "rigid"}, init="2"))
+    check("tayoqcha: noma'lum yog'och rad etiladi", json.loads(r.body)["ok"] is False)
     check("patronus: Patronusi yo'q odamga rasm yo'q", json.loads((await hppatronus.api_share(Req({}, init="2"))).body)["ok"] is False)
     await hpcup.award(1, "daily", "k1", 10)
     await hpcup.award(1, "chess_win", "g1", 10)

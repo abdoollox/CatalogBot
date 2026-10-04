@@ -41,6 +41,7 @@ import hpserial
 import hpnishon
 import hppatronus
 import hpsandiq
+import hptayoq
 import hpevents
 import threading
 try:
@@ -2533,6 +2534,13 @@ async def main():
                                   "public_base": PUBLIC_BASE, "share": prepare_xat_share})
     except Exception as patronus_error:
         logging.error("Patronus moduli ishga tushmadi: %s", patronus_error)
+
+    # --- Tayoqchani ulashish rasmi ---
+    try:
+        hptayoq.register(app, {"verify_init_data": verify_init_data, "cors": _cors,
+                               "public_base": PUBLIC_BASE, "share": prepare_xat_share})
+    except Exception as tayoq_error:
+        logging.error("Tayoqcha ulashish moduli ishga tushmadi: %s", tayoq_error)
 
     # --- Kunlik sandiq (topshiriqlar, ketma-ketlik) ---
     try:
