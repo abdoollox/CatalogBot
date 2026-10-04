@@ -628,17 +628,11 @@ SIFAT_TX = {
 
 
 def hajm_matni(bayt, lang):
-    """2 990 000 000 -> "2,8 GB" (inglizchada nuqta bilan)."""
+    """Fayl hajmi doim MB da: 2 990 000 000 -> "2851 MB" (egasi, 2026-10-04: GB emas, MB;
+    hamma sifat bir xil o'lchovda yozilsin)."""
     if not bayt:
         return ""
-    # Hamma film bir xil o'lchovda (GB) yoziladi: "2,7 GB" yonida "1014 MB" chalkashtiradi
-    # (egasi, 2026-10-04). MB faqat juda kichik fayllar uchun (100 MB dan kam).
-    gb = bayt / (1024.0 ** 3)
-    katta = gb >= 0.1
-    son = ("%.1f" % gb) if katta else ("%d" % round(bayt / (1024.0 ** 2)))
-    if lang != "en":
-        son = son.replace(".", ",")
-    return "%s %s" % (son, "GB" if katta else "MB")
+    return "%d MB" % round(bayt / (1024.0 ** 2))
 
 
 def sifat_matni(movie_key, lang):
