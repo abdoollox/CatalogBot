@@ -84,16 +84,69 @@ def _save():
 
 # --- YUBORISH UCHUN MANBA ---
 
-def source(movie_key, lang):
-    """(chat_id, message_id) - film qayerdan nusxalanadi. Guruhda bo'lmasa - None."""
-    item = _data["map"].get("%s_%s" % (movie_key, lang))
-    if item and _data.get("group"):
-        return _data["group"], int(item["mid"])
+# --- SIFAT (egasi, 2026-10-04) ---
+# Har film-til bir nechta sifatda bo'lishi mumkin. Odamga "1080p/720p" emas, "Full HD" va "HD"
+# deb ko'rsatiladi (hamma ham raqamlarni tushunmaydi). Jadval kaliti: Full HD - "hp1_uz"
+# (avvalgidek, eski yozuvlar o'z joyida), boshqa sifat - "hp1_uz@hd".
+QUALITIES = ("fhd", "hd")              # ko'rsatish tartibi: yaxshisi birinchi
+Q_LABEL = {"fhd": "Full HD", "hd": "HD"}
+Q_PIX = {"fhd": "1080p", "hd": "720p"}
+_Q_HD = re.compile(r"(?<![0-9])720\s*p?\b|\bhd\s*720\b", re.I)
+_Q_FHD = re.compile(r"(?<![0-9])1080\s*p?\b|full\s*hd|\bfhd\b", re.I)
+
+
+def quality_of(it):
+    """Videoning sifati: avval nomi/izohidan ("720p", "1080p"), bo'lmasa balandligidan."""
+    text = "%s\n%s" % (it.get("name") or "", it.get("cap") or "")
+    if _Q_HD.search(text):
+        return "hd"
+    if _Q_FHD.search(text):
+        return "fhd"
+    h = int(it.get("h") or 0)
+    return "hd" if 0 < h <= 800 else "fhd"
+
+
+def _mkey(movie_key, lang, q="fhd"):
+    return "%s_%s" % (movie_key, lang) + ("" if q == "fhd" else "@" + q)
+
+
+def qualities(movie_key, lang):
+    """{sifat: fayl hajmi (bayt)} - shu film-tilda mavjud sifatlar."""
+    if not _data.get("group"):
+        return {}
+    out = {}
+    for q in QUALITIES:
+        it = _data["map"].get(_mkey(movie_key, lang, q))
+        if it:
+            out[q] = int(it.get("size") or 0)
+    return out
+
+
+def source(movie_key, lang, q=None):
+    """(chat_id, message_id) - film qayerdan nusxalanadi. Guruhda bo'lmasa - None.
+    q berilmasa - mavjudlarining eng yaxshisi."""
+    if not _data.get("group"):
+        return None
+    for one in ([q] if q else QUALITIES):
+        item = _data["map"].get(_mkey(movie_key, lang, one))
+        if item:
+            return _data["group"], int(item["mid"])
     return None
 
 
 def in_group(movie_key, lang):
     return source(movie_key, lang) is not None
+
+
+def public_map():
+    """Ilova uchun: {"hp1_uz": {"fhd": hajm, "hd": hajm}} - faqat bor sifatlar."""
+    out = {}
+    for fid in catalog.FILMS:
+        for l in catalog.LANGS:
+            qs = qualities(fid, l)
+            if qs:
+                out["%s_%s" % (fid, l)] = qs
+    return out
 
 
 # --- NOMDAN FILM VA TIL ---
@@ -148,7 +201,7 @@ def _video(m):
 def _item(mid, m, v):
     return {"mid": mid, "name": getattr(v, "file_name", None) or "",
             "cap": (m.caption or "")[:300], "size": int(getattr(v, "file_size", 0) or 0),
-            "dur": int(getattr(v, "duration", 0) or 0)}
+            "dur": int(getattr(v, "duration", 0) or 0), "h": int(getattr(v, "height", 0) or 0)}
 
 
 _SKIP = re.compile(r"\[\s*\d\s*\]|2160p|\b4k\b|ultra\s*hd|\buhd\b", re.I)
@@ -195,16 +248,17 @@ def table_text():
         belgilar = []
         for l in catalog.LANGS:
             it = _data["map"].get("%s_%s" % (fid, l))
+            hd = _data["map"].get(_mkey(fid, l, "hd"))
             if it and _data.get("group"):
                 b = "⚠️" if it.get("by") == "mavzu" else "✅"
             else:
                 b = "❌"
-            belgilar.append(flag[l] + b)
+            belgilar.append(flag[l] + b + ("+HD" if hd else ""))
         qator.append("%-4s %s" % (fid, "  ".join(belgilar)))
     kopi = sum(1 for it in _data["seen"].values() if _skip(it))
     if kopi:
         qator += ["", "📀 4K / qismlarga bo'lingan videolar: %d ta — hozircha ishlatilmaydi (keyin sifat tanlash uchun)." % kopi]
-    shubha = ["%s_%s ← %d-xabar (%s)" % (k.split("_")[0], k.split("_")[1], v["mid"], (v["name"] or v["cap"] or "nomsiz")[:50])
+    shubha = ["%s ← %d-xabar (%s)" % (k, v["mid"], (v["name"] or v["cap"] or "nomsiz")[:50])
               for k, v in sorted(_data["map"].items()) if v.get("by") == "mavzu"]
     if shubha:
         qator += ["", "⚠️ Tili nomidan emas, mavzudan olinganlar:"] + ["• " + x for x in shubha]
@@ -225,8 +279,9 @@ def _place(it, film, lang, how):
     """Topilgan videoni jadvalga qo'yadi.
 
     Ustunlik: qo'lda bog'langan > tili nomidan aniqlangan > tili mavzudan olingan;
-    teng bo'lsa - kattaroq xabar raqami (yangi yuklangani)."""
-    key = "%s_%s" % (film, lang)
+    teng bo'lsa - kattaroq xabar raqami (yangi yuklangani). Har SIFAT alohida o'rin:
+    720p nusxa 1080p ning o'rnini egallamaydi."""
+    key = _mkey(film, lang, quality_of(it))
     it = dict(it, by=how)
     old = _data["map"].get(key)
     if old:
@@ -370,8 +425,11 @@ async def on_film_command(message: types.Message):
         return
     key = bolak[1].lower()
     m = re.fullmatch(r"(hp[1-8]|fb[1-3])_(uz|ru|en)", key)
+    # Ixtiyoriy sifat: /film hp1_uz hd 1234 (yozilmasa - Full HD)
+    if m and len(bolak) > 2 and bolak[2].lower() in QUALITIES:
+        key = _mkey(m.group(1), m.group(2), bolak.pop(2).lower())
     if not m or len(bolak) < 3:
-        await message.answer("Masalan: /film hp1_uz 1234  yoki  /film hp1_uz -")
+        await message.answer("Masalan: /film hp1_uz 1234  ·  /film hp1_uz hd 1234  ·  /film hp1_uz -")
         return
     if bolak[2] == "-":
         _data["map"].pop(key, None)
@@ -421,7 +479,8 @@ async def on_group_video(message: types.Message):
         return
     if film and topic_lang and _place(it, film, topic_lang, "nom"):
         _save()
-        await _tell("🎬 Yangi video bog'landi: %s_%s ← %d-xabar (%s)" % (film, topic_lang, it["mid"], it["name"]))
+        await _tell("🎬 Yangi video bog'landi: %s_%s · %s ← %d-xabar (%s)"
+                    % (film, topic_lang, Q_LABEL[quality_of(it)], it["mid"], it["name"]))
     else:
         _save()
         await _tell("🎬 Yangi video tanilmadi: %d-xabar (%s)\nQo'lda: /film hp1_%s %d"
