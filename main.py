@@ -682,8 +682,9 @@ async def on_quality_pick(callback: types.CallbackQuery):
         pass
     payload_clean = "%s_%s" % (movie_key, lang)
     try:
+        # Jadvaldagi nomga sifat ham qo'shiladi (panel uchun): bot_hp1_uz@hd
         await log_user_action(user, payload_clean,
-                              "%s_%s" % ("web" if origin == "w" else "bot", payload_clean))
+                              "%s_%s@%s" % ("web" if origin == "w" else "bot", payload_clean, q))
         movie_data = MOVIES_DB[movie_key][lang]
         vk_url = movie_data.get("vk_url") if lang == "uz" else None
         await send_film(chat_id, movie_key, lang, vk_url, q)
@@ -2065,7 +2066,9 @@ async def api_send(request):
 
     # Sinov o'quvchisining harakati statistikaga yozilmaydi
     if user.id > 0:
-        await log_user_action(user, "%s_%s" % (movie_key, lang), "web_%s_%s" % (movie_key, lang))
+        q_olingan = q or next((x for x in hpfilms.QUALITIES if x in hpfilms.qualities(movie_key, lang)), "fhd")
+        await log_user_action(user, "%s_%s" % (movie_key, lang),
+                              "web_%s_%s@%s" % (movie_key, lang, q_olingan))
     remember_send(user.id, sent.message_id, movie_key, lang)
 
     # Xogvarts kubogi: kino ochilgani uchun ball. Film allaqachon yuborilgan,
