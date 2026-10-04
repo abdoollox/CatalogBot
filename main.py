@@ -38,6 +38,7 @@ import hpmusic
 import hpchatstat
 import hpfilms
 import hpserial
+import hpnishon
 import hpevents
 import threading
 try:
@@ -2521,6 +2522,12 @@ async def main():
         })
     except Exception as serial_error:
         logging.error("Serial moduli ishga tushmadi: %s", serial_error)
+
+    # --- Nishonlar (profildagi yutuqlar) ---
+    try:
+        hpnishon.register(app, {"verify_init_data": verify_init_data, "cors": _cors})
+    except Exception as nishon_error:
+        logging.error("Nishonlar moduli ishga tushmadi: %s", nishon_error)
 
     # --- Filmlar bazasi guruhda ---
     # Musiqadan KEYIN (uning guruh o'qish vositalarini ishlatadi), hpleave dan OLDIN.
