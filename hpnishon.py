@@ -26,7 +26,7 @@ _cfg = {}
 # Tartib ilovadagi ko'rinish tartibi. (kod, guruh)
 NISHONLAR = (
     ("film_1", "kino"), ("film_8", "kino"), ("fb_3", "kino"), ("poliglot", "kino"),
-    ("oquvchi", "yol"), ("tayoqcha", "yol"),
+    ("oquvchi", "yol"), ("tayoqcha", "yol"), ("patronus", "yol"),
     ("ball_1", "kubok"), ("streak_7", "kubok"), ("perfect_week", "kubok"),
     ("kubok_golib", "kubok"), ("top_3", "kubok"),
     ("dost_1", "dostlik"), ("dost_5", "dostlik"), ("shaxmat", "dostlik"),
@@ -105,6 +105,8 @@ def hisob(conn, uid):
     refs = int(u["refs"] or 0) if u else 0
     w = _one(conn, "SELECT wand_at FROM users WHERE user_id=?", (uid,))
     wand = bool(w and w[0])
+    pt = _one(conn, "SELECT patronus FROM users WHERE user_id=?", (uid,))
+    patronus = bool(pt and pt[0])
 
     ball = bool(_one(conn, "SELECT 1 FROM points WHERE user_id=? LIMIT 1", (uid,))
                 or _one(conn, "SELECT 1 FROM points_arxiv WHERE user_id=? LIMIT 1", (uid,)))
@@ -128,6 +130,7 @@ def hisob(conn, uid):
         "poliglot": (len(tillar), 3),
         "oquvchi": (1 if house else 0, 1),
         "tayoqcha": (1 if wand else 0, 1),
+        "patronus": (1 if patronus else 0, 1),
         "ball_1": (1 if ball else 0, 1),
         "streak_7": (min(kun, 7), 7),
         "perfect_week": (1 if "perfect_week" in eski else 0, 1),

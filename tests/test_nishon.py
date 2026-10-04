@@ -25,7 +25,7 @@ sheets.append_click = _none
 sheets.read_csv = _none
 sys.modules["sheets"] = sheets
 
-import hpcup, hpevents, hpnishon   # noqa: E402
+import hpcup, hpevents, hpnishon, hppatronus   # noqa: E402
 
 ok = fail = 0
 def check(name, cond):
@@ -79,8 +79,8 @@ async def amain():
     await hpcup.touch_user(1, "Garri")
     await hpcup.touch_user(2, "Ron")
     d = await ask(1)
-    check("yangi odamda nishon yo'q, 16 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 16
-          and len(d["list"]) == 16 and d["new"] == [])
+    check("yangi odamda nishon yo'q, 17 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 17
+          and len(d["list"]) == 17 and d["new"] == [])
 
     # Filmlar: botdan, ilovadan (web_ va sifat bilan), 3 tilda
     for p in ("hp1_uz", "web_hp2_uz@hd", "hp3_ru", "hp4_en", "hp1_uz", "fb1_uz", "start", "share_hp1"):
@@ -99,8 +99,20 @@ async def amain():
     d = await ask(1)
     check("hamma film, fantastik uchlik, serial", d["new"] == ["film_8", "fb_3", "serial_1"])
 
-    # Yo'l, kubok, do'stlar, albom
+    # Patronus: saralanmaganga yo'q, bir marta, o'zgarmaydi
+    hppatronus.register(app, {"cors": lambda r: r, "verify_init_data": lambda s: {"id": int(s)} if s.lstrip("-").isdigit() else None})
+    async def pat(kim, **body):
+        r = await hppatronus.api_patronus(Req(body, init=str(kim)))
+        return r.status, json.loads(r.body)
+    check("patronus: saralanmaganga berilmaydi", (await pat(1, code="stag"))[0] == 409)
     await hpcup.set_house(1, "gryffindor")
+    check("patronus: hali yo'q", (await pat(1))[1]["code"] is None)
+    check("patronus: noma'lum kod", (await pat(1, code="dragon"))[0] == 400)
+    st, d = await pat(1, code="stag")
+    check("patronus: yozildi", st == 200 and d["code"] == "stag" and d["new"] is True)
+    st, d = await pat(1, code="otter")
+    check("patronus: ikkinchi marta o'zgarmaydi", d["code"] == "stag" and d["new"] is False)
+    check("patronus: saqlangan", (await pat(1))[1]["code"] == "stag")
     await hpcup.award(1, "daily", "k1", 10)
     await hpcup.award(1, "chess_win", "g1", 10)
     sql("UPDATE users SET wand_at='2026-10-01T00:00:00Z', refs=5 WHERE user_id=1")
@@ -116,16 +128,16 @@ async def amain():
     # Hafta yopildi: fakulteti g'olib, o'zi eng ko'p ball to'plagan
     sql("UPDATE seasons SET status='closed', winner_house='gryffindor' WHERE id=?", (season["id"],))
     d = await ask(1)
-    check("g'olib fakultet va top-3", d["new"] == ["kubok_golib", "top_3"] and d["count"] == 16)
+    check("g'olib fakultet va top-3", d["new"] == ["kubok_golib", "top_3"] and d["count"] == 17)
 
     # Nishon qaytib olinmaydi
     sql("UPDATE users SET refs=0, wand_at=NULL WHERE user_id=1")
     d = await ask(1)
-    check("olingan nishon yo'qolmaydi", d["count"] == 16)
+    check("olingan nishon yo'qolmaydi", d["count"] == 17)
 
     # Boshqa odam ko'radi: faqat olinganlari
     d = await ask(2, uid=1)
-    check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 16 and all(x["got"] for x in d["list"]) and "new" not in d)
+    check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 17 and all(x["got"] for x in d["list"]) and "new" not in d)
     d = await ask(1, uid=2)
     check("nishoni yo'q odam - bo'sh ro'yxat", d["list"] == [] and d["count"] == 0)
     check("yo'q odam - bo'sh ro'yxat", (await ask(1, uid=999))["list"] == [])

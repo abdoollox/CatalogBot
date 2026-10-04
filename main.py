@@ -39,6 +39,7 @@ import hpchatstat
 import hpfilms
 import hpserial
 import hpnishon
+import hppatronus
 import hpevents
 import threading
 try:
@@ -2522,6 +2523,14 @@ async def main():
         })
     except Exception as serial_error:
         logging.error("Serial moduli ishga tushmadi: %s", serial_error)
+
+    # --- Patronus (test ilovada, natija shu yerda; nishonlardan OLDIN - ustunni u yaratadi) ---
+    try:
+        async def _patronus_log(user, payload):
+            await log_user_action(_WebUser(user), payload)
+        hppatronus.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _patronus_log})
+    except Exception as patronus_error:
+        logging.error("Patronus moduli ishga tushmadi: %s", patronus_error)
 
     # --- Nishonlar (profildagi yutuqlar) ---
     try:
