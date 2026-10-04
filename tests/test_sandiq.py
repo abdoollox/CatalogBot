@@ -99,14 +99,14 @@ async def amain():
     d = await ask(1, task=boshqa[0])
     check("takror sanalmaydi", d["n"] == 1)
     d = await ask(1, task=boshqa[1])
-    check("2 ta - +5 ball", d["n"] == 2 and d["reward"] == {"ball": 5} and ball(1) == 5)
+    check("2 ta - oraliq mukofot yo'q", d["n"] == 2 and not d["reward"] and ball(1) == 0)
     d = await ask(1, task=boshqa[2])
     d = await ask(1, task=boshqa[3])
-    check("4 ta - yana +5 ball", d["n"] == 4 and d["reward"] == {"ball": 5} and ball(1) == 10)
+    check("4 ta - hali ham ball yo'q", d["n"] == 4 and not d["reward"] and ball(1) == 0)
     d = await ask(1, task=boshqa[4])
     check("5 ta - ochib bo'lmaydi", d["n"] == 5 and not d["can_open"])
     d = await ask(1, open=True)
-    check("5 ta bilan ochilmaydi", not d["opened"] and ball(1) == 10)
+    check("5 ta bilan ochilmaydi", not d["opened"] and ball(1) == 0)
 
     # Kunlik savolga javob: server o'zi ko'radi
     q = sql("SELECT id FROM questions WHERE kind='daily' LIMIT 1")[0][0]
@@ -120,10 +120,10 @@ async def amain():
     gal1 = sql("SELECT galleons FROM users WHERE user_id=1")[0][0]
     check("sandiq ochildi: +10 ball, +1 galleon, ketma-ketlik 1",
           d["opened"] and d["reward"]["ball"] == 10 and d["reward"]["gal"] == 1 and d["streak"] == 1
-          and ball(1) == 20 and gal1 - gal0 == 1)
+          and ball(1) == 10 and gal1 - gal0 == 1)
     d = await ask(1, open=True)
-    check("ikkinchi marta ochilmaydi", ball(1) == 20 and sql("SELECT galleons FROM users WHERE user_id=1")[0][0] == gal1)
-    check("kubokda 'chest' manbasi", (await hpcup.user_stats(1, season["id"]))["by"].get("chest") == 20)
+    check("ikkinchi marta ochilmaydi", ball(1) == 10 and sql("SELECT galleons FROM users WHERE user_id=1")[0][0] == gal1)
+    check("kubokda 'chest' manbasi", (await hpcup.user_stats(1, season["id"]))["by"].get("chest") == 10)
 
     # Ketma-ketlik: oldingi 6 kun ochilgan, bugun 7-kun -> katta sandiq
     await hpcup.touch_user(2, "Ron")

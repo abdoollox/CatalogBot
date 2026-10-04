@@ -61,7 +61,7 @@ DAILY_PER_WEEK = 7
 MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_DAILY * DAILY_PER_WEEK
               + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON
-              + 20 * 7)                                  # kunlik sandiq: kuniga 20  -> jami 300
+              + 10 * 7)                                  # kunlik sandiq: kuniga 10  -> jami 230
 
 # --- Hafta yakunidagi galleon mukofoti (egasi, 2026-10-04) ---
 # Faqat SARALANGAN o'quvchilarga, o'z balidan: har GAL_PER_POINTS ball uchun 1 galleon;
@@ -88,7 +88,7 @@ SOURCE_CAPS = {
     "film": PTS_FILM_OPEN * FILM_PARTS,
     "daily": PTS_DAILY * DAILY_PER_WEEK,
     "chess": PTS_CHESS_WIN * CHESS_MAX_PER_SEASON,
-    "chest": 20 * 7,
+    "chest": 10 * 7,
 }
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")

@@ -2,9 +2,8 @@
 
 Namuna - "Castle Busters" o'yinidagi kunlik sovg'a. Faqat SARALANGAN o'quvchilarga.
 
-  2 ta topshiriq  -> +5 ball
-  4 ta topshiriq  -> +5 ball
-  6 ta topshiriq  -> sandiq ochiladi (odam o'zi bosadi): +10 ball va 1 galleon
+  6 ta topshiriqning HAMMASI bajarilganda sandiq ochiladi (odam o'zi bosadi): +10 ball va 1 galleon.
+  Ungacha hech qanday ball berilmaydi (egasi, 2026-10-05: oraliq mukofot yo'q).
   7 kun ketma-ket -> katta sandiq: qo'shimcha +3 galleon (har 7-kunda)
 
 Topshiriqlar hammaga bir xil: kunlik savol har doim, qolgan 5 tasi shu kun uchun havzadan
@@ -32,7 +31,7 @@ import hpcup
 _cfg = {}
 
 HAVZA = ("chat", "music", "chess", "owl", "cup", "share", "house")   # "daily" har doim bor
-BOSQICH = ((2, 5), (4, 5))          # (nechta topshiriq, ball) - o'zi beriladi
+BOSQICH = ()                        # oraliq mukofot yo'q (ilgari: 2 va 4 topshiriqda +5 ball)
 SANDIQ_BALL = 10
 SANDIQ_GALLEON = 1
 KATTA_HAR = 7                       # har 7-kun ketma-ket
