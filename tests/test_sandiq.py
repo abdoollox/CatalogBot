@@ -121,6 +121,8 @@ async def amain():
     check("sandiq ochildi: +10 ball, +1 galleon, ketma-ketlik 1",
           d["opened"] and d["reward"]["ball"] == 10 and d["reward"]["gal"] == 1 and d["streak"] == 1
           and ball(1) == 10 and gal1 - gal0 == 1)
+    check("kartochka berildi: bugungisi, yangi", d["reward"]["card"] == hpsandiq.kun_kartasi(kun) and d["reward"]["card_new"] is True
+          and d["cards"] == {hpsandiq.kun_kartasi(kun): 1} and d["cards_total"] == 24 and d["card"] == hpsandiq.kun_kartasi(kun))
     d = await ask(1, open=True)
     check("ikkinchi marta ochilmaydi", ball(1) == 10 and sql("SELECT galleons FROM users WHERE user_id=1")[0][0] == gal1)
     check("kubokda 'chest' manbasi", (await hpcup.user_stats(1, season["id"]))["by"].get("chest") == 10)
@@ -140,6 +142,10 @@ async def amain():
     d = await ask(2, open=True)
     check("7-kun: +1 va +3 galleon", d["reward"]["gal"] == 4 and d["reward"]["big"] and d["streak"] == 7
           and sql("SELECT galleons FROM users WHERE user_id=2")[0][0] - g0 == 4)
+
+    aylana = [hpsandiq.kun_kartasi((datetime(2026, 10, 5) + timedelta(days=i)).strftime("%Y-%m-%d")) for i in range(48)]
+    check("24 kunda 24 xil kartochka, keyingi aylanada yana hammasi",
+          len(set(aylana[:24])) == 24 and len(set(aylana[24:])) == 24 and set(aylana[:24]) == set(hpsandiq.KARTALAR))
 
     # Kun o'tkazib yuborilsa - noldan
     await hpcup.touch_user(3, "Nevill")

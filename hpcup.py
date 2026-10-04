@@ -1180,13 +1180,15 @@ def _season_entry(conn, row, number):
         "SUM(p.points) AS pts, MIN(p.id) AS first_id "
         "FROM points p JOIN users u ON u.user_id = p.user_id "
         "WHERE p.season_id = ? AND u.house IS NOT NULL AND p.user_id > 0 "
-        "GROUP BY p.user_id ORDER BY pts DESC, first_id ASC LIMIT 1",
-        (row["id"],)).fetchone()
-    best = None
-    if top:
-        raw = (top["name"] or "Sehrgar").strip()
-        best = {"name": (raw.split()[0] if raw else "Sehrgar")[:20],
-                "house": top["house"], "points": top["pts"]}
+        "GROUP BY p.user_id ORDER BY pts DESC, first_id ASC LIMIT 3",
+        (row["id"],)).fetchall()
+    # Eng yaxshi uchlik (egasi, 2026-10-05); "best" - birinchisi, eski ilova nusxalari uchun qoldi
+    uchlik = []
+    for r in top:
+        raw = (r["name"] or "Sehrgar").strip()
+        uchlik.append({"name": (raw.split()[0] if raw else "Sehrgar")[:20],
+                       "house": r["house"], "points": r["pts"]})
+    best = uchlik[0] if uchlik else None
     return {
         "id": row["id"], "number": number,
         "starts_at": row["starts_at"], "ends_at": row["ends_at"],
@@ -1194,6 +1196,7 @@ def _season_entry(conn, row, number):
         "houses": [{"house": x["house"], "total_points": x["total_points"],
                     "active_members": x["active_members"], "by": x["by"]} for x in table],
         "best": best,
+        "top": uchlik,
     }
 
 
@@ -2779,6 +2782,7 @@ async def test_reset(user_id):
                     "DELETE FROM badges WHERE user_id=?",
                     "DELETE FROM nishon WHERE user_id=?",
                     "DELETE FROM sandiq WHERE user_id=?",
+                    "DELETE FROM qurbaqa WHERE user_id=?",
                     "DELETE FROM chess_games WHERE white_uid=? OR black_uid=?",
                     "DELETE FROM chess_ratings WHERE user_id=?",
                     "DELETE FROM chess_bot_results WHERE user_id=?",

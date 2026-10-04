@@ -18,6 +18,7 @@ API: /api/sandiq
 """
 
 import asyncio
+import datetime as _dt
 import json
 import logging
 import random
@@ -29,6 +30,28 @@ from aiohttp import web
 import hpcup
 
 _cfg = {}
+
+# --- Shokolad qurbaqa kartochkalari (egasi, 2026-10-05) ---
+# Sandiq o'rnida: 6 ta topshiriq bajarilganda quti ochiladi va SHU KUNNING kartochkasi beriladi
+# (hammaga bir xil; o'tkazib yuborilsa keyingi aylanada yana keladi). Kolleksiya - `qurbaqa` jadvali.
+KARTALAR = ("dumbledore", "merlin", "morgana", "flamel",
+            "gryffindor", "slytherin", "ravenclaw", "hufflepuff",
+            "circe", "paracelsus", "agrippa", "ptolemy",
+            "cliodna", "hengist", "grunnion", "scamander",
+            "bott", "wright", "gregory", "uric",
+            "gwenog", "wildsmith", "whitehorn", "potter")
+KARTA_BOSHI = (2026, 10, 5)         # birinchi kartochka kuni
+
+
+def kun_kartasi(kun):
+    """Shu kunning kartochkasi. Har aylana (24 kun) o'z tartibida, takrorsiz."""
+    y, m, d = (int(x) for x in kun.split("-"))
+    n = (_dt.date(y, m, d) - _dt.date(*KARTA_BOSHI)).days
+    if n < 0:
+        n = 0
+    tartib = random.Random("qurbaqa:%d" % (n // len(KARTALAR))).sample(KARTALAR, len(KARTALAR))
+    return tartib[n % len(KARTALAR)]
+
 
 HAVZA = ("chat", "music", "chess", "owl", "cup", "share", "house")   # "daily" har doim bor
 BOSQICH = ()                        # oraliq mukofot yo'q (ilgari: 2 va 4 topshiriqda +5 ball)
@@ -48,6 +71,10 @@ def _init():
             " bosqich INTEGER NOT NULL DEFAULT 0,"    # nechta oraliq mukofot berilgan (0..2)
             " ochildi TEXT,"                          # sandiq ochilgan vaqt (UTC ISO)
             " PRIMARY KEY (user_id, kun))")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS qurbaqa ("
+            " user_id INTEGER NOT NULL, card TEXT NOT NULL, soni INTEGER NOT NULL DEFAULT 1,"
+            " vaqt TEXT NOT NULL, PRIMARY KEY (user_id, card))")
         conn.commit()
     finally:
         conn.close()
@@ -111,6 +138,9 @@ def _holat(conn, uid, kun, mukofot=None):
         "big": (not ochildi) and (streak + 1) % KATTA_HAR == 0,
         "prizes": {"steps": [list(b) for b in BOSQICH], "ball": SANDIQ_BALL, "gal": SANDIQ_GALLEON,
                    "big_every": KATTA_HAR, "big_gal": KATTA_GALLEON},
+        "card": kun_kartasi(kun),
+        "cards": {r[0]: r[1] for r in conn.execute("SELECT card, soni FROM qurbaqa WHERE user_id=?", (uid,))},
+        "cards_total": len(KARTALAR),
         "reward": mukofot,
     }
 
@@ -154,8 +184,15 @@ def _ish(uid, task=None, ochish=False):
                 gal = SANDIQ_GALLEON + (KATTA_GALLEON if streak % KATTA_HAR == 0 else 0)
                 conn.execute("UPDATE users SET galleons = galleons + ? WHERE user_id=?", (gal, uid))
                 ball.append((kun + ":sandiq", SANDIQ_BALL))
+                karta = kun_kartasi(kun)
+                yangi = not conn.execute("SELECT 1 FROM qurbaqa WHERE user_id=? AND card=?", (uid, karta)).fetchone()
+                if yangi:
+                    conn.execute("INSERT INTO qurbaqa (user_id, card, soni, vaqt) VALUES (?,?,1,?)",
+                                 (uid, karta, hpcup._utc_iso(hpcup.now_tk())))
+                else:
+                    conn.execute("UPDATE qurbaqa SET soni = soni + 1 WHERE user_id=? AND card=?", (uid, karta))
                 mukofot = {"ball": SANDIQ_BALL, "gal": gal, "big": streak % KATTA_HAR == 0, "streak": streak,
-                           "opened": True}
+                           "opened": True, "card": karta, "card_new": yangi}
         conn.commit()
     finally:
         conn.close()
