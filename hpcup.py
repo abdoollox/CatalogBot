@@ -2743,6 +2743,7 @@ async def test_reset(user_id):
                     "DELETE FROM answers WHERE user_id=?",
                     "DELETE FROM question_assignments WHERE user_id=?",
                     "DELETE FROM badges WHERE user_id=?",
+                    "DELETE FROM nishon WHERE user_id=?",
                     "DELETE FROM chess_games WHERE white_uid=? OR black_uid=?",
                     "DELETE FROM chess_ratings WHERE user_id=?",
                     "DELETE FROM chess_bot_results WHERE user_id=?",
