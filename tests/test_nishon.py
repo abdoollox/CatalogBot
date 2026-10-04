@@ -70,7 +70,7 @@ async def amain():
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     c.executescript(hpevents.SCHEMA)
     c.close()
-    app = types.SimpleNamespace(router=types.SimpleNamespace(add_route=lambda *a, **k: None))
+    app = types.SimpleNamespace(router=types.SimpleNamespace(add_route=lambda *a, **k: None, add_get=lambda *a, **k: None))
     hpnishon.register(app, {"cors": lambda r: r,
                             "verify_init_data": lambda s: {"id": int(s)} if s.lstrip("-").isdigit() else None})
 
@@ -113,6 +113,13 @@ async def amain():
     st, d = await pat(1, code="otter")
     check("patronus: ikkinchi marta o'zgarmaydi", d["code"] == "stag" and d["new"] is False)
     check("patronus: saqlangan", (await pat(1))[1]["code"] == "stag")
+    os.environ["HP_PATRONUS_DIR"] = hppatronus.OUT_DIR = os.path.join(TMP, "pt")
+    tok = await asyncio.to_thread(hppatronus.ensure, 1, "Garri", "uz", "stag")
+    check("patronus: ulashish rasmi yasaldi", os.path.getsize(hppatronus.path_of(tok)) > 20000)
+    r = await hppatronus.api_share(Req({"lang": "ru"}, init="1"))
+    d = json.loads(r.body)
+    check("patronus: ulashish manzili bazadagi Patronus bilan", d["ok"] and d["code"] == "stag" and "/api/patronus/img/" in d["url"])
+    check("patronus: Patronusi yo'q odamga rasm yo'q", json.loads((await hppatronus.api_share(Req({}, init="2"))).body)["ok"] is False)
     await hpcup.award(1, "daily", "k1", 10)
     await hpcup.award(1, "chess_win", "g1", 10)
     sql("UPDATE users SET wand_at='2026-10-01T00:00:00Z', refs=5 WHERE user_id=1")

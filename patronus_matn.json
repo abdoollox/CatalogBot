@@ -1,0 +1,167 @@
+{
+ "stag": {
+  "uz": "Bug'u",
+  "ru": "Олень",
+  "en": "Stag",
+  "n_uz": "Himoyachi va yetakchi. Yaqinlaringiz xavfda qolsa, birinchi bo'lib oldinga chiqasiz.",
+  "n_ru": "Защитник и вожак. Когда близким грозит беда, вы первым выходите вперёд.",
+  "n_en": "A protector and a leader. When those you love are in danger, you step forward first.",
+  "w_uz": "Garri Potter va otasi Jeymsning Patronusi",
+  "w_ru": "Патронус Гарри Поттера и его отца Джеймса",
+  "w_en": "The Patronus of Harry Potter and his father James"
+ },
+ "doe": {
+  "uz": "Ohu",
+  "ru": "Лань",
+  "en": "Doe",
+  "n_uz": "Sadoqat va chuqur mehr. Bir marta yaxshi ko'rsangiz — umrbod.",
+  "n_ru": "Верность и глубокая любовь. Если полюбили — то навсегда.",
+  "n_en": "Devotion and deep love. Once you love, it is for always.",
+  "w_uz": "Lili Potter va Severus Sneypning Patronusi",
+  "w_ru": "Патронус Лили Поттер и Северуса Снегга",
+  "w_en": "The Patronus of Lily Potter and Severus Snape"
+ },
+ "otter": {
+  "uz": "Suvsar",
+  "ru": "Выдра",
+  "en": "Otter",
+  "n_uz": "Zukko, qiziquvchan va quvnoq. Aqlingiz o'tkir, lekin o'ynashni ham unutmaysiz.",
+  "n_ru": "Умная, любопытная и весёлая. У вас острый ум, но вы не забываете радоваться.",
+  "n_en": "Clever, curious and playful. Your mind is sharp, yet you never forget to have fun.",
+  "w_uz": "Germiona Grenjerning Patronusi",
+  "w_ru": "Патронус Гермионы Грейнджер",
+  "w_en": "The Patronus of Hermione Granger"
+ },
+ "dog": {
+  "uz": "Teryer it",
+  "ru": "Терьер",
+  "en": "Terrier",
+  "n_uz": "Sodiq do'st. Siz bilan kulish ham, qiyin kunda yonma-yon turish ham oson.",
+  "n_ru": "Верный друг. С вами легко и смеяться, и стоять плечом к плечу в трудный день.",
+  "n_en": "A loyal friend. With you it is easy both to laugh and to stand together on a hard day.",
+  "w_uz": "Ron Uizlining Patronusi",
+  "w_ru": "Патронус Рона Уизли",
+  "w_en": "The Patronus of Ron Weasley"
+ },
+ "horse": {
+  "uz": "Ot",
+  "ru": "Лошадь",
+  "en": "Horse",
+  "n_uz": "Erkin ruh va tinimsiz kuch. Sizni jilovlab bo'lmaydi.",
+  "n_ru": "Свободный дух и неутомимая сила. Вас не удержать в узде.",
+  "n_en": "A free spirit and tireless strength. You cannot be reined in.",
+  "w_uz": "Jinni Uizlining Patronusi",
+  "w_ru": "Патронус Джинни Уизли",
+  "w_en": "The Patronus of Ginny Weasley"
+ },
+ "hare": {
+  "uz": "Quyon",
+  "ru": "Заяц",
+  "en": "Hare",
+  "n_uz": "Xayolparast va o'ziga xos. Boshqalar ko'rmagan narsani ko'rasiz.",
+  "n_ru": "Мечтатель, ни на кого не похожий. Вы видите то, чего не замечают другие.",
+  "n_en": "A dreamer unlike anyone else. You see what others miss.",
+  "w_uz": "Luna Lavgudning Patronusi",
+  "w_ru": "Патронус Полумны Лавгуд",
+  "w_en": "The Patronus of Luna Lovegood"
+ },
+ "swan": {
+  "uz": "Oqqush",
+  "ru": "Лебедь",
+  "en": "Swan",
+  "n_uz": "Nafosat va ichki sokinlik. Tashqaridan xotirjam, ichingizda kuchli tuyg'ular.",
+  "n_ru": "Изящество и внутренний покой. Снаружи вы спокойны, внутри — сильные чувства.",
+  "n_en": "Grace and inner calm. Serene on the surface, with strong feelings beneath.",
+  "w_uz": "Cho Changning Patronusi",
+  "w_ru": "Патронус Чжоу Чанг",
+  "w_en": "The Patronus of Cho Chang"
+ },
+ "phoenix": {
+  "uz": "Feniks",
+  "ru": "Феникс",
+  "en": "Phoenix",
+  "n_uz": "Eng noyob Patronus. Donolik va qayta tug'ilish: har yiqilganingizda kuchliroq bo'lib turasiz.",
+  "n_ru": "Самый редкий Патронус. Мудрость и возрождение: после каждого падения вы встаёте сильнее.",
+  "n_en": "The rarest Patronus. Wisdom and rebirth: after every fall you rise stronger.",
+  "w_uz": "Albus Dambldorning Patronusi",
+  "w_ru": "Патронус Альбуса Дамблдора",
+  "w_en": "The Patronus of Albus Dumbledore"
+ },
+ "cat": {
+  "uz": "Mushuk",
+  "ru": "Кошка",
+  "en": "Cat",
+  "n_uz": "Mustaqil, aniq va talabchan. O'z qadringizni bilasiz va tartibni yaxshi ko'rasiz.",
+  "n_ru": "Независимая, точная и требовательная. Вы знаете себе цену и любите порядок.",
+  "n_en": "Independent, precise and exacting. You know your worth and you like order.",
+  "w_uz": "Professor Makgonagallning Patronusi",
+  "w_ru": "Патронус профессора Макгонагалл",
+  "w_en": "The Patronus of Professor McGonagall"
+ },
+ "lynx": {
+  "uz": "Silovsin",
+  "ru": "Рысь",
+  "en": "Lynx",
+  "n_uz": "Sokin kuch. Kam gapirasiz, ko'p kuzatasiz va eng kerakli paytda harakat qilasiz.",
+  "n_ru": "Спокойная сила. Вы мало говорите, много наблюдаете и действуете в нужный миг.",
+  "n_en": "Quiet strength. You speak little, watch closely and act at exactly the right moment.",
+  "w_uz": "Kingsli Shaklboltning Patronusi",
+  "w_ru": "Патронус Кингсли Бруствера",
+  "w_en": "The Patronus of Kingsley Shacklebolt"
+ },
+ "weasel": {
+  "uz": "Latcha",
+  "ru": "Ласка",
+  "en": "Weasel",
+  "n_uz": "Qiziquvchan va mehribon. Uyingiz, oilangiz va kichik ixtirolaringiz — sizning dunyongiz.",
+  "n_ru": "Любопытная и добрая. Дом, семья и маленькие изобретения — ваш мир.",
+  "n_en": "Curious and kind. Home, family and small inventions are your world.",
+  "w_uz": "Artur Uizlining Patronusi",
+  "w_ru": "Патронус Артура Уизли",
+  "w_en": "The Patronus of Arthur Weasley"
+ },
+ "wolf": {
+  "uz": "Bo'ri",
+  "ru": "Волк",
+  "en": "Wolf",
+  "n_uz": "O'z to'dasi uchun hamma narsaga tayyor. Chidamli, sadoqatli va ichida ko'p narsani olib yuradi.",
+  "n_ru": "Готов на всё ради своей стаи. Выносливый, преданный и многое носит в себе.",
+  "n_en": "Ready to do anything for the pack. Enduring, devoted, and carrying a great deal inside.",
+  "w_uz": "Nimfadora Tonksning Patronusi",
+  "w_ru": "Патронус Нимфадоры Тонкс",
+  "w_en": "The Patronus of Nymphadora Tonks"
+ },
+ "goat": {
+  "uz": "Echki",
+  "ru": "Козёл",
+  "en": "Goat",
+  "n_uz": "Qaysar va to'g'riso'z. O'z yo'lingizdan yurasiz, kim nima desa ham.",
+  "n_ru": "Упрямый и прямой. Вы идёте своей дорогой, что бы ни говорили другие.",
+  "n_en": "Stubborn and plain-spoken. You go your own way, whatever anyone says.",
+  "w_uz": "Aberfort Dambldorning Patronusi",
+  "w_ru": "Патронус Аберфорта Дамблдора",
+  "w_en": "The Patronus of Aberforth Dumbledore"
+ },
+ "fox": {
+  "uz": "Tulki",
+  "ru": "Лис",
+  "en": "Fox",
+  "n_uz": "Epchil va hozirjavob. Har qanday vaziyatdan chiqish yo'lini topasiz.",
+  "n_ru": "Ловкий и находчивый. Вы найдёте выход из любой ситуации.",
+  "n_en": "Quick and resourceful. You find a way out of any situation.",
+  "w_uz": "Sheymus Finniganning Patronusi",
+  "w_ru": "Патронус Симуса Финнигана",
+  "w_en": "The Patronus of Seamus Finnigan"
+ },
+ "boar": {
+  "uz": "To'ng'iz",
+  "ru": "Вепрь",
+  "en": "Boar",
+  "n_uz": "Jasur va mehnatkash. Boshlagan ishingizni oxiriga yetkazmaguncha to'xtamaysiz.",
+  "n_ru": "Смелый и трудолюбивый. Вы не остановитесь, пока не доведёте дело до конца.",
+  "n_en": "Brave and hard-working. You do not stop until the job is done.",
+  "w_uz": "Erni Makmillanning Patronusi",
+  "w_ru": "Патронус Эрни Макмиллана",
+  "w_en": "The Patronus of Ernie Macmillan"
+ }
+}

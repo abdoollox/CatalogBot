@@ -2528,7 +2528,8 @@ async def main():
     try:
         async def _patronus_log(user, payload):
             await log_user_action(_WebUser(user), payload)
-        hppatronus.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _patronus_log})
+        hppatronus.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _patronus_log,
+                                  "public_base": PUBLIC_BASE, "share": prepare_xat_share})
     except Exception as patronus_error:
         logging.error("Patronus moduli ishga tushmadi: %s", patronus_error)
 
