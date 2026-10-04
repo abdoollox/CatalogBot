@@ -63,7 +63,8 @@ async def amain():
     check("jadvalda +HD", "+HD" in hpfilms.table_text())
 
     check("hajm: GB va MB", main.hajm_matni(3 * 1024 ** 3, "uz") == "3,0 GB" and main.hajm_matni(1288490188, "en") == "1.2 GB"
-          and main.hajm_matni(500 * 1024 ** 2, "ru") == "500 MB")
+          and main.hajm_matni(1014 * 1024 ** 2, "uz") == "1,0 GB" and main.hajm_matni(500 * 1024 ** 2, "ru") == "0,5 GB"
+          and main.hajm_matni(40 * 1024 ** 2, "uz") == "40 MB")
     kb = main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard
     check("ikkala sifat tugmasi", [b[0].text for b in kb] == ["Full HD · 3,0 GB", "HD · 1,2 GB"]
           and kb[1][0].callback_data == "sf:hp1:uz:hd:b")
