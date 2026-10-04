@@ -189,7 +189,8 @@ def tracks(album):
 # Narx (egasi, 2026-10-04): albom galleonga bir marta ochiladi va doim ochiq qoladi.
 # Birinchi albom hammaga bepul (tatib ko'rish uchun). Galleon - hafta yakunidagi kubok
 # mukofotidan (hpcup._galleon_mukofot) va Gringottsdagi boshlang'ich puldan.
-ALBUM_PRICE = 30
+# 3 galleon (egasi, 2026-10-04: 30 juda qimmat edi - o'rtacha o'quvchi haftada 2-3 galleon oladi)
+ALBUM_PRICE = 3
 FREE_ALBUMS = ("hp1",)
 _owned = {}                  # user_id -> {albom} (bazadan bir marta o'qiladi)
 

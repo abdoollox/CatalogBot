@@ -127,6 +127,8 @@ async def amain():
         async def json(self):
             return self._b
 
+    check("albom narxi 3 galleon", hpmusic.ALBUM_PRICE == 3)
+    hpmusic.ALBUM_PRICE = 30        # quyidagi hisob-kitob sinovlari eski narx bilan yozilgan
     check("birinchi albom hammaga ochiq, ikkinchisi yopiq", hpmusic.album_open(1, "hp1") and not hpmusic.album_open(1, "hp2"))
     check("sinov o'quvchisiga ham qulf, bepul albom ochiq", not hpmusic.album_open(-9, "hp2") and hpmusic.album_open(-9, "hp1"))
     check("ro'yxatda open belgisi", hpmusic._public_list(1)["hp2"]["open"] is False
