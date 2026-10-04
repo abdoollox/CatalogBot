@@ -452,6 +452,28 @@ async def on_film_command(message: types.Message):
     await message.answer("✅ %s -> guruhdagi %d-xabar (%s)\n\n%s" % (key, mid, it["name"] or "nomsiz", table_text()))
 
 
+async def on_stream_test(message: types.Message):
+    """Shaxsiy chatda (admin): /oqim hp1_uz hd - oqim (stream) nega ishlamayotganini ajratish uchun
+    filmni IKKI XIL yuboradi: A - himoyalangan (odamlarga boradigan holat), B - himoyasiz.
+    Qaysi biri darhol ochilsa - sabab shundan bilinadi."""
+    if message.chat.type != "private" or not _is_admin(message):
+        return
+    bolak = (message.text or "").split()
+    m = re.fullmatch(r"(hp[1-8]|fb[1-3])_(uz|ru|en)", bolak[1].lower()) if len(bolak) > 1 else None
+    q = bolak[2].lower() if len(bolak) > 2 and bolak[2].lower() in QUALITIES else None
+    manba = source(m.group(1), m.group(2), q) if m else None
+    if not manba:
+        await message.answer("Masalan: /oqim hp1_uz hd")
+        return
+    bot = _cfg["bot"]
+    for nom, himoya in (("A — himoyalangan (hozir odamlarga shunday boradi)", True), ("B — himoyasiz", False)):
+        try:
+            await bot.copy_message(chat_id=message.chat.id, from_chat_id=manba[0], message_id=manba[1],
+                                   caption="Oqim sinovi: " + nom, protect_content=himoya)
+        except Exception as e:
+            await message.answer("%s yuborilmadi: %s" % (nom, e))
+
+
 def _topic_of(message):
     return str(message.message_thread_id if message.is_topic_message else None)
 
@@ -517,6 +539,7 @@ def register(dp, bot, cfg):
         _save()
     dp.message.register(on_scan_command, Command("filmlar"))
     dp.message.register(on_film_command, Command("film"))
+    dp.message.register(on_stream_test, Command("oqim"))
     dp.message.register(on_archive_command, Command("arxiv"))
     dp.message.register(on_group_video, _in_films_topic)
     logging.info("Filmlar: %d ta film-til guruhdan, %d mavzu", len(_data["map"]), len(_data["topics"]))
