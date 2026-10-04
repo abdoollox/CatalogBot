@@ -128,7 +128,7 @@ async def amain():
             return self._b
 
     check("birinchi albom hammaga ochiq, ikkinchisi yopiq", hpmusic.album_open(1, "hp1") and not hpmusic.album_open(1, "hp2"))
-    check("sinov o'quvchisiga hammasi ochiq", hpmusic.album_open(-9, "hp2"))
+    check("sinov o'quvchisiga ham qulf, bepul albom ochiq", not hpmusic.album_open(-9, "hp2") and hpmusic.album_open(-9, "hp1"))
     check("ro'yxatda open belgisi", hpmusic._public_list(1)["hp2"]["open"] is False
           and hpmusic._public_list(1)["hp1"]["open"] is True)
     r = json.loads((await hpmusic.api_buy(Req({"album": "hp2"}, "3"))).body)          # 3 da 13 galleon

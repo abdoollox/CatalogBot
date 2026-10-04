@@ -209,12 +209,13 @@ def owned(user_id):
 
 
 def album_open(user_id, album):
-    """Albom shu odamga ochiqmi: bepul albom, sotib olingan yoki sinov o'quvchisi (manfiy id)."""
+    """Albom shu odamga ochiqmi: bepul albom yoki sotib olingan."""
     if album not in ALBUMS:
         return False
     if album in FREE_ALBUMS or user_id is None:
         return album in FREE_ALBUMS
-    return int(user_id) < 0 or album in owned(user_id)
+    # Sinov o'quvchisiga ham qulf (egasi, 2026-10-04): u oddiy odam ko'rganini ko'rishi kerak
+    return album in owned(user_id)
 
 
 def _galleons(uid):
