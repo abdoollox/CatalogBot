@@ -109,12 +109,12 @@ def _init():
 # Tartib muhim: aniqroq so'zlar oldin. "prince" 6-kitob, "half blood" ham.
 _SOZ = (
     ("kt7", r"deathly|hallows|дары\s+смерти|ajal\s+tuhfa|o'lim\s+tuhfa|olim\s+tuhfa"),
-    ("kt6", r"half[\s-]*blood|prince|принц|полукровк|shahzoda|chala\s*qon"),
+    ("kt6", r"half[\s-]*blood|prince|принц|полукровк|shahzoda|shaxzoda|tilsim|chala\s*qon"),
     ("kt5", r"phoenix|феникс|feniks|qaqnus|kaknus"),
-    ("kt4", r"goblet|кубок\s+огня|olov\s+(?:jomi|kubogi)|otashli\s+jom"),
+    ("kt4", r"goblet|кубок\s+огня|olov\s+(?:jomi|kubogi)|alanga\s+kubogi|otashli\s+jom"),
     ("kt3", r"azkaban|азкабан"),
-    ("kt2", r"chamber|secrets|тайная\s+комната|maxfiy\s+xona|sirli\s+xona|sirlar\s+xonasi"),
-    ("kt1", r"philosopher|sorcerer|stone|философск|камень|afsonaviy\s+tosh|falsafa\s+toshi|hikmatlar\s+toshi|sehrli\s+tosh"),
+    ("kt2", r"chamber|secrets|тайная\s+комната|maxfiy\s+(?:xona|hujra)|sirli\s+xona|sirlar\s+xonasi"),
+    ("kt1", r"philosopher|sorcerer|stone|философск|камень|afsonaviy\s+tosh|falsafa\s+toshi|hikmatlar?\s+toshi|sehrli\s+tosh"),
 )
 _SOZ = tuple((k, re.compile(rx)) for k, rx in _SOZ)
 _RAQAM = (
@@ -436,12 +436,13 @@ async def on_group_doc(message: types.Message):
 
 # --- KARTA (chatga yuboriladigan fayl ostidagi yozuv) ---
 
+# Nomlar FILMLAR bilan bir xil (catalog.py) - egasi, 2026-10-07
 NOM = {
-    "uz": ("Garri Potter va afsonaviy tosh", "Garri Potter va maxfiy xona", "Garri Potter va Azkaban mahbusi",
-           "Garri Potter va olov kubogi", "Garri Potter va Feniks ordeni", "Garri Potter va chala qonli shahzoda",
-           "Garri Potter va ajal tuhfalari"),
-    "ru": ("Гарри Поттер и философский камень", "Гарри Поттер и Тайная комната", "Гарри Поттер и узник Азкабана",
-           "Гарри Поттер и Кубок огня", "Гарри Поттер и Орден Феникса", "Гарри Поттер и Принц-полукровка",
+    "uz": ("Garri Potter va Hikmatlar Toshi", "Garri Potter va Maxfiy Hujra", "Garri Potter va Azkaban Mahbusi",
+           "Garri Potter va Alanga Kubogi", "Garri Potter va Feniks Jamiyati", "Garri Potter va Tilsim Shaxzodasi",
+           "Garri Potter va Ajal Tuhfasi"),
+    "ru": ("Гарри Поттер и Философский Камень", "Гарри Поттер и Тайная Комната", "Гарри Поттер и Узник Азкабана",
+           "Гарри Поттер и Кубок Огня", "Гарри Поттер и Орден Феникса", "Гарри Поттер и Принц Полукровка",
            "Гарри Поттер и Дары Смерти"),
     "en": ("Harry Potter and the Philosopher's Stone", "Harry Potter and the Chamber of Secrets",
            "Harry Potter and the Prisoner of Azkaban", "Harry Potter and the Goblet of Fire",

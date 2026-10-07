@@ -85,6 +85,8 @@ async def main():
           == ["kt%d" % i for i in range(1, 8)])
     check("o'zbekcha nomlar", b("Garri Potter va afsonaviy tosh") == "kt1" and b("Garri Potter va maxfiy xona") == "kt2"
           and b("Feniks ordeni") == "kt5" and b("Chala qonli shahzoda") == "kt6" and b("Ajal tuhfalari") == "kt7")
+    check("film uslubidagi o'zbekcha nomlar", [b(x) for x in ("Garri Potter va Hikmatlar Toshi", "Maxfiy Hujra", "Alanga Kubogi",
+          "Feniks Jamiyati", "Tilsim Shaxzodasi", "Ajal Tuhfasi")] == ["kt1", "kt2", "kt4", "kt5", "kt6", "kt7"])
     check("raqam bilan", b("Harry Potter Book 3.pdf") == "kt3" and b("4-kitob") == "kt4" and b("Книга 5") == "kt5"
           and b("02 - Harry Potter.pdf") == "kt2" and b("HP6.pdf") == "kt6")
     check("yil kitob raqami emas", b("Harry Potter 2007.pdf") is None and b("") is None and b(None) is None)
@@ -154,7 +156,7 @@ async def main():
     r = await hpkitob.api_send(Req({"book": "kt2", "lang": "en", "fmt": "pdf", "ui": "uz"}, init="5"))
     k = bot.copied[-1]
     check("kitob yuborildi (himoyasiz, o'zbekcha karta)", json.loads(r.body)["ok"] and k["message_id"] == 55
-          and k["protect_content"] is False and "maxfiy xona" in k["caption"] and "2-kitob" in k["caption"]
+          and k["protect_content"] is False and "Maxfiy Hujra" in k["caption"] and "2-kitob" in k["caption"]
           and "English" in k["caption"] and "PDF" in k["caption"] and "1998" in k["caption"])
     check("o'qib bo'lmaydigan kitobda faqat kutubxona tugmasi", len(k["reply_markup"].inline_keyboard[0]) == 1)
     r = await hpkitob.api_send(Req({"book": "kt2", "lang": "en"}, init="5"))
@@ -162,7 +164,7 @@ async def main():
     hpkitob._oxirgi.clear()
     r = await hpkitob.api_send(Req({"book": "kt1", "lang": "en", "ui": "ru"}, init="6"))
     k = bot.copied[-1]
-    check("bepul kitob hammaga, o'qish tugmasi bilan", json.loads(r.body)["ok"] and "философский" in k["caption"]
+    check("bepul kitob hammaga, o'qish tugmasi bilan", json.loads(r.body)["ok"] and "Философский Камень" in k["caption"]
           and k["reply_markup"].inline_keyboard[0][0].web_app.url.endswith("&kitob=kt1"))
     r = await hpkitob.api_send(Req({"book": "kt1", "lang": "uz"}, init="6"))
     check("yo'q til - not_ready", json.loads(r.body)["error"] == "not_ready")
