@@ -40,6 +40,7 @@ import hpfilms
 import hpserial
 import hpkitob
 import hpprofil
+import hpdars
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2612,6 +2613,14 @@ async def main():
         hpnishon.register(app, {"verify_init_data": verify_init_data, "cors": _cors})
     except Exception as nishon_error:
         logging.error("Nishonlar moduli ishga tushmadi: %s", nishon_error)
+
+    # --- Darslar (fanlar: afsunlar, iksirlar...) ---
+    try:
+        async def _dars_log(user, payload):
+            await log_user_action(_WebUser(user), payload)
+        hpdars.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
+    except Exception as dars_error:
+        logging.error("Darslar moduli ishga tushmadi: %s", dars_error)
 
     # --- Sehrgar profili (boshqa odamni ko'rish) ---
     try:

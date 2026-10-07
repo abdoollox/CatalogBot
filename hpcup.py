@@ -54,6 +54,10 @@ PTS_REFERRAL = 20
 CHESS_MAX_PER_SEASON = 5
 
 FILM_PARTS = 8
+# Darslar (hpdars.py, 2026-10-07): har fan kuniga bir marta shuncha ball; hozir 2 ta fan ballanadi
+# (kunlik savol = "Sehrgarlik tarixi", u 'daily' bo'lib qoladi). Yangi fan qo'shilsa LESSONS_PER_DAY oshiriladi.
+PTS_LESSON = 5
+LESSONS_PER_DAY = 2
 QUIZ_PER_FILM = 3
 DAILY_PER_WEEK = 7
 
@@ -61,7 +65,8 @@ DAILY_PER_WEEK = 7
 MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_DAILY * DAILY_PER_WEEK
               + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON
-              + 10 * 7)                                  # kunlik sandiq: kuniga 10  -> jami 230
+              + 10 * 7                                   # kunlik sandiq: kuniga 10
+              + PTS_LESSON * LESSONS_PER_DAY * 7)        # darslar: 2 fan x 5 ball x 7 kun -> jami 300
 
 # --- Hafta yakunidagi galleon mukofoti (egasi, 2026-10-04) ---
 # Faqat SARALANGAN o'quvchilarga, o'z balidan: har GAL_PER_POINTS ball uchun 1 galleon;
@@ -80,15 +85,16 @@ ACTIVE_MIN_POINTS = 1
 SOURCE_GROUP = {
     "film_open": "film", "daily": "daily",
     "chess_win": "chess", "chess_draw": "chess", "referral": "friends",
-    "sandiq": "chest",
+    "sandiq": "chest", "dars": "lesson",
 }
-SOURCE_KEYS = ("film", "daily", "chess", "chest", "friends")
+SOURCE_KEYS = ("film", "daily", "lesson", "chess", "chest", "friends")
 # Mavsumda har manbadan olish mumkin bo'lgan eng ko'p ball (do'stlar - cheksiz)
 SOURCE_CAPS = {
     "film": PTS_FILM_OPEN * FILM_PARTS,
     "daily": PTS_DAILY * DAILY_PER_WEEK,
     "chess": PTS_CHESS_WIN * CHESS_MAX_PER_SEASON,
     "chest": 10 * 7,
+    "lesson": PTS_LESSON * LESSONS_PER_DAY * 7,
 }
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")
@@ -118,7 +124,7 @@ CREATE TABLE IF NOT EXISTS points (
     season_id   INTEGER NOT NULL REFERENCES seasons(id),
     source_type TEXT NOT NULL CHECK (source_type IN
                     ('film_open','film_quiz','daily','chess_win','chess_draw',
-                     'referral','sandiq')),
+                     'referral','sandiq','dars')),
     source_ref  TEXT NOT NULL,
     points      INTEGER NOT NULL,
     created_at  TEXT NOT NULL,
@@ -563,6 +569,37 @@ def _migrate(conn, users_json):
                      "ON points(season_id, user_id)")
         conn.execute("PRAGMA foreign_keys = ON")
         logging.info("Kubok migratsiyasi: points cheklovi yangilandi (sandiq)")
+
+    # 5) Darslar ballari ('dars', 2026-10-07) - xuddi shu usul.
+    ddl = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='points'"
+    ).fetchone()
+    if ddl and "'dars'" not in (ddl[0] or ""):
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("""
+            CREATE TABLE points_v5 (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(user_id),
+                season_id   INTEGER NOT NULL REFERENCES seasons(id),
+                source_type TEXT NOT NULL CHECK (source_type IN
+                                ('film_open','film_quiz','daily',
+                                 'chess_win','chess_draw','referral','sandiq','dars')),
+                source_ref  TEXT NOT NULL,
+                points      INTEGER NOT NULL,
+                created_at  TEXT NOT NULL,
+                UNIQUE (user_id, season_id, source_type, source_ref)
+            )""")
+        conn.execute(
+            "INSERT INTO points_v5 (id, user_id, season_id, source_type, "
+            "source_ref, points, created_at) "
+            "SELECT id, user_id, season_id, source_type, source_ref, points, "
+            "created_at FROM points")
+        conn.execute("DROP TABLE points")
+        conn.execute("ALTER TABLE points_v5 RENAME TO points")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_points_season_user "
+                     "ON points(season_id, user_id)")
+        conn.execute("PRAGMA foreign_keys = ON")
+        logging.info("Kubok migratsiyasi: points cheklovi yangilandi (dars)")
 
 
 def _questions_dir():
