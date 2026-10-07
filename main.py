@@ -646,12 +646,15 @@ def sifat_matni(movie_key, lang):
 def sifat_tugmalari(movie_key, lang, origin="b", dub=None):
     """Har sifat alohida qator. Bor sifat - hajmi bilan; yo'g'i qulflangan.
     Filmda ikki dublyaj bo'lsa - tepada dublyaj tanlovi (tanlangani ● bilan)."""
-    dl = hpfilms.dubs(movie_key, lang)
+    # O'zbekcha filmda dublyaj tanlovi DOIM ko'rinadi (egasi, 2026-10-07): fayli hali yo'q dublyaj ham
+    # turadi - tanlansa sifatlari qulflangan chiqadi, fayllar tashlangani sari o'zi ochiladi.
+    bor_dub = hpfilms.dubs(movie_key, lang)
+    dl = list(hpfilms.DUBS) if (lang == "uz" and bor_dub) else []
     qator = []
     if len(dl) > 1:
-        dub = dub if dub in dl else dl[0]
+        dub = dub if dub in dl else bor_dub[0]
         qator.append([InlineKeyboardButton(
-            text=("● " if d == dub else "") + hpfilms.DUB_LABEL[d],
+            text=("● " if d == dub else "") + hpfilms.DUB_LABEL[d] + ("" if d in bor_dub else " · " + SIFAT_TX[lang]["soon"]),
             callback_data="db:%s:%s:%s:%s" % (movie_key, lang, d, origin)) for d in dl])
     else:
         dub = None

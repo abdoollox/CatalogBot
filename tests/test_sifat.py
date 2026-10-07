@@ -69,12 +69,17 @@ async def amain():
     check("hajm doim MB da", main.hajm_matni(3 * 1024 ** 3, "uz") == "3072 MB" and main.hajm_matni(1288490188, "en") == "1229 MB"
           and main.hajm_matni(0, "uz") == "")
     kb = main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard
+    check("tepada dublyaj qatori doim bor (ZO'R TV - tez orada)", [b.text for b in kb[0]] == ["● MY5 TV", "ZO'R TV · tez orada"])
+    kb = kb[1:]
     check("uch sifat tugmasi: ikkitasi bor, SD qulflangan", [b[0].text for b in kb][:2] == ["Full HD · 3072 MB", "HD · 1229 MB"]
           and len(kb) == 3 and kb[2][0].text.startswith("🔒 SD") and kb[2][0].callback_data == "sf:hp1:uz:sd:x"
-          and kb[1][0].callback_data == "sf:hp1:uz:hd:b")
-    kb = main.sifat_tugmalari("hp2", "uz", "w").inline_keyboard
+          and kb[1][0].callback_data == "sf:hp1:uz:hd:b:my5")
+    kz = main.sifat_tugmalari("hp1", "uz", "b", "zor").inline_keyboard
+    check("fayli yo'q dublyaj tanlansa - hamma sifat qulflangan", [b.text for b in kz[0]] == ["MY5 TV", "● ZO'R TV · tez orada"]
+          and all(r[0].text.startswith("🔒") and r[0].callback_data.endswith(":x") for r in kz[1:]) and len(kz) == 4)
+    kb = main.sifat_tugmalari("hp2", "uz", "w").inline_keyboard[1:]
     check("yo'q sifat qulflangan", kb[0][0].text.startswith("🔒 Full HD") and kb[0][0].callback_data.endswith(":x")
-          and kb[1][0].callback_data == "sf:hp2:uz:hd:w")
+          and kb[1][0].callback_data == "sf:hp2:uz:hd:w:my5")
     cap = main.share_caption("hp1", main.catalog.FILMS["hp1"], "uz", 5, "hd")
     check("yuborilgan film ostida aynan o'sha sifat", "Sifat: HD" in main.emoji.strip_tags(cap) and "Full HD" not in cap)
     cap = main.share_caption("hp1", main.catalog.FILMS["hp1"], "uz", 5)
@@ -101,8 +106,9 @@ async def amain():
     check("dublyaj nomdan", d(V(1, "Garri Potter 1 (ZO'R TV)(720p).mp4", 1)) == "zor" and d(V(1, "GP 1 Zor TV.mp4", 1)) == "zor"
           and d(V(1, "Garri Potter 1 MY5 (1080p).mp4", 1)) == "my5" and d(V(1, "Garri Potter 1 (1080p).mp4", 1)) == "my5")
     check("izohdan ham taniladi", d(V(1, "film.mp4", 1, cap="ZO‘R TV dublyaji")) == "zor")
-    check("bitta dublyajda tanlov yo'q", hpfilms.dubs("hp1", "uz") == ["my5"] and hpfilms.dubs("hp1", "ru") == []
-          and len(main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard) == 3)
+    check("fayli bor dublyaj bitta; ruschada dublyaj qatori yo'q", hpfilms.dubs("hp1", "uz") == ["my5"] and hpfilms.dubs("hp1", "ru") == []
+          and len(main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard) == 4
+          and all(len(r) == 1 for r in main.sifat_tugmalari("hp1", "ru", "b").inline_keyboard))
     hpfilms._place(V(40, "Garri Potter va Hikmatlar Toshi (2001)(ZO'R TV)(1080p).mp4", 2 * 1024 ** 3), "hp1", "uz", "nom")
     hpfilms._place(V(41, "Garri Potter va Hikmatlar Toshi (2001)(ZO'R TV)(480p).mp4", 400 * 1024 ** 2), "hp1", "uz", "nom")
     check("ikkinchi dublyaj asosiysining o'rnini egallamaydi", hpfilms.source("hp1", "uz", "fhd") == (-1, 10)
