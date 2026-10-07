@@ -45,6 +45,10 @@ async def amain():
     q = hpfilms.quality_of
     check("nomdan 1080p", q(V(1, "Garri Potter va Hikmatlar Toshi (2001)(1080p).mp4", 1)) == "fhd")
     check("nomdan 720p", q(V(1, "Garri Potter va Hikmatlar Toshi (2001)(720p).mp4", 1)) == "hd")
+    check("nomdan 480p - SD", q(V(1, "Garri Potter va Hikmatlar Toshi (2001)(480p).mp4", 1)) == "sd")
+    check("nomsiz, past balandlik - SD; keng ekranli 720p (534) - HD",
+          q(V(1, "film.mp4", 1, h=356)) == "sd" and q(V(1, "film.mp4", 1, h=480)) == "sd" and q(V(1, "film.mp4", 1, h=534)) == "hd")
+    check("uch sifat, yaxshisidan boshlab", hpfilms.QUALITIES == ("fhd", "hd", "sd") and hpfilms.Q_LABEL["sd"] == "SD")
     check("yil 720 emas", q(V(1, "Film (2007).mp4", 1)) == "fhd")
     check("yopishgan 20111080p - Full HD", q(V(1, "Гарри_Поттер_20111080p.mp4", 1)) == "fhd")
     check("nomsiz: balandlikdan", q(V(1, "film.mp4", 1, h=720)) == "hd" and q(V(1, "film.mp4", 1, h=1080)) == "fhd")
@@ -65,7 +69,8 @@ async def amain():
     check("hajm doim MB da", main.hajm_matni(3 * 1024 ** 3, "uz") == "3072 MB" and main.hajm_matni(1288490188, "en") == "1229 MB"
           and main.hajm_matni(0, "uz") == "")
     kb = main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard
-    check("ikkala sifat tugmasi", [b[0].text for b in kb] == ["Full HD · 3072 MB", "HD · 1229 MB"]
+    check("uch sifat tugmasi: ikkitasi bor, SD qulflangan", [b[0].text for b in kb][:2] == ["Full HD · 3072 MB", "HD · 1229 MB"]
+          and len(kb) == 3 and kb[2][0].text.startswith("🔒 SD") and kb[2][0].callback_data == "sf:hp1:uz:sd:x"
           and kb[1][0].callback_data == "sf:hp1:uz:hd:b")
     kb = main.sifat_tugmalari("hp2", "uz", "w").inline_keyboard
     check("yo'q sifat qulflangan", kb[0][0].text.startswith("🔒 Full HD") and kb[0][0].callback_data.endswith(":x")

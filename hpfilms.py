@@ -88,9 +88,10 @@ def _save():
 # Har film-til bir nechta sifatda bo'lishi mumkin. Odamga "1080p/720p" emas, "Full HD" va "HD"
 # deb ko'rsatiladi (hamma ham raqamlarni tushunmaydi). Jadval kaliti: Full HD - "hp1_uz"
 # (avvalgidek, eski yozuvlar o'z joyida), boshqa sifat - "hp1_uz@hd".
-QUALITIES = ("fhd", "hd")              # ko'rsatish tartibi: yaxshisi birinchi
-Q_LABEL = {"fhd": "Full HD", "hd": "HD"}
-Q_PIX = {"fhd": "1080p", "hd": "720p"}
+QUALITIES = ("fhd", "hd", "sd")        # ko'rsatish tartibi: yaxshisi birinchi
+Q_LABEL = {"fhd": "Full HD", "hd": "HD", "sd": "SD"}      # SD = 480p (egasi 2026-10-07 da qo'shdi: internet sust bo'lganlar uchun)
+Q_PIX = {"fhd": "1080p", "hd": "720p", "sd": "480p"}
+_Q_SD = re.compile(r"(?<![0-9])480\s*p?\b|\bsd\s*480\b", re.I)
 _Q_HD = re.compile(r"(?<![0-9])720\s*p?\b|\bhd\s*720\b", re.I)
 _Q_FHD = re.compile(r"(?<![0-9])1080\s*p?\b|full\s*hd|\bfhd\b", re.I)
 
@@ -98,11 +99,16 @@ _Q_FHD = re.compile(r"(?<![0-9])1080\s*p?\b|full\s*hd|\bfhd\b", re.I)
 def quality_of(it):
     """Videoning sifati: avval nomi/izohidan ("720p", "1080p"), bo'lmasa balandligidan."""
     text = "%s\n%s" % (it.get("name") or "", it.get("cap") or "")
+    if _Q_SD.search(text):
+        return "sd"
     if _Q_HD.search(text):
         return "hd"
     if _Q_FHD.search(text):
         return "fhd"
+    # Balandlik: keng ekranli 720p = 534, 480p = 356 atrofida
     h = int(it.get("h") or 0)
+    if 0 < h <= 500:
+        return "sd"
     return "hd" if 0 < h <= 800 else "fhd"
 
 
@@ -249,11 +255,12 @@ def table_text():
         for l in catalog.LANGS:
             it = _data["map"].get("%s_%s" % (fid, l))
             hd = _data["map"].get(_mkey(fid, l, "hd"))
+            sd = _data["map"].get(_mkey(fid, l, "sd"))
             if it and _data.get("group"):
                 b = "⚠️" if it.get("by") == "mavzu" else "✅"
             else:
                 b = "❌"
-            belgilar.append(flag[l] + b + ("+HD" if hd else ""))
+            belgilar.append(flag[l] + b + ("+HD" if hd else "") + ("+SD" if sd else ""))
         qator.append("%-4s %s" % (fid, "  ".join(belgilar)))
     kopi = sum(1 for it in _data["seen"].values() if _skip(it))
     if kopi:
