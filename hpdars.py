@@ -11,7 +11,7 @@ Faqat SARALANGANLARGA. Ikki qism (egasi, 2026-10-07 kechqurun: mashq - ballsiz v
 
 2) BELLASHUV (musobaqa) - kuniga bitta topshiriq HAMMAGA BIR XIL (sana bo'yicha), kim tezroq va xatosiz.
      Vaqtni SERVER o'lchaydi ({start} -> {finish}); har xato +3 soniya. Kuniga 3 urinish, eng yaxshisi hisob.
-     tarix bellashuvi - 5 ta savol: javoblarni SERVER tekshiradi (to'g'ri javob ilovaga yuborilmaydi).
+     tarix bellashuvi - 10 ta savol: javoblarni SERVER tekshiradi (to'g'ri javob ilovaga yuborilmaydi).
      Kun tugagach (keyingi kun birinchi so'rovda) eng yaxshilarga ball: 1-o'rin +15, 2-o'rin +10, 3-o'rin +7,
      4-10-o'rinlar +3. Ball kubokka 'dars' manbasi bo'lib yoziladi (ref "m:afsun:2026-10-08").
 
@@ -57,7 +57,8 @@ DARSLAR = {
 }
 TARIX_DARS = 4                 # tarix darsida nechta savol
 TARIX_OTISH = 3                # shundan nechtasi to'g'ri bo'lsa dars o'tadi (ilova tekshiradi - ball yo'q)
-TARIX_BELL = 5                 # tarix bellashuvida nechta savol
+TARIX_BELL = 10                # tarix bellashuvida nechta savol (egasi, 2026-10-07: 5 ta kam, kamida 10)
+TARIX_BELL_ESKI = 5            # 2026-10-07 gacha (o'sha kunning jadvali 5 savol bilan to'plangan)
 BOSHI = (2026, 10, 7)
 URINISH = 3                    # bellashuvda kuniga nechta urinish
 XATO_MS = 3000                 # har xato uchun jarima
@@ -119,7 +120,12 @@ def tarix_dars(daraja, lang):
 def tarix_bell(kun):
     """Shu kungi bellashuv savollari (indekslar) - hammaga bir xil."""
     s = savollar()
-    return random.Random("tarix|" + kun).sample(range(len(s)), min(TARIX_BELL, len(s)))
+    return random.Random("tarix|" + kun).sample(range(len(s)), min(tarix_soni(kun), len(s)))
+
+
+def tarix_soni(kun):
+    """Shu kungi tarix bellashuvida nechta savol."""
+    return TARIX_BELL if kun >= "2026-10-08" else TARIX_BELL_ESKI
 
 
 def kun_mavzusi(dars, kun):
@@ -128,7 +134,7 @@ def kun_mavzusi(dars, kun):
     n = max(0, (_dt.date(y, m, d) - _dt.date(*BOSHI)).days)
     items = DARSLAR[dars]["items"]
     if not items:
-        return "savol"                      # tarix: savollar tarix_bell(kun) dan
+        return str(tarix_soni(kun))         # tarix: savollar soni (savollarning o'zi tarix_bell(kun) dan)
     return items[n % len(items)]
 
 

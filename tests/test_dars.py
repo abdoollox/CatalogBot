@@ -64,7 +64,8 @@ async def amain():
     k = hpdars.kun_mavzusi
     check("bellashuv mavzusi: sana bo'yicha aylanadi", k("afsun", "2026-10-07") == "lumos"
           and k("afsun", "2026-10-08") == "leviosa" and k("afsun", "2026-10-19") == "lumos"
-          and k("iksir", "2026-10-07") == "boils" and k("iksir", "2026-10-19") == "boils" and k("tarix", "2026-10-07") == "savol")
+          and k("iksir", "2026-10-07") == "boils" and k("iksir", "2026-10-19") == "boils"
+          and k("tarix", "2026-10-07") == "5" and k("tarix", "2026-10-08") == "10")
     check("kubok: 'dars' manbasi, mashq ballsiz", hpcup.SOURCE_GROUP["dars"] == "lesson" and "lesson" in hpcup.SOURCE_KEYS
           and hpcup.MAX_POINTS == 230)
     check("jadvaldagi ism: belgidan iborat ism o'rniga Sehrgar", hpdars._ism(".") == "Sehrgar" and hpdars._ism("") == "Sehrgar"
@@ -72,7 +73,8 @@ async def amain():
     check("sovrinlar", [hpdars.sovrin(i) for i in (1, 2, 3, 4, 10, 11)] == [15, 10, 7, 3, 3, 0])
     check("tarix savollari: 96 ta = 24 dars x 4", len(hpdars.savollar()) == 96 and hpdars.DARS_SONI * hpdars.TARIX_DARS == 96
           and len(hpdars.tarix_dars(24, "uz")) == 4 and "c" in hpdars.tarix_dars(1, "ru")[0]
-          and hpdars.tarix_bell("2026-10-08") == hpdars.tarix_bell("2026-10-08") and len(set(hpdars.tarix_bell("2026-10-08"))) == 5)
+          and hpdars.tarix_bell("2026-10-08") == hpdars.tarix_bell("2026-10-08") and len(set(hpdars.tarix_bell("2026-10-08"))) == 10
+          and len(hpdars.tarix_bell("2026-10-07")) == 5)
 
     check("imzosiz - 403", (await ask(""))[0] == 403)
     await hpcup.touch_user(1, "Garri Potter")
@@ -150,17 +152,18 @@ async def amain():
     # Tarix bellashuvi: savollar javobsiz keladi, xatoni server sanaydi
     st, d = await ask(2, start="tarix", lang="ru")
     idx = hpdars.tarix_bell(kun)
-    check("tarix: 5 savol, to'g'ri javob yuborilmaydi", d["started"] and len(d["questions"]) == 5
+    N = hpdars.tarix_soni(kun)
+    check("tarix: savollar soni, to'g'ri javob yuborilmaydi", d["started"] and len(d["questions"]) == N
           and all("c" not in q for q in d["questions"]) and d["questions"][0]["q"] == hpdars.savollar()[idx[0]]["ru"]["q"])
     togri = [hpdars.savollar()[i]["correct"] for i in idx]
-    xato2 = togri[:3] + [(togri[3] + 1) % 4, (togri[4] + 1) % 4]
+    xato2 = togri[:-2] + [(togri[-2] + 1) % 4, (togri[-1] + 1) % 4]
     st, d = await ask(2, finish="tarix", answers=xato2)
     check("tarix: 2 xato = +6 soniya", d["ok"] and d["wrong"] == 2 and d["ms"] == hpdars.ENG_KAM_MS + 6000)
     st, d = await ask(2, start="tarix"); st, d = await ask(2, finish="tarix", answers=togri)
     check("tarix: hammasi to'g'ri", d["wrong"] == 0 and d["best"] == hpdars.ENG_KAM_MS
           and d["lessons"]["tarix"]["contest"]["place"] == 1)
     st, d = await ask(2, start="tarix"); st, d = await ask(2, finish="tarix")
-    check("tarix: javobsiz - hammasi xato", d["wrong"] == 5)
+    check("tarix: javobsiz - hammasi xato", d["wrong"] == N)
     import hpsandiq
     c = hpcup._connect()
     check("qurbaqa topshirig'i: tarix bellashuvida qatnashgan - bajarilgan", hpsandiq._daily_bajarildi(c, 2, kun) is True
