@@ -35,7 +35,7 @@ NISHONLAR = (
 )
 KODLAR = tuple(k for k, _ in NISHONLAR)
 
-_FILM = re.compile(r"^(?:web_)?((?:hp[1-8])|(?:fb[1-3]))_(uz|ru|en)(?:@\w+)?$")
+_FILM = re.compile(r"^(?:web_)?((?:hp[1-8])|(?:fb[1-3]))_(uz|ru|en)(?:~\w+)?(?:@\w+)?$")
 _SERIAL = re.compile(r"^(?:web_)?sr_s\d+e\d+_")
 
 

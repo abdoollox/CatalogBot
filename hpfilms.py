@@ -112,31 +112,63 @@ def quality_of(it):
     return "hd" if 0 < h <= 800 else "fhd"
 
 
-def _mkey(movie_key, lang, q="fhd"):
-    return "%s_%s" % (movie_key, lang) + ("" if q == "fhd" else "@" + q)
+# --- DUBLYAJ (egasi, 2026-10-07) ---
+# O'zbekcha filmlar ikki xil dublyajda: MY5 TV va ZO'R TV. Odam sifat oynasining tepasida tanlaydi.
+# Faqat o'zbek tilida. Fayl qaysi dublyaj ekani NOMIDAN (yoki izohidan) taniladi: "MY5" / "ZO'R TV".
+# Nomida hech biri yo'q fayl - ASOSIY_DUB (2026-10-07 gacha yuklangan fayllar). Jadval kaliti:
+# asosiy dublyaj - avvalgidek ("hp1_uz", "hp1_uz@hd"), boshqasi - "hp1_uz~zor", "hp1_uz~zor@hd".
+DUBS = ("my5", "zor")
+DUB_LABEL = {"my5": "MY5 TV", "zor": "ZO'R TV"}
+ASOSIY_DUB = "my5"
+_D_MY5 = re.compile(r"my\s*5", re.I)
+_D_ZOR = re.compile(r"zo['’ʻ`‘]?r\s*tv|\bzo['’ʻ`‘]r\b|\bzor\b", re.I)
+_D_TOZA = re.compile(r"my\s*5(\s*tv)?|zo['’ʻ`‘]?r(\s*tv)?", re.I)      # film nomini tanishdan oldin olib tashlanadi
 
 
-def qualities(movie_key, lang):
-    """{sifat: fayl hajmi (bayt)} - shu film-tilda mavjud sifatlar."""
+def dub_of(it):
+    """Videoning dublyaji: nomi/izohidan; yozilmagan bo'lsa - asosiysi."""
+    text = "%s\n%s" % (it.get("name") or "", it.get("cap") or "")
+    if _D_ZOR.search(text):
+        return "zor"
+    if _D_MY5.search(text):
+        return "my5"
+    return ASOSIY_DUB
+
+
+def _mkey(movie_key, lang, q="fhd", dub=None):
+    d = "~" + dub if (dub and dub != ASOSIY_DUB and lang == "uz") else ""
+    return "%s_%s" % (movie_key, lang) + d + ("" if q == "fhd" else "@" + q)
+
+
+def qualities(movie_key, lang, dub=None):
+    """{sifat: fayl hajmi (bayt)} - shu film-tilda (va dublyajda) mavjud sifatlar."""
     if not _data.get("group"):
         return {}
     out = {}
     for q in QUALITIES:
-        it = _data["map"].get(_mkey(movie_key, lang, q))
+        it = _data["map"].get(_mkey(movie_key, lang, q, dub))
         if it:
             out[q] = int(it.get("size") or 0)
     return out
 
 
-def source(movie_key, lang, q=None):
+def dubs(movie_key, lang):
+    """Shu filmda mavjud dublyajlar (faqat o'zbek tilida; boshqa tillarda bo'sh)."""
+    if lang != "uz":
+        return []
+    return [d for d in DUBS if qualities(movie_key, lang, d)]
+
+
+def source(movie_key, lang, q=None, dub=None):
     """(chat_id, message_id) - film qayerdan nusxalanadi. Guruhda bo'lmasa - None.
-    q berilmasa - mavjudlarining eng yaxshisi."""
+    q berilmasa - mavjudlarining eng yaxshisi; dub berilmasa - asosiysi, u yo'q bo'lsa boshqasi."""
     if not _data.get("group"):
         return None
-    for one in ([q] if q else QUALITIES):
-        item = _data["map"].get(_mkey(movie_key, lang, one))
-        if item:
-            return _data["group"], int(item["mid"])
+    for d in ([dub] if dub else [ASOSIY_DUB] + [x for x in DUBS if x != ASOSIY_DUB]):
+        for one in ([q] if q else QUALITIES):
+            item = _data["map"].get(_mkey(movie_key, lang, one, d))
+            if item:
+                return _data["group"], int(item["mid"])
     return None
 
 
@@ -152,6 +184,12 @@ def public_map():
             qs = qualities(fid, l)
             if qs:
                 out["%s_%s" % (fid, l)] = qs
+            # Ikkinchi dublyaj (faqat o'zbekcha): "hp1_uz~zor"
+            for d in DUBS:
+                if l == "uz" and d != ASOSIY_DUB:
+                    qd = qualities(fid, l, d)
+                    if qd:
+                        out["%s_%s~%s" % (fid, l, d)] = qd
     return out
 
 
@@ -168,10 +206,10 @@ def film_of(text):
             return "fb2"
         if any(w in n for w in ("dumbledore", "дамблдор", "dambldor", "secrets", "тайны", "sirlar")):
             return "fb3"
-        m = re.search(r"\b([123])\b", re.sub(r"\b(19|20)\d\d\b|\d{3,4}p\b", " ", n))
+        m = re.search(r"\b([123])\b", re.sub(r"\b(19|20)\d\d\b|\d{3,4}p\b", " ", _D_TOZA.sub(" ", n)))
         return "fb" + m.group(1) if m else "fb1"
     # Garri Potter: yil va sifat raqamlari ("2001", "1080p") chalg'itmasin
-    clean = re.sub(r"\b(19|20)\d\d\b|\b\d{3,4}p\b|\b[hx]26[45]\b", " ", n)
+    clean = re.sub(r"\b(19|20)\d\d\b|\b\d{3,4}p\b|\b[hx]26[45]\b", " ", _D_TOZA.sub(" ", n))
     for line in [clean] + clean.splitlines():
         a = hpmusic.title_album(line)
         if a:
@@ -288,7 +326,7 @@ def _place(it, film, lang, how):
     Ustunlik: qo'lda bog'langan > tili nomidan aniqlangan > tili mavzudan olingan;
     teng bo'lsa - kattaroq xabar raqami (yangi yuklangani). Har SIFAT alohida o'rin:
     720p nusxa 1080p ning o'rnini egallamaydi."""
-    key = _mkey(film, lang, quality_of(it))
+    key = _mkey(film, lang, quality_of(it), dub_of(it) if lang == "uz" else None)
     it = dict(it, by=how)
     old = _data["map"].get(key)
     if old:
@@ -433,8 +471,16 @@ async def on_film_command(message: types.Message):
     key = bolak[1].lower()
     m = re.fullmatch(r"(hp[1-8]|fb[1-3])_(uz|ru|en)", key)
     # Ixtiyoriy sifat: /film hp1_uz hd 1234 (yozilmasa - Full HD)
-    if m and len(bolak) > 2 and bolak[2].lower() in QUALITIES:
-        key = _mkey(m.group(1), m.group(2), bolak.pop(2).lower())
+    # Ixtiyoriy dublyaj va sifat: /film hp1_uz zor hd 1234 (yozilmasa - asosiy dublyaj, Full HD)
+    q_, d_ = "fhd", None
+    while m and len(bolak) > 2 and bolak[2].lower() in QUALITIES + DUBS:
+        soz = bolak.pop(2).lower()
+        if soz in QUALITIES:
+            q_ = soz
+        else:
+            d_ = soz
+    if m and (q_ != "fhd" or d_):
+        key = _mkey(m.group(1), m.group(2), q_, d_)
     if not m or len(bolak) < 3:
         await message.answer("Masalan: /film hp1_uz 1234  ·  /film hp1_uz hd 1234  ·  /film hp1_uz -")
         return

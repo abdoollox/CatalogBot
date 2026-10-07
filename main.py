@@ -643,17 +643,27 @@ def sifat_matni(movie_key, lang):
     return "%s\n\n%s" % (catalog.FILMS[movie_key][lang]["caption"], SIFAT_TX[lang]["ask"])
 
 
-def sifat_tugmalari(movie_key, lang, origin="b"):
-    """Har sifat alohida qator. Bor sifat - hajmi bilan; yo'g'i qulflangan."""
-    bor = hpfilms.qualities(movie_key, lang)
+def sifat_tugmalari(movie_key, lang, origin="b", dub=None):
+    """Har sifat alohida qator. Bor sifat - hajmi bilan; yo'g'i qulflangan.
+    Filmda ikki dublyaj bo'lsa - tepada dublyaj tanlovi (tanlangani ● bilan)."""
+    dl = hpfilms.dubs(movie_key, lang)
     qator = []
+    if len(dl) > 1:
+        dub = dub if dub in dl else dl[0]
+        qator.append([InlineKeyboardButton(
+            text=("● " if d == dub else "") + hpfilms.DUB_LABEL[d],
+            callback_data="db:%s:%s:%s:%s" % (movie_key, lang, d, origin)) for d in dl])
+    else:
+        dub = None
+    bor = hpfilms.qualities(movie_key, lang, dub)
+    qo = ":" + dub if dub else ""
     for q in hpfilms.QUALITIES:
         nom = hpfilms.Q_LABEL[q]
         if q in bor:
             h = hajm_matni(bor[q], lang)
             qator.append([InlineKeyboardButton(
                 text=nom + (" · " + h if h else ""),
-                callback_data="sf:%s:%s:%s:%s" % (movie_key, lang, q, origin))])
+                callback_data="sf:%s:%s:%s:%s%s" % (movie_key, lang, q, origin, qo))])
         else:
             qator.append([InlineKeyboardButton(
                 text="🔒 %s · %s" % (nom, SIFAT_TX[lang]["soon"]),
@@ -661,18 +671,37 @@ def sifat_tugmalari(movie_key, lang, origin="b"):
     return InlineKeyboardMarkup(inline_keyboard=qator)
 
 
-@dp.callback_query(F.data.startswith("sf:"))
-async def on_quality_pick(callback: types.CallbackQuery):
-    """Odam sifatni tanladi - film shu sifatda yuboriladi."""
+@dp.callback_query(F.data.startswith("db:"))
+async def on_dub_pick(callback: types.CallbackQuery):
+    """Odam dublyajni almashtirdi - shu xabardagi tugmalar yangilanadi (sifatlar o'sha dublyajniki)."""
     try:
-        _, movie_key, lang, q, origin = callback.data.split(":")
+        _, movie_key, lang, dub, origin = callback.data.split(":")
     except ValueError:
         await callback.answer()
         return
+    if movie_key not in catalog.FILMS or lang not in catalog.LANGS or dub not in hpfilms.DUBS:
+        await callback.answer()
+        return
+    try:
+        await callback.message.edit_reply_markup(reply_markup=sifat_tugmalari(movie_key, lang, origin, dub))
+    except Exception:
+        pass                                   # o'sha dublyaj qayta bosildi - o'zgarish yo'q
+    await callback.answer(hpfilms.DUB_LABEL[dub])
+
+
+@dp.callback_query(F.data.startswith("sf:"))
+async def on_quality_pick(callback: types.CallbackQuery):
+    """Odam sifatni tanladi - film shu sifatda (va tanlangan dublyajda) yuboriladi."""
+    bolak = callback.data.split(":")
+    if len(bolak) not in (5, 6):
+        await callback.answer()
+        return
+    _, movie_key, lang, q, origin = bolak[:5]
+    dub = bolak[5] if len(bolak) == 6 and bolak[5] in hpfilms.DUBS else None
     if movie_key not in catalog.FILMS or lang not in catalog.LANGS or q not in hpfilms.QUALITIES:
         await callback.answer()
         return
-    if origin == "x" or q not in hpfilms.qualities(movie_key, lang):
+    if origin == "x" or q not in hpfilms.qualities(movie_key, lang, dub):
         await callback.answer(SIFAT_TX[lang]["none"], show_alert=True)
         return
     user, chat_id = callback.from_user, callback.from_user.id
@@ -688,10 +717,11 @@ async def on_quality_pick(callback: types.CallbackQuery):
     try:
         # Jadvaldagi nomga sifat ham qo'shiladi (panel uchun): bot_hp1_uz@hd
         await log_user_action(user, payload_clean,
-                              "%s_%s@%s" % ("web" if origin == "w" else "bot", payload_clean, q))
+                              "%s_%s%s@%s" % ("web" if origin == "w" else "bot", payload_clean,
+                                              "~" + dub if dub else "", q))
         movie_data = MOVIES_DB[movie_key][lang]
         vk_url = movie_data.get("vk_url") if lang == "uz" else None
-        await send_film(chat_id, movie_key, lang, vk_url, q)
+        await send_film(chat_id, movie_key, lang, vk_url, q, dub)
     except Exception as e:
         logging.error("Film yuborilmadi (%s, %s): %s", payload_clean, q, e)
         try:
@@ -874,7 +904,7 @@ def share_caption(movie_key, film, lang, sharer_id=None, q=None):
     return "\n".join(lines)
 
 
-async def send_film(chat_id, movie_key, lang, vk_url=None, q=None):
+async def send_film(chat_id, movie_key, lang, vk_url=None, q=None, dub=None):
     """Filmni yopiq kanaldan nusxalab yuboradi, ostida to'liq karta matni.
 
     Matndagi havola filmni olgan odamning o'z havolasi (Marvel botidagidek).
@@ -883,10 +913,10 @@ async def send_film(chat_id, movie_key, lang, vk_url=None, q=None):
     """
     # q berilmasa - mavjud sifatlarning eng yaxshisi (eski ilova va eski havolalar uchun)
     if not q:
-        q = next((x for x in hpfilms.QUALITIES if x in hpfilms.qualities(movie_key, lang)), None)
+        q = next((x for x in hpfilms.QUALITIES if x in hpfilms.qualities(movie_key, lang, dub)), None)
     matn = share_caption(movie_key, catalog.FILMS[movie_key], lang, chat_id, q)
     # Manba - faqat Database guruhi (hpfilms). Bog'lanmagan film yuborilmaydi.
-    manba = hpfilms.source(movie_key, lang, q)
+    manba = hpfilms.source(movie_key, lang, q, dub)
     if not manba:
         raise RuntimeError("film guruhda bog'lanmagan: %s_%s (message to copy not found)" % (movie_key, lang))
     kw = dict(chat_id=chat_id, from_chat_id=manba[0],
@@ -2052,12 +2082,16 @@ async def api_send(request):
 
     # Sifat: ilova "fhd" yoki "hd" yuboradi. Yubormasa (eski ilova) - eng yaxshisi.
     q = str(body.get("q", "")) or None
-    if q and q not in hpfilms.qualities(movie_key, lang):
+    # Dublyaj (faqat o'zbekcha, ikki xili bor filmda): "my5" yoki "zor". Yuborilmasa - asosiysi.
+    dub = str(body.get("dub", "")) or None
+    if dub not in hpfilms.dubs(movie_key, lang):
+        dub = None
+    if q and q not in hpfilms.qualities(movie_key, lang, dub):
         return _cors(web.json_response({"ok": False, "error": "not_ready"}))
 
     vk_url = movie_data.get("vk_url") if lang == "uz" else None
     try:
-        sent = await send_film(tg_chat_id(user.id), movie_key, lang, vk_url, q)
+        sent = await send_film(tg_chat_id(user.id), movie_key, lang, vk_url, q, dub)
     except Exception as e:
         # Eng ko'p uchraydigani: foydalanuvchi botni hech qachon ochmagan,
         # shuning uchun bot unga yoza olmaydi.
@@ -2070,9 +2104,9 @@ async def api_send(request):
 
     # Sinov o'quvchisining harakati statistikaga yozilmaydi
     if user.id > 0:
-        q_olingan = q or next((x for x in hpfilms.QUALITIES if x in hpfilms.qualities(movie_key, lang)), "fhd")
+        q_olingan = q or next((x for x in hpfilms.QUALITIES if x in hpfilms.qualities(movie_key, lang, dub)), "fhd")
         await log_user_action(user, "%s_%s" % (movie_key, lang),
-                              "web_%s_%s@%s" % (movie_key, lang, q_olingan))
+                              "web_%s_%s%s@%s" % (movie_key, lang, "~" + dub if dub else "", q_olingan))
     remember_send(user.id, sent.message_id, movie_key, lang)
 
     # Xogvarts kubogi: kino ochilgani uchun ball. Film allaqachon yuborilgan,
@@ -2094,7 +2128,8 @@ async def api_films(request):
     if request.method == "OPTIONS":
         return _cors(web.Response(status=204))
     return _cors(web.json_response({"ok": True, "films": hpfilms.public_map(),
-                                    "labels": hpfilms.Q_LABEL, "pix": hpfilms.Q_PIX}))
+                                    "labels": hpfilms.Q_LABEL, "pix": hpfilms.Q_PIX,
+                                    "dubs": hpfilms.DUB_LABEL, "dub_main": hpfilms.ASOSIY_DUB}))
 
 
 async def api_undo(request):

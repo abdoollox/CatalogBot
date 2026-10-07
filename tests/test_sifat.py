@@ -96,6 +96,38 @@ async def amain():
     check("HD so'ralsa 720p fayl, so'ralmasa Full HD", [x["message_id"] for x in sent] == [20, 10]
           and "HD" in sent[0]["caption"] and "Full HD" in sent[1]["caption"])
 
+    # --- Dublyaj: MY5 TV (asosiy) va ZO'R TV ---
+    d = hpfilms.dub_of
+    check("dublyaj nomdan", d(V(1, "Garri Potter 1 (ZO'R TV)(720p).mp4", 1)) == "zor" and d(V(1, "GP 1 Zor TV.mp4", 1)) == "zor"
+          and d(V(1, "Garri Potter 1 MY5 (1080p).mp4", 1)) == "my5" and d(V(1, "Garri Potter 1 (1080p).mp4", 1)) == "my5")
+    check("izohdan ham taniladi", d(V(1, "film.mp4", 1, cap="ZO‘R TV dublyaji")) == "zor")
+    check("bitta dublyajda tanlov yo'q", hpfilms.dubs("hp1", "uz") == ["my5"] and hpfilms.dubs("hp1", "ru") == []
+          and len(main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard) == 3)
+    hpfilms._place(V(40, "Garri Potter va Hikmatlar Toshi (2001)(ZO'R TV)(1080p).mp4", 2 * 1024 ** 3), "hp1", "uz", "nom")
+    hpfilms._place(V(41, "Garri Potter va Hikmatlar Toshi (2001)(ZO'R TV)(480p).mp4", 400 * 1024 ** 2), "hp1", "uz", "nom")
+    check("ikkinchi dublyaj asosiysining o'rnini egallamaydi", hpfilms.source("hp1", "uz", "fhd") == (-1, 10)
+          and hpfilms.source("hp1", "uz", "fhd", "zor") == (-1, 40) and hpfilms.source("hp1", "uz", "sd", "zor") == (-1, 41)
+          and hpfilms.source("hp1", "uz", "hd", "zor") is None)
+    check("ikki dublyaj", hpfilms.dubs("hp1", "uz") == ["my5", "zor"]
+          and hpfilms.qualities("hp1", "uz", "zor") == {"fhd": 2 * 1024 ** 3, "sd": 400 * 1024 ** 2})
+    check("ilova ro'yxatida ikkinchi dublyaj alohida kalitda", hpfilms.public_map()["hp1_uz~zor"] == {"fhd": 2 * 1024 ** 3, "sd": 400 * 1024 ** 2}
+          and "fhd" in hpfilms.public_map()["hp1_uz"])
+    kb = main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard
+    check("tepada dublyaj tanlovi, asosiysi tanlangan", [b.text for b in kb[0]] == ["● MY5 TV", "ZO'R TV"]
+          and kb[0][1].callback_data == "db:hp1:uz:zor:b" and kb[1][0].callback_data == "sf:hp1:uz:fhd:b:my5" and len(kb) == 4)
+    kb = main.sifat_tugmalari("hp1", "uz", "w", "zor").inline_keyboard
+    check("ZO'R TV tanlansa - uning sifatlari, yo'g'i qulflangan", [b.text for b in kb[0]] == ["MY5 TV", "● ZO'R TV"]
+          and kb[1][0].callback_data == "sf:hp1:uz:fhd:w:zor" and kb[2][0].text.startswith("🔒 HD") and kb[3][0].callback_data == "sf:hp1:uz:sd:w:zor")
+    del sent[:]
+    eski = main.bot
+    main.bot = FakeBot()
+    try:
+        await main.send_film(5, "hp1", "uz", None, "fhd", "zor")
+        await main.send_film(5, "hp1", "uz", None, "fhd")
+    finally:
+        main.bot = eski
+    check("tanlangan dublyaj fayli yuboriladi", [x["message_id"] for x in sent] == [40, 10])
+
     print("O'tdi: %d, xato: %d" % (ok, fail))
     return fail
 
