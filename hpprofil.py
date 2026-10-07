@@ -18,6 +18,7 @@ import sqlite3
 
 from aiohttp import web
 
+import hpcup
 import hpnishon
 
 DB_PATH = os.getenv("HP_DB_PATH", "/data/hp.db")
@@ -57,6 +58,7 @@ def profil(uid, men):
         u = _one(conn, "SELECT first_name, house, sorted_at, created_at FROM users WHERE user_id=?", (uid,))
         if not u:
             return None
+        ls = _one(conn, "SELECT last_seen_at FROM users WHERE user_id=?", (uid,))
         pt = _one(conn, "SELECT patronus FROM users WHERE user_id=?", (uid,))
         hafta = _one(conn, "SELECT COALESCE(SUM(p.points),0) FROM points p JOIN seasons s ON s.id=p.season_id "
                            "WHERE p.user_id=? AND s.status='active'", (uid,))
@@ -71,6 +73,8 @@ def profil(uid, men):
         out = {
             "ok": True, "uid": uid, "me": uid == int(men),
             "name": (u[0] or "").strip()[:40], "house": u[1], "since": (u[2] or u[3] or "")[:10],
+            # Oxirgi marta ilovada bo'lgan vaqti (chatdagi kabi); hozir ilovada bo'lsa online
+            "online": hpcup.presence_online(uid), "seen": hpcup.presence_seen(uid, ls[0] if ls else None),
             "wand": wand_of(conn, uid), "patronus": pt[0] if pt else None,
             "points": {"week": int(hafta[0]) if hafta else 0, "all": int(jami[0]) if jami else 0},
             "films": len(filmlar), "cards": int(karta[0]) if karta else 0,

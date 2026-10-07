@@ -1000,7 +1000,7 @@ def _referral_board(user_id, lang="uz"):
             if r["user_id"] == int(user_id):
                 place = i + 1
             if i < REF_TOP:
-                top.append({"pos": i + 1, "name": r["first_name"] or "Sehrgar",
+                top.append({"pos": i + 1, "uid": r["user_id"], "name": r["first_name"] or "Sehrgar",
                             "house": r["house"], "refs": int(r["refs"]),
                             "me": r["user_id"] == int(user_id)})
 
@@ -1186,7 +1186,7 @@ def _season_entry(conn, row, number):
     uchlik = []
     for r in top:
         raw = (r["name"] or "Sehrgar").strip()
-        uchlik.append({"name": (raw.split()[0] if raw else "Sehrgar")[:20],
+        uchlik.append({"uid": r["user_id"], "name": (raw.split()[0] if raw else "Sehrgar")[:20],
                        "house": r["house"], "points": r["pts"]})
     best = uchlik[0] if uchlik else None
     return {
@@ -1661,6 +1661,7 @@ def _feed(conn, limit=50):
         raw_name = (r["name"] or "Sehrgar").strip()
         first_word = raw_name.split()[0] if raw_name else "Sehrgar"
         feed_list.append({
+            "uid": r["user_id"],             # ilovada ism bosilganda profil ochiladi
             "name": first_word[:20],
             "house": r["house"],
             "ago_minutes": ago_min

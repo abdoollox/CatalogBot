@@ -177,6 +177,9 @@ async def amain():
     check("profil: o'zi, fakultetsiz", d["me"] is True and d["house"] is None and d["wand"]["wood"] == "cherry" and d["chess"] is None)
     check("profil: yo'q odam 404, imzosiz 403", (await hpprofil.api_profil(Req({"uid": 999}, init="2"))).status == 404
           and (await hpprofil.api_profil(Req({"uid": 1}, init=""))).status == 403)
+    hpcup.presence_mark(1, "gryffindor")
+    d1 = json.loads((await hpprofil.api_profil(Req({"uid": 1}, init="2"))).body)
+    check("profil: oxirgi kirish", d1["online"] is True and d1["seen"] and d["online"] is False and d["seen"] is None)
     check("profil: maxfiy narsa yo'q", not ({"username", "galleons", "lang"} & set(d)))
 
     # Boshqa odam ko'radi: faqat olinganlari
