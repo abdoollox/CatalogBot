@@ -159,6 +159,26 @@ async def amain():
     d = await ask(1)
     check("olingan nishon yo'qolmaydi", d["count"] == 19)
 
+    # Tayoqcha Gringottsdan oldin olingan (wand_at bo'sh), lekin hodisa bor - nishon beriladi
+    await hpcup.touch_user(3, "Nevill")
+    await hpevents.log(3, "Nevill", None, "wand_cherry_unicorn_supple", "2026-09-20 10:00:00")
+    check("eski tayoqcha egasiga ham nishon", "tayoqcha" in got(await ask(3)))
+
+    # Sehrgar profili
+    import hpprofil
+    hpprofil.register(app, {"cors": lambda r: r, "verify_init_data": lambda s: {"id": int(s)} if s.lstrip("-").isdigit() else None})
+    await hpevents.log(1, "Garri", None, "wand_holly_phoenix_rigid", "2026-10-01 10:00:00")
+    r = await hpprofil.api_profil(Req({"uid": 1}, init="2"))
+    d = json.loads(r.body)
+    check("profil: boshqa odam", d["ok"] and d["name"] == "Garri" and d["house"] == "gryffindor" and d["me"] is False
+          and d["wand"] == {"wood": "holly", "core": "phoenix", "flex": "rigid"} and d["patronus"] == "stag"
+          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] and d["points"]["all"] >= 20)
+    d = json.loads((await hpprofil.api_profil(Req({}, init="3"))).body)
+    check("profil: o'zi, fakultetsiz", d["me"] is True and d["house"] is None and d["wand"]["wood"] == "cherry" and d["chess"] is None)
+    check("profil: yo'q odam 404, imzosiz 403", (await hpprofil.api_profil(Req({"uid": 999}, init="2"))).status == 404
+          and (await hpprofil.api_profil(Req({"uid": 1}, init=""))).status == 403)
+    check("profil: maxfiy narsa yo'q", not ({"username", "galleons", "lang"} & set(d)))
+
     # Boshqa odam ko'radi: faqat olinganlari
     d = await ask(2, uid=1)
     check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 19 and all(x["got"] for x in d["list"]) and "new" not in d)

@@ -105,7 +105,9 @@ def hisob(conn, uid):
     house = u["house"] if u else None
     refs = int(u["refs"] or 0) if u else 0
     w = _one(conn, "SELECT wand_at FROM users WHERE user_id=?", (uid,))
-    wand = bool(w and w[0])
+    # Tayoqcha Gringotts tartibidan OLDIN olingan bo'lsa wand_at bo'sh (2026-10-07: 246 kishi nishonsiz qolgan edi) -
+    # shuning uchun ilova yozgan hodisa ("wand_oak_phoenix_rigid") ham hisobga olinadi
+    wand = bool(w and w[0]) or bool(_one(conn, "SELECT 1 FROM events WHERE user_id=? AND payload LIKE 'wand_%' LIMIT 1", (uid,)))
     pt = _one(conn, "SELECT patronus FROM users WHERE user_id=?", (uid,))
     patronus = bool(pt and pt[0])
 

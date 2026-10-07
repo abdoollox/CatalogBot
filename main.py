@@ -39,6 +39,7 @@ import hpchatstat
 import hpfilms
 import hpserial
 import hpkitob
+import hpprofil
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2611,6 +2612,12 @@ async def main():
         hpnishon.register(app, {"verify_init_data": verify_init_data, "cors": _cors})
     except Exception as nishon_error:
         logging.error("Nishonlar moduli ishga tushmadi: %s", nishon_error)
+
+    # --- Sehrgar profili (boshqa odamni ko'rish) ---
+    try:
+        hpprofil.register(app, {"verify_init_data": verify_init_data, "cors": _cors})
+    except Exception as profil_error:
+        logging.error("Profil moduli ishga tushmadi: %s", profil_error)
 
     # --- Filmlar bazasi guruhda ---
     # Musiqadan KEYIN (uning guruh o'qish vositalarini ishlatadi), hpleave dan OLDIN.
