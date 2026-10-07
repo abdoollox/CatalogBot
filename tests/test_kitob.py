@@ -153,8 +153,8 @@ async def main():
 
     r = await hpkitob.api_send(Req({"book": "kt2", "lang": "en", "fmt": "pdf", "ui": "uz"}, init="5"))
     k = bot.copied[-1]
-    check("kitob yuborildi (himoyalangan, o'zbekcha karta)", json.loads(r.body)["ok"] and k["message_id"] == 55
-          and k["protect_content"] and "maxfiy xona" in k["caption"] and "2-kitob" in k["caption"]
+    check("kitob yuborildi (himoyasiz, o'zbekcha karta)", json.loads(r.body)["ok"] and k["message_id"] == 55
+          and k["protect_content"] is False and "maxfiy xona" in k["caption"] and "2-kitob" in k["caption"]
           and "English" in k["caption"] and "PDF" in k["caption"] and "1998" in k["caption"])
     check("o'qib bo'lmaydigan kitobda faqat kutubxona tugmasi", len(k["reply_markup"].inline_keyboard[0]) == 1)
     r = await hpkitob.api_send(Req({"book": "kt2", "lang": "en"}, init="5"))

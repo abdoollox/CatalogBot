@@ -577,7 +577,7 @@ async def api_send(request):
         return cors(web.json_response({"ok": False, "error": "not_subscribed"}))
     matn = caption(book, lang, fmt, ui)
     kw = dict(chat_id=chat, from_chat_id=manba[0], message_id=manba[1], parse_mode="HTML",
-              reply_markup=keyboard(book, lang, ui), protect_content=True)
+              reply_markup=keyboard(book, lang, ui), protect_content=False)   # egasi, 2026-10-07: kitoblar himoyasiz
     try:
         try:
             sent = await _cfg["bot"].copy_message(caption=matn, **kw)
