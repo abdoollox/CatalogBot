@@ -304,7 +304,10 @@ async def api_dars(request):
         return cors(web.json_response({"ok": False, "error": "server"}, status=500))
     if len(_kesh) > 5000:
         _kesh.clear()
-    _kesh[uid] = (hozir, res) if not amal else (0, res)        # amaldan keyin holat yangi - darhol qayta o'qilsin
+    if amal:
+        _kesh.pop(uid, None)           # amaldan keyin holat o'zgardi - keyingi so'rov yangidan hisoblanadi
+    else:
+        _kesh[uid] = (hozir, res)
     if _cfg.get("log") and res.get("ok"):
         try:
             if res.get("new"):
