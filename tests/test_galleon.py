@@ -52,7 +52,7 @@ async def amain():
           h([(1, "gryffindor", 120), (2, "slytherin", 95), (3, "gryffindor", 40), (4, "slytherin", 9)], "gryffindor")
           == [(1, 120, 12, 1, 15, 39), (2, 95, 9, 0, 10, 19), (3, 40, 4, 1, 5, 13)])
     check("g'olib yo'q - hech kimga ikki baravar emas", h([(1, "gryffindor", 50)], None) == [(1, 50, 5, 0, 15, 20)])
-    check("imtihon o'chirilgan, eng ko'p ball 300 (sandiq va darslar bilan)", hpcup.EXAM_ON is False and hpcup.MAX_POINTS == 300
+    check("imtihon o'chirilgan, eng ko'p ball 230 (sandiq bilan)", hpcup.EXAM_ON is False and hpcup.MAX_POINTS == 230
           and "exam" not in hpcup.SOURCE_KEYS)
 
     # Odamlar: 1,3 - Grifindor; 2 - Sliterin; 5 - saralanmagan; -9 - sinov o'quvchisi

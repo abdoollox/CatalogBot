@@ -54,10 +54,6 @@ PTS_REFERRAL = 20
 CHESS_MAX_PER_SEASON = 5
 
 FILM_PARTS = 8
-# Darslar (hpdars.py, 2026-10-07): har fan kuniga bir marta shuncha ball; hozir 2 ta fan ballanadi
-# (kunlik savol = "Sehrgarlik tarixi", u 'daily' bo'lib qoladi). Yangi fan qo'shilsa LESSONS_PER_DAY oshiriladi.
-PTS_LESSON = 5
-LESSONS_PER_DAY = 2
 QUIZ_PER_FILM = 3
 DAILY_PER_WEEK = 7
 
@@ -65,8 +61,8 @@ DAILY_PER_WEEK = 7
 MAX_POINTS = (PTS_FILM_OPEN * FILM_PARTS
               + PTS_DAILY * DAILY_PER_WEEK
               + PTS_CHESS_WIN * CHESS_MAX_PER_SEASON
-              + 10 * 7                                   # kunlik sandiq: kuniga 10
-              + PTS_LESSON * LESSONS_PER_DAY * 7)        # darslar: 2 fan x 5 ball x 7 kun -> jami 300
+              + 10 * 7)                                  # kunlik sandiq: kuniga 10  -> jami 230
+# Darslar (mashq) ball bermaydi; bellashuv sovrinlari (hpdars) bu songa kirmaydi - u hammaga kafolatlanmagan.
 
 # --- Hafta yakunidagi galleon mukofoti (egasi, 2026-10-04) ---
 # Faqat SARALANGAN o'quvchilarga, o'z balidan: har GAL_PER_POINTS ball uchun 1 galleon;
@@ -94,7 +90,7 @@ SOURCE_CAPS = {
     "daily": PTS_DAILY * DAILY_PER_WEEK,
     "chess": PTS_CHESS_WIN * CHESS_MAX_PER_SEASON,
     "chest": 10 * 7,
-    "lesson": PTS_LESSON * LESSONS_PER_DAY * 7,
+    "lesson": 15 * 3 * 7,          # bellashuv: 3 fan x 1-o'rin (+15) x 7 kun - nazariy eng ko'pi
 }
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")

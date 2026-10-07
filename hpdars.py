@@ -1,32 +1,38 @@
 # -*- coding: utf-8 -*-
 """Darslar (egasi, 2026-10-07): Xogvarts sahifasida kunlik savol o'rnida fanlar bo'limi.
 
-Faqat SARALANGANLARGA. Ikki qism:
+Faqat SARALANGANLARGA. Ikki qism (egasi, 2026-10-07 kechqurun: mashq - ballsiz va cheklovsiz, ball - faqat bellashuvdan):
 
-1) DARS (mashq) - har odamning O'Z BOSQICHI bor (kimdir 1-darsda, kimdir 100-darsda):
-     kuniga bitta yangi dars -> bosqich +1 va +5 ball. Mavzu va qiyinlik bosqichga bog'liq
-     (ro'yxat bo'yicha aylanadi; har aylanada qiyinroq - buni ilova hisoblaydi).
-     Bugun bajarilgan bo'lsa - qayta o'ynash mashq, bosqich va ball o'zgarmaydi.
-   tarix (Sehrgarlik tarixi) - bu KUNLIK SAVOL: ball eski yo'l bilan ('daily'), bu yerda faqat holati.
+1) DARSLAR (mashq) - har fanda DARS_SONI ta dars (bosqich). Har odam o'z bosqichida: keyingi darsni o'tsa
+     bosqichi +1. Kunlik chegara YO'Q, ball BERILMAYDI - xohlagancha o'tadi, o'tilganini qayta o'ynay oladi.
+     Mavzu va qiyinlik dars raqamiga bog'liq (ilova hisoblaydi):
+       afsun - 12 afsun x 2 aylana; iksir - 12 damlama x 2 aylana;
+       tarix - Sehrgarlik tarixi: har darsda 4 savol (questions/kino.json, 96 ta - film tartibida), 3 tasi to'g'ri bo'lsa o'tadi.
 
 2) BELLASHUV (musobaqa) - kuniga bitta topshiriq HAMMAGA BIR XIL (sana bo'yicha), kim tezroq va xatosiz.
      Vaqtni SERVER o'lchaydi ({start} -> {finish}); har xato +3 soniya. Kuniga 3 urinish, eng yaxshisi hisob.
-     Kun tugagach (keyingi kun birinchi so'rovda) eng yaxshilarga qo'shimcha ball: 1-o'rin +15, 2-o'rin +10,
-     3-o'rin +7, 4-10-o'rinlar +3.
+     tarix bellashuvi - 5 ta savol: javoblarni SERVER tekshiradi (to'g'ri javob ilovaga yuborilmaydi).
+     Kun tugagach (keyingi kun birinchi so'rovda) eng yaxshilarga ball: 1-o'rin +15, 2-o'rin +10, 3-o'rin +7,
+     4-10-o'rinlar +3. Ball kubokka 'dars' manbasi bo'lib yoziladi (ref "m:afsun:2026-10-08").
 
-Ball kubokka 'dars' manbasi bo'lib yoziladi: dars "afsun:2026-10-08", bellashuv "m:afsun:2026-10-08".
+Kunlik savol (+10, 'daily') o'zgarmadi - ilovada Sehrgarlik tarixi sahifasida turadi; bu yerda faqat holati.
 Kun - Toshkent vaqti. Qolgan fanlar ilovada "Tez orada" - qo'shilganda DARSLAR ga yoziladi.
 
 API: POST /api/dars
-  {}                         -> holat (darslar, bosqichlar, bellashuv jadvali, kechagi g'oliblar)
-  {done: "afsun"}            -> dars bajarildi
-  {start: "afsun"}           -> bellashuv urinishi boshlandi
-  {finish: "afsun", xato: 2} -> bellashuv urinishi tugadi
+  {}                                     -> holat (bosqichlar, bellashuv jadvali, kechagi g'oliblar)
+  {done: "afsun", level: 7}              -> 7-dars o'tildi (faqat navbatdagi dars bosqichni oshiradi)
+  {quiz: 7, lang: "uz"}                  -> tarix 7-darsining savollari (to'g'ri javobi bilan - mashq)
+  {start: "afsun"}                       -> bellashuv urinishi boshlandi (tarixda - savollar qaytadi)
+  {finish: "afsun", xato: 2}             -> bellashuv urinishi tugadi
+  {finish: "tarix", answers: [1,0,3,2,1]} -> tarix: javoblar, xatoni server sanaydi
 """
 
 import asyncio
 import datetime as _dt
+import json
 import logging
+import os
+import random
 import sqlite3
 import time
 from datetime import timedelta
@@ -40,12 +46,17 @@ _cfg = {}
 _kesh = {}                     # uid -> (vaqt, oxirgi holat javobi)
 KESH_S = 5
 
+DARS_SONI = 24                 # har fanda nechta dars (bosqich)
 DARSLAR = {
-    "afsun": {"pts": 5, "items": ("lumos", "leviosa", "alohomora", "expelliarmus", "accio", "protego",
-                                  "incendio", "reparo", "stupefy", "aguamenti", "nox", "patronum")},
-    "iksir": {"pts": 5, "items": ("boils", "forget", "shrink", "antidote", "wiggenweld", "uyqu",
-                                  "skelegro", "living", "polyjuice", "felix")},
+    "tarix": {"items": ()},
+    "afsun": {"items": ("lumos", "leviosa", "alohomora", "expelliarmus", "accio", "protego",
+                        "incendio", "reparo", "stupefy", "aguamenti", "nox", "patronum")},
+    "iksir": {"items": ("boils", "forget", "shrink", "antidote", "wiggenweld", "uyqu",
+                        "skelegro", "living", "wit", "peace", "polyjuice", "felix")},
 }
+TARIX_DARS = 4                 # tarix darsida nechta savol
+TARIX_OTISH = 3                # shundan nechtasi to'g'ri bo'lsa dars o'tadi (ilova tekshiradi - ball yo'q)
+TARIX_BELL = 5                 # tarix bellashuvida nechta savol
 BOSHI = (2026, 10, 7)
 URINISH = 3                    # bellashuvda kuniga nechta urinish
 XATO_MS = 3000                 # har xato uchun jarima
@@ -73,18 +84,51 @@ def _init():
         conn.close()
 
 
+_savollar = None
+
+
+def savollar():
+    """Sehrgarlik tarixi savollari (questions/kino.json, 96 ta). Bir marta o'qiladi."""
+    global _savollar
+    if _savollar is None:
+        try:
+            with open(os.path.join(hpcup._questions_dir(), "kino.json"), encoding="utf-8") as f:
+                _savollar = json.load(f)
+        except Exception as e:
+            logging.error("Tarix savollari o'qilmadi: %s", e)
+            _savollar = []
+    return _savollar
+
+
+def _savol(q, lang, javob):
+    t = q.get(lang) or q["uz"]
+    out = {"q": t["q"], "a": t["a"]}
+    if javob:
+        out["c"] = q["correct"]
+    return out
+
+
+def tarix_dars(daraja, lang):
+    """N-darsning savollari (1 dan), to'g'ri javobi bilan."""
+    s = savollar()
+    bosh = (int(daraja) - 1) * TARIX_DARS
+    return [_savol(q, lang, True) for q in s[bosh:bosh + TARIX_DARS]]
+
+
+def tarix_bell(kun):
+    """Shu kungi bellashuv savollari (indekslar) - hammaga bir xil."""
+    s = savollar()
+    return random.Random("tarix|" + kun).sample(range(len(s)), min(TARIX_BELL, len(s)))
+
+
 def kun_mavzusi(dars, kun):
     """Bellashuvning shu kungi mavzusi (hammaga bir xil): ro'yxat bo'yicha aylanadi."""
     y, m, d = (int(x) for x in kun.split("-"))
     n = max(0, (_dt.date(y, m, d) - _dt.date(*BOSHI)).days)
     items = DARSLAR[dars]["items"]
+    if not items:
+        return "savol"                      # tarix: savollar tarix_bell(kun) dan
     return items[n % len(items)]
-
-
-def daraja_mavzusi(dars, daraja):
-    """Shaxsiy darsning mavzusi: bosqich bo'yicha (0 - birinchi dars)."""
-    items = DARSLAR[dars]["items"]
-    return items[int(daraja) % len(items)]
 
 
 def _kecha(kun):
@@ -169,32 +213,40 @@ def _bellashuv(conn, uid, kun, dars):
 def _holat(uid, kun):
     conn = hpcup._connect()
     try:
-        out = {"tarix": {"done": hpsandiq._daily_bajarildi(conn, uid, kun), "pts": hpcup.PTS_DAILY}}
+        out = {}
         dar = {r["dars"]: r for r in conn.execute(
-            "SELECT dars, daraja, kun FROM dars_daraja WHERE user_id=?", (uid,))}
-        for kod, d in DARSLAR.items():
+            "SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (uid,))}
+        for kod in DARSLAR:
             r = dar.get(kod)
-            daraja = int(r["daraja"]) if r else 0
-            bugun = bool(r and r["kun"] == kun)
-            # Bugun bajarilgan bo'lsa - mashq uchun shu (oxirgi o'tilgan) dars qaytariladi
-            ochiq = daraja - 1 if (bugun and daraja > 0) else daraja
-            out[kod] = {"done": bugun, "pts": d["pts"], "level": daraja, "n": ochiq + 1,
-                        "item": daraja_mavzusi(kod, ochiq), "cycle": ochiq // len(d["items"]),
+            out[kod] = {"level": min(int(r["daraja"]) if r else 0, DARS_SONI), "total": DARS_SONI,
                         "contest": _bellashuv(conn, uid, kun, kod)}
+        out["tarix"]["daily"] = {"done": hpsandiq._daily_bajarildi(conn, uid, kun), "pts": hpcup.PTS_DAILY}
         return out
     finally:
         conn.close()
 
 
-def _dars_bajarildi(uid, dars, kun):
-    """Bosqichni oshiradi (kuniga bir marta). Yangi bo'lsa True."""
+def _dars_bajarildi(uid, dars, daraja):
+    """N-dars o'tildi. Faqat NAVBATDAGI dars (bosqich + 1) bosqichni oshiradi. Oshgan bo'lsa True."""
+    daraja = int(daraja)
+    if not (1 <= daraja <= DARS_SONI):
+        return False
     conn = hpcup._connect()
     try:
         conn.execute("INSERT OR IGNORE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (?,?,0,NULL)", (uid, dars))
-        cur = conn.execute("UPDATE dars_daraja SET daraja = daraja + 1, kun = ? "
-                           "WHERE user_id=? AND dars=? AND (kun IS NULL OR kun <> ?)", (kun, uid, dars, kun))
+        cur = conn.execute("UPDATE dars_daraja SET daraja = ?, kun = ? WHERE user_id=? AND dars=? AND daraja = ?",
+                           (daraja, hpcup.today_tk(), uid, dars, daraja - 1))
         conn.commit()
         return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def _daraja(uid, dars):
+    conn = hpcup._connect()
+    try:
+        r = conn.execute("SELECT daraja FROM dars_daraja WHERE user_id=? AND dars=?", (uid, dars)).fetchone()
+        return int(r["daraja"]) if r else 0
     finally:
         conn.close()
 
@@ -244,28 +296,50 @@ def _ish(uid, body):
     except Exception as e:
         logging.error("Bellashuv yakuni: %s", e)
     javob = {"ok": True, "kun": kun}
+    lang = str(body.get("lang") or "uz")
+    if lang not in ("uz", "ru", "en"):
+        lang = "uz"
     dars = body.get("done") or body.get("start") or body.get("finish")
     if dars is not None:
         dars = str(dars)
         if dars not in DARSLAR:
             return {"ok": False, "error": "unknown"}
+    if body.get("quiz") is not None:
+        # Tarix darsining savollari: o'tilgan yoki navbatdagi dars
+        try:
+            n = int(body.get("quiz"))
+        except (TypeError, ValueError):
+            n = 0
+        if not (1 <= n <= min(DARS_SONI, _daraja(uid, "tarix") + 1)):
+            return {"ok": False, "error": "locked"}
+        javob.update(level=n, questions=tarix_dars(n, lang), need=TARIX_OTISH)
+        return javob
     if body.get("done"):
-        yangi = _dars_bajarildi(uid, dars, kun)
-        pts = DARSLAR[dars]["pts"]
-        if yangi:
-            hpcup._award(uid, "dars", "%s:%s" % (dars, kun), pts)
-        javob["new"] = yangi
-        javob["pts"] = pts if yangi else 0
+        try:
+            n = int(body.get("level") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        javob["new"] = _dars_bajarildi(uid, dars, n)
+        javob["pts"] = 0                          # mashq uchun ball yo'q - ball bellashuvdan
     elif body.get("start"):
         if not _boshla(uid, dars, kun):
             javob.update(ok=False, error="no_tries")
             return javob
         javob["started"] = True
+        if dars == "tarix":
+            s = savollar()
+            javob["questions"] = [_savol(s[i], lang, False) for i in tarix_bell(kun)]
     elif body.get("finish"):
-        try:
-            xato = int(body.get("xato") or 0)
-        except (TypeError, ValueError):
-            xato = 0
+        if dars == "tarix":
+            s, idx, jv = savollar(), tarix_bell(kun), body.get("answers")
+            jv = jv if isinstance(jv, list) else []
+            xato = sum(1 for k, i in enumerate(idx) if k >= len(jv) or jv[k] != s[i]["correct"])
+            javob["wrong"] = xato
+        else:
+            try:
+                xato = int(body.get("xato") or 0)
+            except (TypeError, ValueError):
+                xato = 0
         r = _tugat(uid, dars, kun, xato)
         if not r:
             javob.update(ok=False, error="not_started")
@@ -291,7 +365,7 @@ async def api_dars(request):
     body = body if isinstance(body, dict) else {}
     # Holat so'rovi (amalsiz) bir odamdan 5 soniyada bir marta hisoblanadi - qolganiga oxirgi javob qaytadi.
     # Sabab: ilovaning 2026-10-07 dagi nusxasida bosh sahifa holatni to'xtovsiz so'rab turardi (cheksiz halqa).
-    amal = body.get("done") or body.get("start") or body.get("finish")
+    amal = body.get("done") or body.get("start") or body.get("finish") or body.get("quiz")
     hozir = time.monotonic()
     if not amal:
         eski = _kesh.get(uid)
