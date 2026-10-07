@@ -37,6 +37,8 @@ import hpcup
 import hpsandiq
 
 _cfg = {}
+_kesh = {}                     # uid -> (vaqt, oxirgi holat javobi)
+KESH_S = 5
 
 DARSLAR = {
     "afsun": {"pts": 5, "items": ("lumos", "leviosa", "alohomora", "expelliarmus", "accio", "protego",
@@ -286,11 +288,23 @@ async def api_dars(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
     uid = int(user["id"])
+    body = body if isinstance(body, dict) else {}
+    # Holat so'rovi (amalsiz) bir odamdan 5 soniyada bir marta hisoblanadi - qolganiga oxirgi javob qaytadi.
+    # Sabab: ilovaning 2026-10-07 dagi nusxasida bosh sahifa holatni to'xtovsiz so'rab turardi (cheksiz halqa).
+    amal = body.get("done") or body.get("start") or body.get("finish")
+    hozir = time.monotonic()
+    if not amal:
+        eski = _kesh.get(uid)
+        if eski and hozir - eski[0] < KESH_S:
+            return cors(web.json_response(eski[1]))
     try:
-        res = await asyncio.to_thread(_ish, uid, body if isinstance(body, dict) else {})
+        res = await asyncio.to_thread(_ish, uid, body)
     except Exception as e:
         logging.error("Dars holati hisoblanmadi (%s): %s", uid, e)
         return cors(web.json_response({"ok": False, "error": "server"}, status=500))
+    if len(_kesh) > 5000:
+        _kesh.clear()
+    _kesh[uid] = (hozir, res) if not amal else (0, res)        # amaldan keyin holat yangi - darhol qayta o'qilsin
     if _cfg.get("log") and res.get("ok"):
         try:
             if res.get("new"):

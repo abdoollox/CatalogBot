@@ -47,6 +47,7 @@ class Req:
 
 
 async def ask(kim, **body):
+    hpdars._kesh.clear()               # sinovda har so'rov yangidan hisoblansin
     r = await hpdars.api_dars(Req(body, init=str(kim)))
     return r.status, json.loads(r.body)
 
@@ -157,6 +158,21 @@ async def amain():
     Y = d["lessons"]["afsun"]["contest"]["yesterday"]
     check("kechagi g'oliblar va o'z o'rni", [x["name"] for x in Y["top"]] == ["Nevill", "Garri", "Germiona"]
           and Y["place"] == 2 and Y["pts"] == 10 and Y["n"] == 4 and d["lessons"]["afsun"]["contest"]["tries"] == 0)
+    # Holat keshi: ketma-ket so'rovlar bazani qayta hisoblamaydi
+    hpdars._kesh.clear()
+    sanoq = {"n": 0}
+    asl = hpdars._ish
+    def sanab(uid, body):
+        sanoq["n"] += 1
+        return asl(uid, body)
+    hpdars._ish = sanab
+    for _ in range(5):
+        await hpdars.api_dars(Req({}, init="1"))
+    await hpdars.api_dars(Req({"done": "iksir"}, init="1"))
+    await hpdars.api_dars(Req({}, init="1"))
+    hpdars._ish = asl
+    check("holat so'rovi keshlanadi, amal - yo'q", sanoq["n"] == 3)
+
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     ddl = c.execute("SELECT sql FROM sqlite_master WHERE name='points'").fetchone()[0]
     c.close()
