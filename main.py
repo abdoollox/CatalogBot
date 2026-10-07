@@ -38,6 +38,7 @@ import hpmusic
 import hpchatstat
 import hpfilms
 import hpserial
+import hpkitob
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2563,6 +2564,23 @@ async def main():
         })
     except Exception as serial_error:
         logging.error("Serial moduli ishga tushmadi: %s", serial_error)
+
+    # --- Kitoblar (fayllar guruhdan, hpkitob) ---
+    try:
+        async def _kitob_log(user, payload):
+            await log_user_action(_WebUser(user), payload)
+        hpkitob.register(dp, bot, app, {
+            "admin_ids": ADMIN_IDS,
+            "verify_init_data": verify_init_data,
+            "cors": _cors,
+            "is_subscribed": is_subscribed,
+            "tg_chat_id": tg_chat_id,
+            "log": _kitob_log,
+            "brand": lambda lang: T(lang)["brand"],
+            "webapp_url": webapp_url,
+        })
+    except Exception as kitob_error:
+        logging.error("Kitoblar moduli ishga tushmadi: %s", kitob_error)
 
     # --- Patronus (test ilovada, natija shu yerda; nishonlardan OLDIN - ustunni u yaratadi) ---
     try:
