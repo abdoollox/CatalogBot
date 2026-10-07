@@ -1,0 +1,1954 @@
+[
+{
+"key": "t-001",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Reyvenklo fakultetining asoschisi kim?",
+"a": [
+"Xelga Xaffelpaff",
+"Rovena Reyvenklo",
+"Godrik Grifindor",
+"Salazar Sliterin"
+]
+},
+"ru": {
+"q": "Кто основал факультет Когтевран?",
+"a": [
+"Пенелопа Пуффендуй",
+"Кандида Когтевран",
+"Годрик Гриффиндор",
+"Салазар Слизерин"
+]
+},
+"en": {
+"q": "Who founded Ravenclaw house?",
+"a": [
+"Helga Hufflepuff",
+"Rowena Ravenclaw",
+"Godric Gryffindor",
+"Salazar Slytherin"
+]
+}
+},
+{
+"key": "t-002",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Xaffelpaff fakultetining asoschisi kim?",
+"a": [
+"Xelga Xaffelpaff",
+"Rovena Reyvenklo",
+"Minerva Makgonagall",
+"Pomona Sprout"
+]
+},
+"ru": {
+"q": "Кто основал факультет Пуффендуй?",
+"a": [
+"Пенелопа Пуффендуй",
+"Кандида Когтевран",
+"Минерва Макгонагалл",
+"Помона Стебль"
+]
+},
+"en": {
+"q": "Who founded Hufflepuff house?",
+"a": [
+"Helga Hufflepuff",
+"Rowena Ravenclaw",
+"Minerva McGonagall",
+"Pomona Sprout"
+]
+}
+},
+{
+"key": "t-003",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Grifindor qilichini kimlar yasagan?",
+"a": [
+"Sehrgarlar",
+"Uy elflari",
+"Goblinlar",
+"Gigantlar"
+]
+},
+"ru": {
+"q": "Кто выковал меч Гриффиндора?",
+"a": [
+"Волшебники",
+"Домовые эльфы",
+"Гоблины",
+"Великаны"
+]
+},
+"en": {
+"q": "Who forged the sword of Gryffindor?",
+"a": [
+"Wizards",
+"House-elves",
+"Goblins",
+"Giants"
+]
+}
+},
+{
+"key": "t-004",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Reyvenklo fakultetining arvohi qanday ataladi?",
+"a": [
+"Semiz rohib",
+"Qonli baron",
+"Deyarli boshsiz Nik",
+"Kulrang xonim"
+]
+},
+"ru": {
+"q": "Как зовут привидение факультета Когтевран?",
+"a": [
+"Толстый Монах",
+"Кровавый Барон",
+"Почти Безголовый Ник",
+"Серая Дама"
+]
+},
+"en": {
+"q": "What is the Ravenclaw house ghost called?",
+"a": [
+"The Fat Friar",
+"The Bloody Baron",
+"Nearly Headless Nick",
+"The Grey Lady"
+]
+}
+},
+{
+"key": "t-005",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Xogvarts shiori nimani anglatadi?",
+"a": [
+"Bilim — kuchdir",
+"Uxlayotgan ajdahoni qitiqlama",
+"Jasorat hamma narsadan ustun",
+"Birlikda kuchlimiz"
+]
+},
+"ru": {
+"q": "Что означает девиз Хогвартса?",
+"a": [
+"Знание — сила",
+"Не щекочи спящего дракона",
+"Храбрость превыше всего",
+"Вместе мы сильны"
+]
+},
+"en": {
+"q": "What does the Hogwarts motto mean?",
+"a": [
+"Knowledge is power",
+"Never tickle a sleeping dragon",
+"Courage above all",
+"Together we are strong"
+]
+}
+},
+{
+"key": "t-006",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Krestraj nima?",
+"a": [
+"Sehrgar o'z jonining bir bo'lagini yashirgan buyum",
+"Kelajakni ko'rsatadigan ko'zgu",
+"Vaqtni ortga qaytaradigan soat",
+"Xotiralar saqlanadigan idish"
+]
+},
+"ru": {
+"q": "Что такое крестраж?",
+"a": [
+"Предмет, в котором волшебник спрятал часть своей души",
+"Зеркало, показывающее будущее",
+"Часы, возвращающие время назад",
+"Сосуд для хранения воспоминаний"
+]
+},
+"en": {
+"q": "What is a Horcrux?",
+"a": [
+"An object in which a wizard has hidden part of his soul",
+"A mirror that shows the future",
+"A watch that turns back time",
+"A basin for storing memories"
+]
+}
+},
+{
+"key": "t-007",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Quyidagilardan qaysi biri Voldemortning krestraji BO'LMAGAN?",
+"a": [
+"Sliterin medalyoni",
+"Xaffelpaff kosasi",
+"Grifindor qilichi",
+"Reyvenklo diademasi"
+]
+},
+"ru": {
+"q": "Что из перечисленного НЕ было крестражем Волан-де-Морта?",
+"a": [
+"Медальон Слизерина",
+"Чаша Пуффендуй",
+"Меч Гриффиндора",
+"Диадема Когтевран"
+]
+},
+"en": {
+"q": "Which of these was NOT one of Voldemort's Horcruxes?",
+"a": [
+"Slytherin's locket",
+"Hufflepuff's cup",
+"Gryffindor's sword",
+"Ravenclaw's diadem"
+]
+}
+},
+{
+"key": "t-008",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Krestrajni nima yo'q qila oladi?",
+"a": [
+"Feniks ko'z yoshlari",
+"Bazilisk zahari",
+"Yakkashox qoni",
+"Oddiy olov"
+]
+},
+"ru": {
+"q": "Что способно уничтожить крестраж?",
+"a": [
+"Слёзы феникса",
+"Яд василиска",
+"Кровь единорога",
+"Обычный огонь"
+]
+},
+"en": {
+"q": "What can destroy a Horcrux?",
+"a": [
+"Phoenix tears",
+"Basilisk venom",
+"Unicorn blood",
+"Ordinary fire"
+]
+}
+},
+{
+"key": "t-009",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Quyidagilardan qaysi biri Ajal tuhfasi EMAS?",
+"a": [
+"Oqsoqol tayoqcha",
+"Tiriltiruvchi tosh",
+"Ko'rinmas plash",
+"Vaqt qaytargich"
+]
+},
+"ru": {
+"q": "Что из перечисленного НЕ является Даром Смерти?",
+"a": [
+"Бузинная палочка",
+"Воскрешающий камень",
+"Мантия-невидимка",
+"Маховик времени"
+]
+},
+"en": {
+"q": "Which of these is NOT a Deathly Hallow?",
+"a": [
+"The Elder Wand",
+"The Resurrection Stone",
+"The Cloak of Invisibility",
+"The Time-Turner"
+]
+}
+},
+{
+"key": "t-010",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Uch aka-uka haqidagi ertak qaysi kitobga kirgan?",
+"a": [
+"Bard Bidl ertaklari",
+"Xogvarts tarixi",
+"Sehrli maxluqlar va ularning makoni",
+"Afsunlarning standart kitobi"
+]
+},
+"ru": {
+"q": "В какую книгу входит сказка о трёх братьях?",
+"a": [
+"Сказки барда Бидля",
+"История Хогвартса",
+"Фантастические звери и места их обитания",
+"Стандартная книга заклинаний"
+]
+},
+"en": {
+"q": "Which book contains the tale of the three brothers?",
+"a": [
+"The Tales of Beedle the Bard",
+"Hogwarts: A History",
+"Fantastic Beasts and Where to Find Them",
+"The Standard Book of Spells"
+]
+}
+},
+{
+"key": "t-011",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Remus Lyupin har to'lin oyda nimaga aylanadi?",
+"a": [
+"Vampirga",
+"Itga",
+"Bo'ri-odamga",
+"Ko'rshapalakka"
+]
+},
+"ru": {
+"q": "В кого превращается Римус Люпин каждое полнолуние?",
+"a": [
+"В вампира",
+"В собаку",
+"В оборотня",
+"В летучую мышь"
+]
+},
+"en": {
+"q": "What does Remus Lupin turn into at every full moon?",
+"a": [
+"A vampire",
+"A dog",
+"A werewolf",
+"A bat"
+]
+}
+},
+{
+"key": "t-012",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Piter Pettigryu qaysi hayvonga aylana oladi?",
+"a": [
+"Mushukka",
+"Kalamushga",
+"Qurbaqaga",
+"Qarg'aga"
+]
+},
+"ru": {
+"q": "В какое животное умеет превращаться Питер Петтигрю?",
+"a": [
+"В кошку",
+"В крысу",
+"В жабу",
+"В ворону"
+]
+},
+"en": {
+"q": "Which animal can Peter Pettigrew turn into?",
+"a": [
+"A cat",
+"A rat",
+"A toad",
+"A crow"
+]
+}
+},
+{
+"key": "t-013",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Garrining otasi Jeyms Potter qaysi hayvonga aylana olardi?",
+"a": [
+"Bug'uga",
+"Itga",
+"Bo'riga",
+"Burgutga"
+]
+},
+"ru": {
+"q": "В какое животное превращался отец Гарри, Джеймс Поттер?",
+"a": [
+"В оленя",
+"В собаку",
+"В волка",
+"В орла"
+]
+},
+"en": {
+"q": "Which animal could Harry's father, James Potter, turn into?",
+"a": [
+"A stag",
+"A dog",
+"A wolf",
+"An eagle"
+]
+}
+},
+{
+"key": "t-014",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Garri Potterning Patronusi qanday shaklda?",
+"a": [
+"Feniks",
+"Bo'ri",
+"Suvsar",
+"Bug'u"
+]
+},
+"ru": {
+"q": "Какую форму принимает Патронус Гарри Поттера?",
+"a": [
+"Феникс",
+"Волк",
+"Выдра",
+"Олень"
+]
+},
+"en": {
+"q": "What shape does Harry Potter's Patronus take?",
+"a": [
+"A phoenix",
+"A wolf",
+"An otter",
+"A stag"
+]
+}
+},
+{
+"key": "t-015",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Severus Sneypning Patronusi qanday shaklda?",
+"a": [
+"Ilon",
+"Ohu",
+"Ko'rshapalak",
+"Qarg'a"
+]
+},
+"ru": {
+"q": "Какую форму принимает Патронус Северуса Снегга?",
+"a": [
+"Змея",
+"Лань",
+"Летучая мышь",
+"Ворон"
+]
+},
+"en": {
+"q": "What shape does Severus Snape's Patronus take?",
+"a": [
+"A snake",
+"A doe",
+"A bat",
+"A raven"
+]
+}
+},
+{
+"key": "t-016",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Kviddich maydonining har tomonida nechta halqa bor?",
+"a": [
+"Bitta",
+"Ikkita",
+"Uchta",
+"To'rtta"
+]
+},
+"ru": {
+"q": "Сколько колец на каждой стороне поля для квиддича?",
+"a": [
+"Одно",
+"Два",
+"Три",
+"Четыре"
+]
+},
+"en": {
+"q": "How many hoops stand at each end of a Quidditch pitch?",
+"a": [
+"One",
+"Two",
+"Three",
+"Four"
+]
+}
+},
+{
+"key": "t-017",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Kviddich o'yinida nechta bladjer ishtirok etadi?",
+"a": [
+"Bitta",
+"Ikkita",
+"Uchta",
+"To'rtta"
+]
+},
+"ru": {
+"q": "Сколько бладжеров участвует в игре в квиддич?",
+"a": [
+"Один",
+"Два",
+"Три",
+"Четыре"
+]
+},
+"en": {
+"q": "How many Bludgers are used in a game of Quidditch?",
+"a": [
+"One",
+"Two",
+"Three",
+"Four"
+]
+}
+},
+{
+"key": "t-018",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Garri kviddich jamoasiga nechanchi kursda qabul qilingan?",
+"a": [
+"Birinchi",
+"Ikkinchi",
+"Uchinchi",
+"To'rtinchi"
+]
+},
+"ru": {
+"q": "На каком курсе Гарри взяли в команду по квиддичу?",
+"a": [
+"На первом",
+"На втором",
+"На третьем",
+"На четвёртом"
+]
+},
+"en": {
+"q": "In which year did Harry join the Quidditch team?",
+"a": [
+"First",
+"Second",
+"Third",
+"Fourth"
+]
+}
+},
+{
+"key": "t-019",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Sirius Blek Garriga qanday supurgi sovg'a qilgan?",
+"a": [
+"Nimbus 2001",
+"Toza supuruvchi",
+"Chaqmoq",
+"Kometa 260"
+]
+},
+"ru": {
+"q": "Какую метлу подарил Гарри Сириус Блэк?",
+"a": [
+"«Нимбус-2001»",
+"«Чистомёт»",
+"«Молния»",
+"«Комета-260»"
+]
+},
+"en": {
+"q": "Which broomstick did Sirius Black give Harry?",
+"a": [
+"Nimbus 2001",
+"Cleansweep",
+"Firebolt",
+"Comet 260"
+]
+}
+},
+{
+"key": "t-020",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Flyor Delakur qaysi sehrgarlik maktabida o'qigan?",
+"a": [
+"Durmstrang",
+"Bobaton",
+"Xogvarts",
+"Ilvermorni"
+]
+},
+"ru": {
+"q": "В какой школе волшебства училась Флёр Делакур?",
+"a": [
+"Дурмстранг",
+"Шармбатон",
+"Хогвартс",
+"Ильверморни"
+]
+},
+"en": {
+"q": "Which school of magic did Fleur Delacour attend?",
+"a": [
+"Durmstrang",
+"Beauxbatons",
+"Hogwarts",
+"Ilvermorny"
+]
+}
+},
+{
+"key": "t-021",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Viktor Krum qaysi sehrgarlik maktabida o'qigan?",
+"a": [
+"Bobaton",
+"Xogvarts",
+"Ilvermorni",
+"Durmstrang"
+]
+},
+"ru": {
+"q": "В какой школе волшебства учился Виктор Крам?",
+"a": [
+"Шармбатон",
+"Хогвартс",
+"Ильверморни",
+"Дурмстранг"
+]
+},
+"en": {
+"q": "Which school of magic did Viktor Krum attend?",
+"a": [
+"Beauxbatons",
+"Hogwarts",
+"Ilvermorny",
+"Durmstrang"
+]
+}
+},
+{
+"key": "t-022",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Uch sehrgar turnirida Garridan tashqari Xogvartsning yana bir chempioni kim edi?",
+"a": [
+"Sedrik Diggori",
+"Draco Malfoy",
+"Fred Uizli",
+"Oliver Vud"
+]
+},
+"ru": {
+"q": "Кто, кроме Гарри, был чемпионом Хогвартса на Турнире Трёх Волшебников?",
+"a": [
+"Седрик Диггори",
+"Драко Малфой",
+"Фред Уизли",
+"Оливер Вуд"
+]
+},
+"en": {
+"q": "Who was the other Hogwarts champion in the Triwizard Tournament besides Harry?",
+"a": [
+"Cedric Diggory",
+"Draco Malfoy",
+"Fred Weasley",
+"Oliver Wood"
+]
+}
+},
+{
+"key": "t-023",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Sedrik Diggori qaysi fakultetda o'qigan?",
+"a": [
+"Grifindor",
+"Reyvenklo",
+"Xaffelpaff",
+"Sliterin"
+]
+},
+"ru": {
+"q": "На каком факультете учился Седрик Диггори?",
+"a": [
+"Гриффиндор",
+"Когтевран",
+"Пуффендуй",
+"Слизерин"
+]
+},
+"en": {
+"q": "Which house was Cedric Diggory in?",
+"a": [
+"Gryffindor",
+"Ravenclaw",
+"Hufflepuff",
+"Slytherin"
+]
+}
+},
+{
+"key": "t-024",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Sehrgarlarning asosiy gazetasi qanday ataladi?",
+"a": [
+"Sehrgar haftaligi",
+"Kundalik Payg'ambar",
+"Xogvarts xabarlari",
+"Tungi boyqush"
+]
+},
+"ru": {
+"q": "Как называется главная газета волшебников?",
+"a": [
+"«Ведьмин досуг»",
+"«Ежедневный пророк»",
+"«Вести Хогвартса»",
+"«Ночная сова»"
+]
+},
+"en": {
+"q": "What is the main wizarding newspaper called?",
+"a": [
+"Witch Weekly",
+"The Daily Prophet",
+"The Hogwarts Herald",
+"The Night Owl"
+]
+}
+},
+{
+"key": "t-025",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Jurnalist Rita Skiter yashirincha qaysi jonzotga aylana oladi?",
+"a": [
+"Kapalakka",
+"Ilonga",
+"Chumchuqqa",
+"Qo'ng'izga"
+]
+},
+"ru": {
+"q": "В кого тайно умеет превращаться журналистка Рита Скитер?",
+"a": [
+"В бабочку",
+"В змею",
+"В воробья",
+"В жука"
+]
+},
+"en": {
+"q": "What can the journalist Rita Skeeter secretly turn into?",
+"a": [
+"A butterfly",
+"A snake",
+"A sparrow",
+"A beetle"
+]
+}
+},
+{
+"key": "t-026",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Garri Xogvartsga kelgan paytda Sehrgarlik vaziri kim edi?",
+"a": [
+"Kornelius Fadj",
+"Rufus Skrimjer",
+"Kingsli Shaklbolt",
+"Lyutsius Malfoy"
+]
+},
+"ru": {
+"q": "Кто был министром магии, когда Гарри поступил в Хогвартс?",
+"a": [
+"Корнелиус Фадж",
+"Руфус Скримджер",
+"Кингсли Бруствер",
+"Люциус Малфой"
+]
+},
+"en": {
+"q": "Who was Minister for Magic when Harry started at Hogwarts?",
+"a": [
+"Cornelius Fudge",
+"Rufus Scrimgeour",
+"Kingsley Shacklebolt",
+"Lucius Malfoy"
+]
+}
+},
+{
+"key": "t-027",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Azkaban qamoqxonasi qayerda joylashgan?",
+"a": [
+"Tog' cho'qqisida",
+"London ostidagi yerto'lada",
+"Dengiz o'rtasidagi orolda",
+"Taqiqlangan o'rmon ichida"
+]
+},
+"ru": {
+"q": "Где находится тюрьма Азкабан?",
+"a": [
+"На вершине горы",
+"В подземелье под Лондоном",
+"На острове посреди моря",
+"В Запретном лесу"
+]
+},
+"en": {
+"q": "Where is Azkaban prison located?",
+"a": [
+"On a mountain top",
+"In a dungeon under London",
+"On an island in the middle of the sea",
+"In the Forbidden Forest"
+]
+}
+},
+{
+"key": "t-028",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Dambldor qo'shini mashg'ulotlarni qayerda o'tkazgan?",
+"a": [
+"Katta zalda",
+"Zarurat xonasida",
+"Taqiqlangan o'rmonda",
+"Astronomiya minorasida"
+]
+},
+"ru": {
+"q": "Где проводил занятия Отряд Дамблдора?",
+"a": [
+"В Большом зале",
+"В Выручай-комнате",
+"В Запретном лесу",
+"В Астрономической башне"
+]
+},
+"en": {
+"q": "Where did Dumbledore's Army hold its meetings?",
+"a": [
+"In the Great Hall",
+"In the Room of Requirement",
+"In the Forbidden Forest",
+"In the Astronomy Tower"
+]
+}
+},
+{
+"key": "t-029",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Albus Dambldorning ukasining ismi nima?",
+"a": [
+"Gellert",
+"Elfias",
+"Persival",
+"Aberfort"
+]
+},
+"ru": {
+"q": "Как зовут брата Альбуса Дамблдора?",
+"a": [
+"Геллерт",
+"Элфиас",
+"Персиваль",
+"Аберфорт"
+]
+},
+"en": {
+"q": "What is the name of Albus Dumbledore's brother?",
+"a": [
+"Gellert",
+"Elphias",
+"Percival",
+"Aberforth"
+]
+}
+},
+{
+"key": "t-030",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Xogsmiddagi Aberfort ishlaydigan qovoqxona qanday ataladi?",
+"a": [
+"Uch supurgi",
+"Oqayotgan qozon",
+"Cho'chqa kallasi",
+"Oltin snitch"
+]
+},
+"ru": {
+"q": "Как называется трактир в Хогсмиде, где работает Аберфорт?",
+"a": [
+"«Три метлы»",
+"«Дырявый котёл»",
+"«Кабанья голова»",
+"«Золотой снитч»"
+]
+},
+"en": {
+"q": "What is the Hogsmeade inn where Aberforth works called?",
+"a": [
+"The Three Broomsticks",
+"The Leaky Cauldron",
+"The Hog's Head",
+"The Golden Snitch"
+]
+}
+},
+{
+"key": "t-031",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Xogsmiddagi mashhur shirinliklar do'koni qanday ataladi?",
+"a": [
+"Zonko",
+"Shirin qirollik",
+"Olivander",
+"Florish va Blotts"
+]
+},
+"ru": {
+"q": "Как называется знаменитая лавка сладостей в Хогсмиде?",
+"a": [
+"«Зонко»",
+"«Сладкое королевство»",
+"«Олливандер»",
+"«Флориш и Блоттс»"
+]
+},
+"en": {
+"q": "What is the famous sweet shop in Hogsmeade called?",
+"a": [
+"Zonko's",
+"Honeydukes",
+"Ollivanders",
+"Flourish and Blotts"
+]
+}
+},
+{
+"key": "t-032",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Xogsmidda o'quvchilar eng yaxshi ko'radigan ichimlik qaysi?",
+"a": [
+"Saryog'li pivo",
+"Qovoq sharbati",
+"Olovli viski",
+"Yalpizli choy"
+]
+},
+"ru": {
+"q": "Какой напиток больше всего любят ученики в Хогсмиде?",
+"a": [
+"Сливочное пиво",
+"Тыквенный сок",
+"Огненный виски",
+"Мятный чай"
+]
+},
+"en": {
+"q": "Which drink do students love most in Hogsmeade?",
+"a": [
+"Butterbeer",
+"Pumpkin juice",
+"Firewhisky",
+"Mint tea"
+]
+}
+},
+{
+"key": "t-033",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Xagridning gippogrifining ismi nima?",
+"a": [
+"Norbert",
+"Aragog",
+"Paxmoq",
+"Bukbik"
+]
+},
+"ru": {
+"q": "Как зовут гиппогрифа Хагрида?",
+"a": [
+"Норберт",
+"Арагог",
+"Пушок",
+"Клювокрыл"
+]
+},
+"en": {
+"q": "What is the name of Hagrid's hippogriff?",
+"a": [
+"Norbert",
+"Aragog",
+"Fluffy",
+"Buckbeak"
+]
+}
+},
+{
+"key": "t-034",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Xagridning gigant ukasining ismi nima?",
+"a": [
+"Aragog",
+"Grop",
+"Firenze",
+"Kricher"
+]
+},
+"ru": {
+"q": "Как зовут брата-великана Хагрида?",
+"a": [
+"Арагог",
+"Грохх",
+"Флоренц",
+"Кикимер"
+]
+},
+"en": {
+"q": "What is the name of Hagrid's giant half-brother?",
+"a": [
+"Aragog",
+"Grawp",
+"Firenze",
+"Kreacher"
+]
+}
+},
+{
+"key": "t-035",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Aragog kim?",
+"a": [
+"Ulkan o'rgimchak",
+"Uch boshli it",
+"Kentavr",
+"Ajdaho"
+]
+},
+"ru": {
+"q": "Кто такой Арагог?",
+"a": [
+"Гигантский паук",
+"Трёхголовый пёс",
+"Кентавр",
+"Дракон"
+]
+},
+"en": {
+"q": "Who is Aragog?",
+"a": [
+"A giant spider",
+"A three-headed dog",
+"A centaur",
+"A dragon"
+]
+}
+},
+{
+"key": "t-036",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Turnirning birinchi sinovida Garriga qaysi ajdaho tushgan?",
+"a": [
+"Shved kaltatumshug'i",
+"Uels yashili",
+"Vengriya shoxdumi",
+"Xitoy olovshari"
+]
+},
+"ru": {
+"q": "Какой дракон достался Гарри в первом испытании Турнира?",
+"a": [
+"Шведский тупорылый",
+"Валлийский зелёный",
+"Венгерская хвосторога",
+"Китайский огненный шар"
+]
+},
+"en": {
+"q": "Which dragon did Harry face in the first task of the Tournament?",
+"a": [
+"Swedish Short-Snout",
+"Common Welsh Green",
+"Hungarian Horntail",
+"Chinese Fireball"
+]
+}
+},
+{
+"key": "t-037",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Blek oilasining qari uy elfining ismi nima?",
+"a": [
+"Dobbi",
+"Vinki",
+"Kricher",
+"Xoki"
+]
+},
+"ru": {
+"q": "Как зовут старого домового эльфа семьи Блэк?",
+"a": [
+"Добби",
+"Винки",
+"Кикимер",
+"Похлёба"
+]
+},
+"en": {
+"q": "What is the name of the Black family's old house-elf?",
+"a": [
+"Dobby",
+"Winky",
+"Kreacher",
+"Hokey"
+]
+}
+},
+{
+"key": "t-038",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Uizlilar oilasining eng katta o'g'li kim?",
+"a": [
+"Charli",
+"Bill",
+"Persi",
+"Ron"
+]
+},
+"ru": {
+"q": "Кто старший сын в семье Уизли?",
+"a": [
+"Чарли",
+"Билл",
+"Перси",
+"Рон"
+]
+},
+"en": {
+"q": "Who is the eldest Weasley son?",
+"a": [
+"Charlie",
+"Bill",
+"Percy",
+"Ron"
+]
+}
+},
+{
+"key": "t-039",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Charli Uizli nima bilan shug'ullanadi?",
+"a": [
+"Ruminiyada ajdaholarni o'rganadi",
+"Gringotts bankida ishlaydi",
+"Vazirlikda xizmat qiladi",
+"Hazil buyumlar do'konini yuritadi"
+]
+},
+"ru": {
+"q": "Чем занимается Чарли Уизли?",
+"a": [
+"Изучает драконов в Румынии",
+"Работает в банке «Гринготтс»",
+"Служит в Министерстве",
+"Держит магазин приколов"
+]
+},
+"en": {
+"q": "What does Charlie Weasley do?",
+"a": [
+"Studies dragons in Romania",
+"Works at Gringotts bank",
+"Works at the Ministry",
+"Runs a joke shop"
+]
+}
+},
+{
+"key": "t-040",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Jinni Uizlining to'liq ismi qanday?",
+"a": [
+"Virjiniya",
+"Jorjina",
+"Jinevra",
+"Jennifer"
+]
+},
+"ru": {
+"q": "Каково полное имя Джинни Уизли?",
+"a": [
+"Вирджиния",
+"Джорджина",
+"Джиневра",
+"Дженнифер"
+]
+},
+"en": {
+"q": "What is Ginny Weasley's full first name?",
+"a": [
+"Virginia",
+"Georgina",
+"Ginevra",
+"Jennifer"
+]
+}
+},
+{
+"key": "t-041",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Garri o'g'liga Albus Severus deb kimlarning sharafiga ism qo'ygan?",
+"a": [
+"Dambldor va Sirius",
+"Dambldor va Sneyp",
+"Lyupin va Sneyp",
+"Xagrid va Dambldor"
+]
+},
+"ru": {
+"q": "В честь кого Гарри назвал сына Альбусом Северусом?",
+"a": [
+"Дамблдора и Сириуса",
+"Дамблдора и Снегга",
+"Люпина и Снегга",
+"Хагрида и Дамблдора"
+]
+},
+"en": {
+"q": "After whom did Harry name his son Albus Severus?",
+"a": [
+"Dumbledore and Sirius",
+"Dumbledore and Snape",
+"Lupin and Snape",
+"Hagrid and Dumbledore"
+]
+}
+},
+{
+"key": "t-042",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Nevill Longbottom katta bo'lgach Xogvartsda qaysi fandan dars bergan?",
+"a": [
+"Iksirlar",
+"Afsunlar",
+"Giyohshunoslik",
+"Sehrgarlik tarixi"
+]
+},
+"ru": {
+"q": "Какой предмет преподавал в Хогвартсе Невилл Долгопупс, когда вырос?",
+"a": [
+"Зельеварение",
+"Заклинания",
+"Травологию",
+"Историю магии"
+]
+},
+"en": {
+"q": "Which subject did Neville Longbottom teach at Hogwarts as an adult?",
+"a": [
+"Potions",
+"Charms",
+"Herbology",
+"History of Magic"
+]
+}
+},
+{
+"key": "t-043",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Luna Lavgud qaysi fakultetda o'qigan?",
+"a": [
+"Grifindor",
+"Xaffelpaff",
+"Sliterin",
+"Reyvenklo"
+]
+},
+"ru": {
+"q": "На каком факультете училась Полумна Лавгуд?",
+"a": [
+"Гриффиндор",
+"Пуффендуй",
+"Слизерин",
+"Когтевран"
+]
+},
+"en": {
+"q": "Which house was Luna Lovegood in?",
+"a": [
+"Gryffindor",
+"Hufflepuff",
+"Slytherin",
+"Ravenclaw"
+]
+}
+},
+{
+"key": "t-044",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Draco Malfoyning otasining ismi nima?",
+"a": [
+"Severus",
+"Lyutsius",
+"Regulus",
+"Kornelius"
+]
+},
+"ru": {
+"q": "Как зовут отца Драко Малфоя?",
+"a": [
+"Северус",
+"Люциус",
+"Регулус",
+"Корнелиус"
+]
+},
+"en": {
+"q": "What is the name of Draco Malfoy's father?",
+"a": [
+"Severus",
+"Lucius",
+"Regulus",
+"Cornelius"
+]
+}
+},
+{
+"key": "t-045",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Qaysi afsun qulflangan eshikni ochadi?",
+"a": [
+"Lumos",
+"Reparo",
+"Aloxomora",
+"Akkio"
+]
+},
+"ru": {
+"q": "Какое заклинание открывает запертую дверь?",
+"a": [
+"Люмос",
+"Репаро",
+"Алохомора",
+"Акцио"
+]
+},
+"en": {
+"q": "Which spell opens a locked door?",
+"a": [
+"Lumos",
+"Reparo",
+"Alohomora",
+"Accio"
+]
+}
+},
+{
+"key": "t-046",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "\"Noks\" afsuni nima qiladi?",
+"a": [
+"Olov yoqadi",
+"Tayoqchadagi yorug'likni o'chiradi",
+"Eshikni qulflaydi",
+"Buyumni ko'rinmas qiladi"
+]
+},
+"ru": {
+"q": "Что делает заклинание «Нокс»?",
+"a": [
+"Зажигает огонь",
+"Гасит свет на палочке",
+"Запирает дверь",
+"Делает предмет невидимым"
+]
+},
+"en": {
+"q": "What does the spell \"Nox\" do?",
+"a": [
+"Lights a fire",
+"Puts out the wand's light",
+"Locks a door",
+"Makes an object invisible"
+]
+}
+},
+{
+"key": "t-047",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "\"Petrifikus Totalus\" afsuni nima qiladi?",
+"a": [
+"Odamni uxlatadi",
+"Xotirani o'chiradi",
+"Odamni havoga ko'taradi",
+"Odamning butun tanasini qotirib qo'yadi"
+]
+},
+"ru": {
+"q": "Что делает заклинание «Петрификус Тоталус»?",
+"a": [
+"Усыпляет человека",
+"Стирает память",
+"Поднимает человека в воздух",
+"Полностью обездвиживает человека"
+]
+},
+"en": {
+"q": "What does the spell \"Petrificus Totalus\" do?",
+"a": [
+"Puts a person to sleep",
+"Erases memory",
+"Lifts a person into the air",
+"Freezes a person's whole body"
+]
+}
+},
+{
+"key": "t-048",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "\"Sektumsempra\" afsunini kim o'ylab topgan?",
+"a": [
+"Severus Sneyp",
+"Voldemort",
+"Albus Dambldor",
+"Bellatrisa Lestreyndj"
+]
+},
+"ru": {
+"q": "Кто придумал заклинание «Сектумсемпра»?",
+"a": [
+"Северус Снегг",
+"Волан-де-Морт",
+"Альбус Дамблдор",
+"Беллатриса Лестрейндж"
+]
+},
+"en": {
+"q": "Who invented the spell \"Sectumsempra\"?",
+"a": [
+"Severus Snape",
+"Voldemort",
+"Albus Dumbledore",
+"Bellatrix Lestrange"
+]
+}
+},
+{
+"key": "t-049",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "\"Feliks Felitsis\" iksiri ichgan odamga nima beradi?",
+"a": [
+"Kuch",
+"Ko'rinmaslik",
+"Omad",
+"Uyqu"
+]
+},
+"ru": {
+"q": "Что даёт человеку зелье «Феликс Фелицис»?",
+"a": [
+"Силу",
+"Невидимость",
+"Удачу",
+"Сон"
+]
+},
+"en": {
+"q": "What does the potion Felix Felicis give the drinker?",
+"a": [
+"Strength",
+"Invisibility",
+"Luck",
+"Sleep"
+]
+}
+},
+{
+"key": "t-050",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Bezoar toshi nimadan qutqaradi?",
+"a": [
+"La'natlardan",
+"Ko'pchilik zaharlardan",
+"Dementorlardan",
+"Bo'ri-odam tishlashidan"
+]
+},
+"ru": {
+"q": "От чего спасает безоар?",
+"a": [
+"От проклятий",
+"От большинства ядов",
+"От дементоров",
+"От укуса оборотня"
+]
+},
+"en": {
+"q": "What does a bezoar save you from?",
+"a": [
+"Curses",
+"Most poisons",
+"Dementors",
+"A werewolf bite"
+]
+}
+},
+{
+"key": "t-051",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Professor Kvirrell sallasi ostida nimani yashirib yurgan?",
+"a": [
+"Voldemortning yuzini",
+"Hikmatlar toshini",
+"Ko'rinmas plashni",
+"Sehrli xaritani"
+]
+},
+"ru": {
+"q": "Что профессор Квиррелл прятал под тюрбаном?",
+"a": [
+"Лицо Волан-де-Морта",
+"Философский камень",
+"Мантию-невидимку",
+"Волшебную карту"
+]
+},
+"en": {
+"q": "What was Professor Quirrell hiding under his turban?",
+"a": [
+"Voldemort's face",
+"The Philosopher's Stone",
+"The Invisibility Cloak",
+"A magical map"
+]
+}
+},
+{
+"key": "t-052",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Hikmatlar toshini kim yaratgan?",
+"a": [
+"Albus Dambldor",
+"Salazar Sliterin",
+"Nikolas Flamel",
+"Merlin"
+]
+},
+"ru": {
+"q": "Кто создал философский камень?",
+"a": [
+"Альбус Дамблдор",
+"Салазар Слизерин",
+"Николас Фламель",
+"Мерлин"
+]
+},
+"en": {
+"q": "Who created the Philosopher's Stone?",
+"a": [
+"Albus Dumbledore",
+"Salazar Slytherin",
+"Nicolas Flamel",
+"Merlin"
+]
+}
+},
+{
+"key": "t-053",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Yeinaj ko'zgusi odamga nimani ko'rsatadi?",
+"a": [
+"Kelajagini",
+"Eng chuqur orzusini",
+"Eng katta qo'rquvini",
+"O'tmishini"
+]
+},
+"ru": {
+"q": "Что показывает человеку зеркало Еиналеж?",
+"a": [
+"Его будущее",
+"Его самое сокровенное желание",
+"Его самый большой страх",
+"Его прошлое"
+]
+},
+"en": {
+"q": "What does the Mirror of Erised show a person?",
+"a": [
+"Their future",
+"Their deepest desire",
+"Their greatest fear",
+"Their past"
+]
+}
+},
+{
+"key": "t-054",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Maxfiy hujrada qanday maxluq yashagan?",
+"a": [
+"Ajdaho",
+"Ulkan o'rgimchak",
+"Uch boshli it",
+"Bazilisk"
+]
+},
+"ru": {
+"q": "Какое чудовище жило в Тайной комнате?",
+"a": [
+"Дракон",
+"Гигантский паук",
+"Трёхголовый пёс",
+"Василиск"
+]
+},
+"en": {
+"q": "What monster lived in the Chamber of Secrets?",
+"a": [
+"A dragon",
+"A giant spider",
+"A three-headed dog",
+"A basilisk"
+]
+}
+},
+{
+"key": "t-055",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Feniks ko'z yoshlari qanday xususiyatga ega?",
+"a": [
+"Odamni ko'rinmas qiladi",
+"Uxlatadi",
+"Jarohatlarni davolaydi",
+"Omad keltiradi"
+]
+},
+"ru": {
+"q": "Каким свойством обладают слёзы феникса?",
+"a": [
+"Делают невидимым",
+"Усыпляют",
+"Исцеляют раны",
+"Приносят удачу"
+]
+},
+"en": {
+"q": "What power do phoenix tears have?",
+"a": [
+"They make you invisible",
+"They put you to sleep",
+"They heal wounds",
+"They bring luck"
+]
+}
+},
+{
+"key": "t-056",
+"kind": "tarix",
+"correct": 1,
+"uz": {
+"q": "Germionaga vaqt qaytargichni kim bergan?",
+"a": [
+"Dambldor",
+"Makgonagall",
+"Sneyp",
+"Xagrid"
+]
+},
+"ru": {
+"q": "Кто дал Гермионе маховик времени?",
+"a": [
+"Дамблдор",
+"Макгонагалл",
+"Снегг",
+"Хагрид"
+]
+},
+"en": {
+"q": "Who gave Hermione the Time-Turner?",
+"a": [
+"Dumbledore",
+"McGonagall",
+"Snape",
+"Hagrid"
+]
+}
+},
+{
+"key": "t-057",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Garri haqidagi bashorat Vazirlikning qaysi bo'limida saqlangan?",
+"a": [
+"Sehrli transport bo'limida",
+"Sehrli o'yinlar bo'limida",
+"Avrorlar bo'limida",
+"Sirlar bo'limida"
+]
+},
+"ru": {
+"q": "В каком отделе Министерства хранилось пророчество о Гарри?",
+"a": [
+"В Отделе магического транспорта",
+"В Отделе магических игр",
+"В Отделе мракоборцев",
+"В Отделе тайн"
+]
+},
+"en": {
+"q": "In which Ministry department was the prophecy about Harry kept?",
+"a": [
+"Department of Magical Transportation",
+"Department of Magical Games",
+"The Auror Office",
+"Department of Mysteries"
+]
+}
+},
+{
+"key": "t-058",
+"kind": "tarix",
+"correct": 2,
+"uz": {
+"q": "Xogvartsda o'qish necha yil davom etadi?",
+"a": [
+"Besh",
+"Olti",
+"Yetti",
+"Sakkiz"
+]
+},
+"ru": {
+"q": "Сколько лет длится обучение в Хогвартсе?",
+"a": [
+"Пять",
+"Шесть",
+"Семь",
+"Восемь"
+]
+},
+"en": {
+"q": "How many years does a Hogwarts education last?",
+"a": [
+"Five",
+"Six",
+"Seven",
+"Eight"
+]
+}
+},
+{
+"key": "t-059",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Xogvarts ekspressi paravozi qanday rangda?",
+"a": [
+"Qora",
+"Yashil",
+"Ko'k",
+"Qirmizi"
+]
+},
+"ru": {
+"q": "Какого цвета паровоз Хогвартс-экспресса?",
+"a": [
+"Чёрного",
+"Зелёного",
+"Синего",
+"Алого"
+]
+},
+"en": {
+"q": "What colour is the Hogwarts Express engine?",
+"a": [
+"Black",
+"Green",
+"Blue",
+"Scarlet"
+]
+}
+},
+{
+"key": "t-060",
+"kind": "tarix",
+"correct": 0,
+"uz": {
+"q": "Dementor bilan uchrashgandan keyin qaysi shirinlik yordam beradi?",
+"a": [
+"Shokolad",
+"Yalpizli konfet",
+"Asal",
+"Qovoq pirogi"
+]
+},
+"ru": {
+"q": "Какое лакомство помогает после встречи с дементором?",
+"a": [
+"Шоколад",
+"Мятные леденцы",
+"Мёд",
+"Тыквенный пирог"
+]
+},
+"en": {
+"q": "Which treat helps after an encounter with a Dementor?",
+"a": [
+"Chocolate",
+"Peppermints",
+"Honey",
+"Pumpkin pie"
+]
+}
+},
+{
+"key": "t-061",
+"kind": "tarix",
+"correct": 3,
+"uz": {
+"q": "Sirius Blek Azkabanda necha yil o'tirgan?",
+"a": [
+"Uch",
+"Yetti",
+"O'n",
+"O'n ikki"
+]
+},
+"ru": {
+"q": "Сколько лет Сириус Блэк провёл в Азкабане?",
+"a": [
+"Три",
+"Семь",
+"Десять",
+"Двенадцать"
+]
+},
+"en": {
+"q": "How many years did Sirius Black spend in Azkaban?",
+"a": [
+"Three",
+"Seven",
+"Ten",
+"Twelve"
+]
+}
+}
+]

@@ -70,6 +70,11 @@ async def amain():
           and hpcup.MAX_POINTS == 230)
     check("jadvaldagi ism: belgidan iborat ism o'rniga Sehrgar", hpdars._ism(".") == "Sehrgar" and hpdars._ism("") == "Sehrgar"
           and hpdars._ism("Garri Potter") == "Garri" and hpdars._ism("ز") == "ز")
+    B = hpdars.bell_savollar()
+    check("bellashuv havzasi: kino + kunlik + yangi savollar, uch tilda", len(B) == 96 + 120 + 61 and len(hpdars.savollar()) == 96
+          and all(len(q[l]["a"]) == 4 and q[l]["q"] and 0 <= q["correct"] < 4 for q in B for l in ("uz", "ru", "en"))
+          and len({q["key"] for q in B}) == len(B) and max(hpdars.tarix_bell("2026-10-20")) < len(B)
+          and max(hpdars.tarix_bell("2026-10-08")) < 96)
     check("sovrinlar", [hpdars.sovrin(i) for i in (1, 2, 3, 4, 10, 11)] == [15, 10, 7, 3, 3, 0])
     check("tarix savollari: 96 ta = 24 dars x 4", len(hpdars.savollar()) == 96 and hpdars.DARS_SONI * hpdars.TARIX_DARS == 96
           and len(hpdars.tarix_dars(24, "uz")) == 4 and "c" in hpdars.tarix_dars(1, "ru")[0]
@@ -154,8 +159,8 @@ async def amain():
     idx = hpdars.tarix_bell(kun)
     N = hpdars.tarix_soni(kun)
     check("tarix: savollar soni, to'g'ri javob yuborilmaydi", d["started"] and len(d["questions"]) == N
-          and all("c" not in q for q in d["questions"]) and d["questions"][0]["q"] == hpdars.savollar()[idx[0]]["ru"]["q"])
-    togri = [hpdars.savollar()[i]["correct"] for i in idx]
+          and all("c" not in q for q in d["questions"]) and d["questions"][0]["q"] == hpdars.bell_savollar()[idx[0]]["ru"]["q"])
+    togri = [hpdars.bell_savollar()[i]["correct"] for i in idx]
     xato2 = togri[:-2] + [(togri[-2] + 1) % 4, (togri[-1] + 1) % 4]
     st, d = await ask(2, finish="tarix", answers=xato2)
     check("tarix: 2 xato = +6 soniya", d["ok"] and d["wrong"] == 2 and d["ms"] == hpdars.ENG_KAM_MS + 6000)

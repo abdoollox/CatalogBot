@@ -102,6 +102,30 @@ def savollar():
     return _savollar
 
 
+_bell_savollar = None
+
+
+def bell_savollar():
+    """Tarix BELLASHUVI uchun savollar havzasi: kino.json (96) + kunlik.json (120 - olib tashlangan kunlik savoldan)
+    + tarix_savollar.json (kitoblar va sehrgarlar olami bo'yicha yangilari, 2026-10-08). Darslar faqat kino.json dan.
+    Yangi savol qo'shish: tarix_savollar.json ga yozing (kalit takrorlanmasin) - kod o'zgarmaydi."""
+    global _bell_savollar
+    if _bell_savollar is None:
+        hammasi = list(savollar())
+        # tarix_savollar.json ATAYLAB questions/ papkasida EMAS: u papkani hpcup to'liq o'qiydi va faqat
+        # "film"/"daily" turini taniydi - boshqa fayl kunlik savol yuklagichini buzadi (sinovlar ushlagan).
+        for yol in (os.path.join(hpcup._questions_dir(), "kunlik.json"),
+                    os.path.join(os.path.dirname(os.path.abspath(__file__)), "tarix_savollar.json")):
+            fayl = os.path.basename(yol)
+            try:
+                with open(yol, encoding="utf-8") as f:
+                    hammasi += [q for q in json.load(f) if q.get("uz") and isinstance(q.get("correct"), int)]
+            except Exception as e:
+                logging.error("Bellashuv savollari o'qilmadi (%s): %s", fayl, e)
+        _bell_savollar = hammasi
+    return _bell_savollar
+
+
 def _savol(q, lang, javob):
     t = q.get(lang) or q["uz"]
     out = {"q": t["q"], "a": t["a"]}
@@ -118,8 +142,9 @@ def tarix_dars(daraja, lang):
 
 
 def tarix_bell(kun):
-    """Shu kungi bellashuv savollari (indekslar) - hammaga bir xil."""
-    s = savollar()
+    """Shu kungi bellashuv savollari (bell_savollar() dagi indekslar) - hammaga bir xil.
+    2026-10-08 gacha havza faqat kino.json edi (o'sha kunlar jadvali o'zgarmasin)."""
+    s = bell_savollar() if kun >= "2026-10-09" else savollar()
     return random.Random("tarix|" + kun).sample(range(len(s)), min(tarix_soni(kun), len(s)))
 
 
@@ -335,11 +360,11 @@ def _ish(uid, body):
             return javob
         javob["started"] = True
         if dars == "tarix":
-            s = savollar()
+            s = bell_savollar()
             javob["questions"] = [_savol(s[i], lang, False) for i in tarix_bell(kun)]
     elif body.get("finish"):
         if dars == "tarix":
-            s, idx, jv = savollar(), tarix_bell(kun), body.get("answers")
+            s, idx, jv = bell_savollar(), tarix_bell(kun), body.get("answers")
             jv = jv if isinstance(jv, list) else []
             xato = sum(1 for k, i in enumerate(idx) if k >= len(jv) or jv[k] != s[i]["correct"])
             javob["wrong"] = xato
