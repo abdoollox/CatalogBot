@@ -80,7 +80,7 @@ async def amain():
     st, d = await ask(1)
     L = d["lessons"]
     check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir"}
-          and all(x["level"] == 0 and x["total"] == 24 for x in L.values()) and L["tarix"]["daily"]["pts"] == 10
+          and all(x["level"] == 0 and x["total"] == 24 for x in L.values()) and "daily" not in L["tarix"]
           and "contest" in L["tarix"])
     st, d = await ask(1, done="afsun", level=1)
     check("1-dars o'tildi: bosqich 1, ball yo'q", d["new"] is True and d["pts"] == 0 and d["lessons"]["afsun"]["level"] == 1)
@@ -159,6 +159,11 @@ async def amain():
           and d["lessons"]["tarix"]["contest"]["place"] == 1)
     st, d = await ask(2, start="tarix"); st, d = await ask(2, finish="tarix")
     check("tarix: javobsiz - hammasi xato", d["wrong"] == 5)
+    import hpsandiq
+    c = hpcup._connect()
+    check("qurbaqa topshirig'i: tarix bellashuvida qatnashgan - bajarilgan", hpsandiq._daily_bajarildi(c, 2, kun) is True
+          and hpsandiq._daily_bajarildi(c, 4, kun) is False)
+    c.close()
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     c.execute("DELETE FROM dars_bellashuv WHERE dars='tarix'")
     c.commit(); c.close()

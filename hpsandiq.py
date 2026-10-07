@@ -99,7 +99,19 @@ def _kun_boshi_utc(kun):
 
 
 def _daily_bajarildi(conn, uid, kun):
-    """Bugungi kunlik savolga javob berilganmi (to'g'ri-noto'g'ri - farqi yo'q)."""
+    """Kunning birinchi (doimiy) topshirig'i bajarilganmi.
+
+    Egasi, 2026-10-07: kunlik savol olib tashlandi - o'rniga SEHRGARLIK TARIXI BELLASHUVIda qatnashish
+    (hpdars: dars_bellashuv, natijasi bor). Topshiriq kodi "daily" bo'lib qoldi (ilova va jadval shu nomni biladi).
+    Eski yo'l (kunlik savolga javob) ham hisobga olinadi: ilovaning eski nusxasi ochiq qolgan odamlar uchun."""
+    try:
+        r = conn.execute(
+            "SELECT 1 FROM dars_bellashuv WHERE user_id=? AND kun=? AND dars='tarix' AND ms IS NOT NULL LIMIT 1",
+            (uid, kun)).fetchone()
+        if r:
+            return True
+    except sqlite3.OperationalError:
+        pass
     try:
         r = conn.execute(
             "SELECT 1 FROM answers a JOIN questions q ON q.id = a.question_id "

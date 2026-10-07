@@ -15,7 +15,8 @@ Faqat SARALANGANLARGA. Ikki qism (egasi, 2026-10-07 kechqurun: mashq - ballsiz v
      Kun tugagach (keyingi kun birinchi so'rovda) eng yaxshilarga ball: 1-o'rin +15, 2-o'rin +10, 3-o'rin +7,
      4-10-o'rinlar +3. Ball kubokka 'dars' manbasi bo'lib yoziladi (ref "m:afsun:2026-10-08").
 
-Kunlik savol (+10, 'daily') o'zgarmadi - ilovada Sehrgarlik tarixi sahifasida turadi; bu yerda faqat holati.
+Kunlik savol ilovadan OLIB TASHLANDI (egasi, 2026-10-07): Shokolad qurbaqaning birinchi topshirig'i endi
+tarix bellashuvida qatnashish (hpsandiq._daily_bajarildi). Server tomonda kunlik savol kodi turibdi (eski nusxalar uchun).
 Kun - Toshkent vaqti. Qolgan fanlar ilovada "Tez orada" - qo'shilganda DARSLAR ga yoziladi.
 
 API: POST /api/dars
@@ -220,7 +221,6 @@ def _holat(uid, kun):
             r = dar.get(kod)
             out[kod] = {"level": min(int(r["daraja"]) if r else 0, DARS_SONI), "total": DARS_SONI,
                         "contest": _bellashuv(conn, uid, kun, kod)}
-        out["tarix"]["daily"] = {"done": hpsandiq._daily_bajarildi(conn, uid, kun), "pts": hpcup.PTS_DAILY}
         return out
     finally:
         conn.close()
