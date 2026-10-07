@@ -184,8 +184,10 @@ def yakunla(bugun):
 
 
 def _ism(raw):
-    raw = (raw or "Sehrgar").strip()
-    return (raw.split()[0] if raw else "Sehrgar")[:20]
+    """Jadval uchun ism: birinchi so'z. Ichida harf ham, raqam ham bo'lmasa ("." kabi) - "Sehrgar"."""
+    raw = (raw or "").strip()
+    soz = raw.split()[0][:20] if raw else ""
+    return soz if any(ch.isalnum() for ch in soz) else "Sehrgar"
 
 
 def _bellashuv(conn, uid, kun, dars):

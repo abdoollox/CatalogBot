@@ -67,6 +67,8 @@ async def amain():
           and k("iksir", "2026-10-07") == "boils" and k("iksir", "2026-10-19") == "boils" and k("tarix", "2026-10-07") == "savol")
     check("kubok: 'dars' manbasi, mashq ballsiz", hpcup.SOURCE_GROUP["dars"] == "lesson" and "lesson" in hpcup.SOURCE_KEYS
           and hpcup.MAX_POINTS == 230)
+    check("jadvaldagi ism: belgidan iborat ism o'rniga Sehrgar", hpdars._ism(".") == "Sehrgar" and hpdars._ism("") == "Sehrgar"
+          and hpdars._ism("Garri Potter") == "Garri" and hpdars._ism("ز") == "ز")
     check("sovrinlar", [hpdars.sovrin(i) for i in (1, 2, 3, 4, 10, 11)] == [15, 10, 7, 3, 3, 0])
     check("tarix savollari: 96 ta = 24 dars x 4", len(hpdars.savollar()) == 96 and hpdars.DARS_SONI * hpdars.TARIX_DARS == 96
           and len(hpdars.tarix_dars(24, "uz")) == 4 and "c" in hpdars.tarix_dars(1, "ru")[0]
