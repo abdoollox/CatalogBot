@@ -421,15 +421,15 @@ def _rekord_yoz(uid, dars, ball):
 
 
 def _rekordlar(uid, faqat=None):
-    """{fan: {week, all, place, n, top: [{uid, name, house, score, me}]}} - shu hafta jadvali va o'z rekordlari."""
+    """{fan: {week, all, place, n, top: [{uid, name, house, score, me}]}} - DOIMIY jadval (egasi, 2026-10-08: haftalik emas); week - o'zining shu haftadagi natijasi."""
     conn = hpcup._connect()
     try:
         hafta, out = _hafta(), {}
         for kod in ([faqat] if faqat else list(DARSLAR)):
             rows = conn.execute(
-                "SELECT r.user_id, r.ball, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM dars_rekord r "
-                "JOIN users u ON u.user_id = r.user_id WHERE r.dars=? AND r.hafta=? AND u.house IS NOT NULL AND r.user_id > 0 "
-                "ORDER BY r.ball DESC, r.vaqt ASC", (kod, hafta)).fetchall()
+                "SELECT r.user_id, MAX(r.ball) AS ball, r.vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM dars_rekord r "
+                "JOIN users u ON u.user_id = r.user_id WHERE r.dars=? AND u.house IS NOT NULL AND r.user_id > 0 "
+                "GROUP BY r.user_id ORDER BY ball DESC, r.vaqt ASC", (kod,)).fetchall()
             men = conn.execute("SELECT COALESCE(MAX(ball),0) AS a, COALESCE(MAX(CASE WHEN hafta=? THEN ball END),0) AS w "
                                "FROM dars_rekord WHERE user_id=? AND dars=?", (hafta, uid, kod)).fetchone()
             out[kod] = {

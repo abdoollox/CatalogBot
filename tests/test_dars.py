@@ -130,7 +130,7 @@ async def amain():
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     c.execute("UPDATE dars_rekord SET hafta='2000-01-03' WHERE user_id=1"); c.commit(); c.close()
     st, d = await ask(1, records=1)
-    check("yangi haftada jadval yangidan, umumiy rekord qoladi", d["records"]["afsun"]["week"] == 0 and d["records"]["afsun"]["all"] == 999 and d["records"]["afsun"]["n"] == 1)
+    check("jadval doimiy: eski hafta natijasi ham jadvalda", d["records"]["afsun"]["week"] == 0 and d["records"]["afsun"]["all"] == 999 and d["records"]["afsun"]["n"] == 2 and d["records"]["afsun"]["place"] == 1)
     st, d = await ask(1, quiz_rek=1, lang="uz")
     check("tarix rekordi: 60 ta tasodifiy savol, javobi bilan", len(d["questions"]) == 60 and "c" in d["questions"][0])
     st, d = await ask(1, record="runlar", score=5)
