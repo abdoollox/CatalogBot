@@ -64,6 +64,8 @@ DARSLAR = {
     "uchish": {"items": ("y1", "y2", "y3", "y4", "y5", "y6", "y7", "y8", "y9", "y10", "y11", "y12")},
     # Sehrli maxluqlar parvarishi (2026-10-08): bellashuvda kartalar joylashuvi shu nomdan (urug') yasaladi
     "maxluq": {"items": ("m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12")},
+    # Astronomiya (2026-10-08): bellashuvda uch turkum va chalg'ituvchi yulduzlar joyi shu nomdan (urug') yasaladi
+    "astro": {"items": ("a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10", "a11", "a12")},
 }
 # Afsunlar (egasi, 2026-10-08): 24 afsun, 48 dars - 1-24 o'rganish, 25-36 vaziyat (afsunni o'zi topadi),
 # 37-48 ketma-ket uch afsun (tartib ilovada: js/09-darslar.js afPlan). 2026-10-08 gacha 12 afsun edi:
@@ -75,6 +77,7 @@ IKSIR_DARS = 36
 HIMOYA_DARS = 36               # tartib ilovada: js/09-darslar.js hmPlan
 UCHISH_DARS = 36               # js/09-darslar.js uchPlan
 MAXLUQ_DARS = 36               # js/09-darslar.js mxPlan
+ASTRO_DARS = 36                # js/09-darslar.js ylPlan
 AFSUN_ESKI = 12
 # Sehrgarlik tarixi darslari (egasi, 2026-10-08: bir kunda 4 kishi 24 darsni tugatdi - dars ko'proq, darsda savol
 # ko'proq bo'lsin va HAMMA savolga to'g'ri javob bergan odamgina keyingi darsga o'tsin):
@@ -189,6 +192,8 @@ def dars_soni(dars):
         return UCHISH_DARS
     if dars == "maxluq":
         return MAXLUQ_DARS
+    if dars == "astro":
+        return ASTRO_DARS
     return DARS_SONI
 
 

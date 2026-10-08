@@ -92,7 +92,7 @@ async def amain():
     await hpcup.set_house(1, "gryffindor")
     st, d = await ask(1)
     L = d["lessons"]
-    check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir", "himoya", "uchish", "maxluq"} and L["maxluq"]["total"] == 36 and L["uchish"]["total"] == 36 and L["himoya"]["total"] == 36 and L["himoya"]["contest"]["item"] in hpdars.DARSLAR["himoya"]["items"]
+    check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir", "himoya", "uchish", "maxluq", "astro"} and L["astro"]["total"] == 36 and L["maxluq"]["total"] == 36 and L["uchish"]["total"] == 36 and L["himoya"]["total"] == 36 and L["himoya"]["contest"]["item"] in hpdars.DARSLAR["himoya"]["items"]
           and all(x["level"] == 0 for x in L.values()) and L["afsun"]["total"] == 48 and L["iksir"]["total"] == 36 and L["tarix"]["total"] == 46
           and "daily" not in L["tarix"]
           and "contest" in L["tarix"])

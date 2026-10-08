@@ -5,8 +5,11 @@ Maxluq QAYERDAN: «Sehrli maxluqlar parvarishi» darslaridan - har uch darsda bi
 o'n ikkinchisi (ajdar bolasi) noyob - shu fan bellashuvida birinchi uchlikka kirganga.
 BOQISH: yemish galleonga olinadi (1 galleon = 5 porsiya, har maxluqning o'z yemishi), har maxluq kuniga bir marta
 boqiladi. 3 marta boqilsa o'smir, 10 marta - katta. Boqilmasa JAZO YO'Q (o'lmaydi, kichraymaydi) - faqat o'smaydi.
-FOYDA: katta maxluq har 7-boqishda 1 galleon sovg'a keltiradi (7 porsiya = 1,4 galleon turadi, ya'ni pul «bosilmaydi»).
-Kubok ballariga ALOQASI YO'Q.
+FOYDA - har maxluqniki O'ZIGA XOS (egasi, 2026-10-08: «Niffler tanga bergani mos, qolganlari ham o'ziga mos qiymat bersin»):
+  uchtasi har 7-boqishda SOVG'A keltiradi (SOVGALAR): niffler - 1 galleon, ajdar bolasi - 2 galleon, boyo'g'li - boshqa
+  maxluqlarga 3 porsiya yemish (7 porsiya = 1,4 galleon turadi, ya'ni pul «bosilmaydi»);
+  qolgan to'qqiztasi katta bo'lgach DARSLARDA yordam beradi (qo'shimcha jon, sekinroq sham va h.k.) - bu ILOVADA
+  (js/09-darslar.js QR_FOYDA), faqat mashq darslarida, bellashuvda EMAS. Kubok ballariga ALOQASI YO'Q.
 
 POST /api/qoriq  (initData)
   {}                 -> holat: {gal, list:[{kod, got, need, fed, stage, next, food, today, gift}], prices}
@@ -31,7 +34,8 @@ HAR_DARS = 3                   # har nechta darsda bitta maxluq
 NARX = 1                       # galleon
 PORSIYA = 5                    # bir xaridda nechta porsiya
 OSMIR, KATTA = 3, 10           # shuncha boqilganda bosqich o'zgaradi
-SOVGA_HAR, SOVGA = 7, 1        # katta maxluq har 7-boqishda 1 galleon keltiradi
+SOVGA_HAR = 7                  # katta maxluq har nechanchi boqishda sovg'a keltiradi
+SOVGALAR = {"niffler": ("gal", 1), "ajdar": ("gal", 2), "boyogli": ("food", 3)}      # qolganlari darslarda yordam beradi (ilova)
 
 _cfg = {}
 
@@ -88,10 +92,11 @@ def _holat(uid):
                 "kod": k, "got": bool(r), "need": 0 if k == NOYOB else (i + 1) * HAR_DARS,
                 "fed": b, "stage": st, "next": (OSMIR - b) if st == 0 else (KATTA - b) if st == 1 else 0,
                 "food": int(r["yemish"]) if r else 0, "today": bool(r and r["oxirgi"] == kun),
-                "gift": (SOVGA_HAR - (b - KATTA) % SOVGA_HAR) if st == 2 else 0,
+                "gift": (SOVGA_HAR - (b - KATTA) % SOVGA_HAR) if (st == 2 and k in SOVGALAR) else 0,
             })
         return {"ok": True, "gal": int(g[0] or 0) if g else 0, "list": lst,
-                "prices": {"gal": NARX, "n": PORSIYA, "teen": OSMIR, "adult": KATTA, "gift_every": SOVGA_HAR, "gift": SOVGA}}
+                "prices": {"gal": NARX, "n": PORSIYA, "teen": OSMIR, "adult": KATTA, "gift_every": SOVGA_HAR,
+                           "gifts": {k: {"type": t, "n": n} for k, (t, n) in SOVGALAR.items()}}}
     finally:
         conn.close()
 
@@ -136,9 +141,18 @@ def _boq(uid, kod):
             return "bugun", None, 0
         b = int(r["boqildi"]) + 1
         osdi = bosqich(b) if bosqich(b) != bosqich(b - 1) else None
-        sovga = SOVGA if (b > KATTA and (b - KATTA) % SOVGA_HAR == 0) else 0
-        if sovga:
-            conn.execute("UPDATE users SET galleons = galleons + ? WHERE user_id=?", (sovga, uid))
+        sovga = 0
+        if kod in SOVGALAR and b > KATTA and (b - KATTA) % SOVGA_HAR == 0:
+            tur, n = SOVGALAR[kod]
+            sovga = {"type": tur, "n": n}
+            if tur == "gal":
+                conn.execute("UPDATE users SET galleons = galleons + ? WHERE user_id=?", (n, uid))
+            else:
+                # yemish: zaxirasi eng kam boshqa maxluqlarga bittadan (boshqasi bo'lmasa - o'ziga)
+                boshqa = [r2["kod"] for r2 in conn.execute("SELECT kod FROM qoriq WHERE user_id=? AND kod<>? ORDER BY yemish, olgan",
+                                                           (uid, kod)).fetchall()][:n] or [kod]
+                for i in range(n):
+                    conn.execute("UPDATE qoriq SET yemish = yemish + 1 WHERE user_id=? AND kod=?", (uid, boshqa[i % len(boshqa)]))
         conn.commit()
         return "ok", osdi, sovga
     finally:
