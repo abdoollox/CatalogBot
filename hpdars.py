@@ -57,6 +57,9 @@ DARSLAR = {
                         "episkey", "silencio", "engorgio", "reducio", "colloportus", "obliviate")},
     "iksir": {"items": ("boils", "forget", "shrink", "antidote", "wiggenweld", "uyqu",
                         "skelegro", "living", "wit", "peace", "polyjuice", "felix")},
+    # Qora san'atlardan himoya (2026-10-08): xavflar; bellashuvda shu kungi xavfdan to'lqinlar tartibi yasaladi (ilovada)
+    "himoya": {"items": ("dementor", "boggart", "curse", "duelist", "dark", "troll",
+                         "fire", "pixies", "inferi", "spider", "rock", "attacker")},
 }
 # Afsunlar (egasi, 2026-10-08): 24 afsun, 48 dars - 1-24 o'rganish, 25-36 vaziyat (afsunni o'zi topadi),
 # 37-48 ketma-ket uch afsun (tartib ilovada: js/09-darslar.js afPlan). 2026-10-08 gacha 12 afsun edi:
@@ -65,6 +68,7 @@ AFSUN_DARS = 48
 # Damlamalar (o'zbekcha nomi 2026-10-08 dan; kodda "iksir"): 12 damlama x 3 bosqich - oddiy, ko'proq masalliq,
 # imtihon (retsept o'zi yopiladi). Tartib ilovada: js/09-darslar.js IK_BOSQ.
 IKSIR_DARS = 36
+HIMOYA_DARS = 36               # tartib ilovada: js/09-darslar.js hmPlan
 AFSUN_ESKI = 12
 # Sehrgarlik tarixi darslari (egasi, 2026-10-08: bir kunda 4 kishi 24 darsni tugatdi - dars ko'proq, darsda savol
 # ko'proq bo'lsin va HAMMA savolga to'g'ri javob bergan odamgina keyingi darsga o'tsin):
@@ -173,6 +177,8 @@ def dars_soni(dars):
         return AFSUN_DARS
     if dars == "iksir":
         return IKSIR_DARS
+    if dars == "himoya":
+        return HIMOYA_DARS
     return DARS_SONI
 
 
