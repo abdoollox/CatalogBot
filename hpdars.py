@@ -7,7 +7,8 @@ Faqat SARALANGANLARGA. Ikki qism (egasi, 2026-10-07 kechqurun: mashq - ballsiz v
      bosqichi +1. Kunlik chegara YO'Q, ball BERILMAYDI - xohlagancha o'tadi, o'tilganini qayta o'ynay oladi.
      Mavzu va qiyinlik dars raqamiga bog'liq (ilova hisoblaydi):
        afsun - 12 afsun x 2 aylana; iksir - 12 damlama x 2 aylana;
-       tarix - Sehrgarlik tarixi: har darsda 4 savol (questions/kino.json, 96 ta - film tartibida), 3 tasi to'g'ri bo'lsa o'tadi.
+       tarix - Sehrgarlik tarixi: 46 dars; har darsda 6 yangi + 2 takror savol (277 ta savol havzasidan,
+               avval filmlar tartibida), HAMMASIGA to'g'ri javob berilsa dars o'tadi (2026-10-08).
 
 2) BELLASHUV (musobaqa) - kuniga bitta topshiriq HAMMAGA BIR XIL (sana bo'yicha), kim tezroq va xatosiz.
      Vaqtni SERVER o'lchaydi ({start} -> {finish}); har xato +3 soniya. Kuniga 3 urinish, eng yaxshisi hisob.
@@ -47,7 +48,7 @@ _cfg = {}
 _kesh = {}                     # uid -> (vaqt, oxirgi holat javobi)
 KESH_S = 5
 
-DARS_SONI = 24                 # har fanda nechta dars (bosqich)
+DARS_SONI = 24                 # fanda nechta dars (bosqich); tarixda ko'proq - dars_soni() ga qarang
 DARSLAR = {
     "tarix": {"items": ()},
     "afsun": {"items": ("lumos", "leviosa", "alohomora", "expelliarmus", "accio", "protego",
@@ -55,8 +56,13 @@ DARSLAR = {
     "iksir": {"items": ("boils", "forget", "shrink", "antidote", "wiggenweld", "uyqu",
                         "skelegro", "living", "wit", "peace", "polyjuice", "felix")},
 }
-TARIX_DARS = 4                 # tarix darsida nechta savol
-TARIX_OTISH = 3                # shundan nechtasi to'g'ri bo'lsa dars o'tadi (ilova tekshiradi - ball yo'q)
+# Sehrgarlik tarixi darslari (egasi, 2026-10-08: bir kunda 4 kishi 24 darsni tugatdi - dars ko'proq, darsda savol
+# ko'proq bo'lsin va HAMMA savolga to'g'ri javob bergan odamgina keyingi darsga o'tsin):
+#   har darsda TARIX_DARS ta YANGI savol + TARIX_TAKROR ta oldingi darslardan takror (1-darsda takror yo'q);
+#   darslar soni = havzadagi savollar // TARIX_DARS (277 savol -> 46 dars); o'tish - hammasi to'g'ri.
+TARIX_DARS = 6
+TARIX_TAKROR = 2
+TARIX_ESKI_DARS = 4            # 2026-10-08 gacha darsda 4 savol edi (bosqichlarni ko'chirish uchun)
 TARIX_BELL = 10                # tarix bellashuvida nechta savol (egasi, 2026-10-07: 5 ta kam, kamida 10)
 TARIX_BELL_ESKI = 5            # 2026-10-07 gacha (o'sha kunning jadvali 5 savol bilan to'plangan)
 BOSHI = (2026, 10, 7)
@@ -81,6 +87,15 @@ def _init():
                      " boshladi REAL, vaqt TEXT, PRIMARY KEY (kun, dars, user_id))")
         conn.execute("CREATE TABLE IF NOT EXISTS dars_yakun ("
                      " kun TEXT NOT NULL, dars TEXT NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (kun, dars))")
+        conn.commit()
+        # Bir martalik ko'chirish (2026-10-08): tarix darsi 4 savoldan 6 savolga o'tdi. Eski N-dars = N*4 savol
+        # ko'rilgan, yangi hisobda bu N*4 // 6 dars (24-dars -> 16-dars): odam ko'rmagan savollari o'tilgan
+        # bo'lib qolmasin. Belgi dars_yakun da ("migr", "tarix-6") - ikkinchi marta ishlamaydi.
+        cur = conn.execute("INSERT OR IGNORE INTO dars_yakun (kun, dars, vaqt) VALUES ('migr', 'tarix-6', ?)",
+                           (hpcup._utc_iso(hpcup.now_tk()),))
+        if cur.rowcount > 0:
+            conn.execute("UPDATE dars_daraja SET daraja = daraja * ? / ? WHERE dars = 'tarix'",
+                         (TARIX_ESKI_DARS, TARIX_DARS))
         conn.commit()
     finally:
         conn.close()
@@ -134,11 +149,24 @@ def _savol(q, lang, javob):
     return out
 
 
+def dars_soni(dars):
+    """Fanda nechta dars bor."""
+    if dars == "tarix":
+        return max(1, len(bell_savollar()) // TARIX_DARS)
+    return DARS_SONI
+
+
 def tarix_dars(daraja, lang):
-    """N-darsning savollari (1 dan), to'g'ri javobi bilan."""
-    s = savollar()
-    bosh = (int(daraja) - 1) * TARIX_DARS
-    return [_savol(q, lang, True) for q in s[bosh:bosh + TARIX_DARS]]
+    """N-darsning savollari (1 dan), to'g'ri javobi bilan: 6 ta yangi + 2 ta oldingi darslardan takror, aralash.
+    Tartib doimiy (dars raqamiga bog'liq) - qayta urinishda savollar o'sha, faqat o'rni o'zgarmaydi."""
+    s = bell_savollar()
+    n = int(daraja)
+    bosh = (n - 1) * TARIX_DARS
+    idx = list(range(bosh, min(bosh + TARIX_DARS, len(s))))
+    if bosh > 0:
+        idx += random.Random("takror|%d" % n).sample(range(bosh), min(TARIX_TAKROR, bosh))
+    random.Random("aralash|%d" % n).shuffle(idx)
+    return [_savol(s[i], lang, True) for i in idx]
 
 
 def tarix_bell(kun):
@@ -252,7 +280,8 @@ def _holat(uid, kun):
             "SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (uid,))}
         for kod in DARSLAR:
             r = dar.get(kod)
-            out[kod] = {"level": min(int(r["daraja"]) if r else 0, DARS_SONI), "total": DARS_SONI,
+            jami = dars_soni(kod)
+            out[kod] = {"level": min(int(r["daraja"]) if r else 0, jami), "total": jami,
                         "contest": _bellashuv(conn, uid, kun, kod)}
         return out
     finally:
@@ -262,7 +291,7 @@ def _holat(uid, kun):
 def _dars_bajarildi(uid, dars, daraja):
     """N-dars o'tildi. Faqat NAVBATDAGI dars (bosqich + 1) bosqichni oshiradi. Oshgan bo'lsa True."""
     daraja = int(daraja)
-    if not (1 <= daraja <= DARS_SONI):
+    if not (1 <= daraja <= dars_soni(dars)):
         return False
     conn = hpcup._connect()
     try:
@@ -343,9 +372,10 @@ def _ish(uid, body):
             n = int(body.get("quiz"))
         except (TypeError, ValueError):
             n = 0
-        if not (1 <= n <= min(DARS_SONI, _daraja(uid, "tarix") + 1)):
+        if not (1 <= n <= min(dars_soni("tarix"), _daraja(uid, "tarix") + 1)):
             return {"ok": False, "error": "locked"}
-        javob.update(level=n, questions=tarix_dars(n, lang), need=TARIX_OTISH)
+        qs = tarix_dars(n, lang)
+        javob.update(level=n, questions=qs, need=len(qs))        # o'tish uchun HAMMASI to'g'ri bo'lishi kerak
         return javob
     if body.get("done"):
         try:

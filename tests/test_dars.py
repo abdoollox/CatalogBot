@@ -76,8 +76,12 @@ async def amain():
           and len({q["key"] for q in B}) == len(B) and max(hpdars.tarix_bell("2026-10-20")) < len(B)
           and max(hpdars.tarix_bell("2026-10-08")) < 96)
     check("sovrinlar", [hpdars.sovrin(i) for i in (1, 2, 3, 4, 10, 11)] == [15, 10, 7, 3, 3, 0])
-    check("tarix savollari: 96 ta = 24 dars x 4", len(hpdars.savollar()) == 96 and hpdars.DARS_SONI * hpdars.TARIX_DARS == 96
-          and len(hpdars.tarix_dars(24, "uz")) == 4 and "c" in hpdars.tarix_dars(1, "ru")[0]
+    d1, d2, d46 = hpdars.tarix_dars(1, "uz"), hpdars.tarix_dars(2, "uz"), hpdars.tarix_dars(46, "uz")
+    birinchi6 = {q["uz"]["q"] for q in hpdars.bell_savollar()[:6]}
+    check("tarix darslari: 46 ta; 1-darsda 6 savol, keyin 6 yangi + 2 takror", hpdars.dars_soni("tarix") == 46
+          and hpdars.dars_soni("afsun") == 24 and len(d1) == 6 and len(d2) == 8 and len(d46) == 8
+          and {q["q"] for q in d1} == birinchi6 and len({q["q"] for q in d2} & birinchi6) == 2
+          and len({q["q"] for q in d2}) == 8 and hpdars.tarix_dars(2, "uz") == d2 and "c" in hpdars.tarix_dars(1, "ru")[0]
           and hpdars.tarix_bell("2026-10-08") == hpdars.tarix_bell("2026-10-08") and len(set(hpdars.tarix_bell("2026-10-08"))) == 10
           and len(hpdars.tarix_bell("2026-10-07")) == 5)
 
@@ -89,7 +93,8 @@ async def amain():
     st, d = await ask(1)
     L = d["lessons"]
     check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir"}
-          and all(x["level"] == 0 and x["total"] == 24 for x in L.values()) and "daily" not in L["tarix"]
+          and all(x["level"] == 0 for x in L.values()) and L["afsun"]["total"] == 24 and L["tarix"]["total"] == 46
+          and "daily" not in L["tarix"]
           and "contest" in L["tarix"])
     st, d = await ask(1, done="afsun", level=1)
     check("1-dars o'tildi: bosqich 1, ball yo'q", d["new"] is True and d["pts"] == 0 and d["lessons"]["afsun"]["level"] == 1)
@@ -110,14 +115,25 @@ async def amain():
     check("noma'lum fan", d == {"ok": False, "error": "unknown"})
 
     st, d = await ask(1, quiz=1, lang="en")
-    check("tarix 1-dars savollari (inglizcha, javobi bilan)", d["ok"] and d["level"] == 1 and len(d["questions"]) == 4
-          and d["need"] == 3 and len(d["questions"][0]["a"]) == 4 and "platform" in d["questions"][0]["q"].lower()
-          and d["questions"][0]["c"] == 1)
+    check("tarix 1-dars savollari (inglizcha, javobi bilan): hammasi to'g'ri bo'lishi shart", d["ok"] and d["level"] == 1
+          and len(d["questions"]) == 6 and d["need"] == 6 and all(len(q["a"]) == 4 and 0 <= q["c"] < 4 for q in d["questions"])
+          and any("platform" in q["q"].lower() for q in d["questions"]))
     st, d = await ask(1, quiz=2)
     check("navbatdagi darsdan keyingisi yopiq", d == {"ok": False, "error": "locked"})
     st, d = await ask(1, done="tarix", level=1)
     st, d = await ask(1, quiz=2)
-    check("1-dars o'tilgach 2-dars ochiladi", d["ok"] and d["questions"][0]["q"] != hpdars.tarix_dars(1, "uz")[0]["q"])
+    check("1-dars o'tilgach 2-dars ochiladi (8 savol, hammasi shart)", d["ok"] and len(d["questions"]) == 8 and d["need"] == 8)
+    # Bir martalik ko'chirish: eski 24-dars (4 savoldan) -> yangi 16-dars
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    c.execute("DELETE FROM dars_yakun WHERE kun='migr'")
+    c.execute("INSERT OR REPLACE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (77, 'tarix', 24, NULL), (78, 'tarix', 5, NULL), (77, 'afsun', 24, NULL)")
+    c.commit(); c.close()
+    hpdars._init(); hpdars._init()
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    kochdi = dict(((u, f), d) for u, f, d in c.execute("SELECT user_id, dars, daraja FROM dars_daraja WHERE user_id IN (77, 78)"))
+    c.close()
+    check("ko'chirish: tarix 24 -> 16, 5 -> 3, bir marta; boshqa fan tegilmaydi",
+          kochdi == {(77, "tarix"): 16, (78, "tarix"): 3, (77, "afsun"): 24})
 
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     ball = c.execute("SELECT COALESCE(SUM(points),0) FROM points WHERE user_id=1").fetchone()[0]
