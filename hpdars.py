@@ -114,6 +114,10 @@ def _init():
                      " kun TEXT NOT NULL, dars TEXT NOT NULL, user_id INTEGER NOT NULL,"
                      " ms INTEGER, xato INTEGER NOT NULL DEFAULT 0, urinish INTEGER NOT NULL DEFAULT 0,"
                      " boshladi REAL, vaqt TEXT, PRIMARY KEY (kun, dars, user_id))")
+        # Dars bahosi (1-5; ilova qo'yadi, eng yaxshisi saqlanadi) - «Qobiliyatlar» boshqalarga ham ko'rinishi uchun (2026-10-08)
+        conn.execute("CREATE TABLE IF NOT EXISTS dars_baho ("
+                     " user_id INTEGER NOT NULL, dars TEXT NOT NULL, daraja INTEGER NOT NULL, baho INTEGER NOT NULL,"
+                     " PRIMARY KEY (user_id, dars, daraja))")
         conn.execute("CREATE TABLE IF NOT EXISTS dars_yakun ("
                      " kun TEXT NOT NULL, dars TEXT NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (kun, dars))")
         conn.commit()
@@ -331,10 +335,14 @@ def _holat(uid, kun):
         out = {}
         dar = {r["dars"]: r for r in conn.execute(
             "SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (uid,))}
+        bah = {r["dars"]: r for r in conn.execute(
+            "SELECT dars, COALESCE(SUM(baho),0) AS s, COUNT(*) AS n FROM dars_baho WHERE user_id=? GROUP BY dars", (uid,))}
         for kod in DARSLAR:
             r = dar.get(kod)
             jami = dars_soni(kod)
+            b = bah.get(kod)
             out[kod] = {"level": min(int(r["daraja"]) if r else 0, jami), "total": jami,
+                        "gs": int(b["s"]) if b else 0, "gn": int(b["n"]) if b else 0,       # baholar yig'indisi va soni
                         "contest": _bellashuv(conn, uid, kun, kod)}
         return out
     finally:
@@ -355,6 +363,53 @@ def _dars_bajarildi(uid, dars, daraja):
         return cur.rowcount > 0
     finally:
         conn.close()
+
+
+def _baho_yoz(uid, juftlar):
+    """[(dars, daraja, baho)] - o'tilgan darslarning bahosi (3-5), eng yaxshisi qoladi. Nechta qator yozilganini qaytaradi."""
+    conn = hpcup._connect()
+    try:
+        dar = {r["dars"]: int(r["daraja"]) for r in conn.execute("SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (uid,))}
+        n = 0
+        for dars, daraja, baho in juftlar:
+            try:
+                daraja, baho = int(daraja), int(baho)
+            except (TypeError, ValueError):
+                continue
+            if dars not in DARSLAR or not (1 <= daraja <= dar.get(dars, 0)) or not (3 <= baho <= 5):
+                continue
+            conn.execute("INSERT INTO dars_baho (user_id, dars, daraja, baho) VALUES (?,?,?,?) "
+                         "ON CONFLICT(user_id, dars, daraja) DO UPDATE SET baho = MAX(baho, excluded.baho)", (uid, dars, daraja, baho))
+            n += 1
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
+# Qobiliyatlar: har fan boshqa qobiliyatni mashq qildiradi (ilova: js/09-darslar.js QOB bilan BIR XIL bo'lsin)
+QOBILIYAT = (("bilim", ("tarix",)), ("aniqlik", ("afsun",)), ("xotira", ("iksir", "maxluq")), ("tezlik", ("himoya",)),
+             ("koord", ("uchish",)), ("fazo", ("astro",)), ("diqqat", ("osimlik",)), ("mantiq", ("trans",)))
+
+
+def qobiliyat(uid):
+    """[{id, score}] - 0..100: 70% o'tilgan darslar ulushi + 30% o'rtacha baho (bahosi yo'q fanda faqat darslar)."""
+    conn = hpcup._connect()
+    try:
+        dar = {r["dars"]: int(r["daraja"]) for r in conn.execute("SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (int(uid),))}
+        bah = {r["dars"]: (int(r["s"]), int(r["n"])) for r in conn.execute(
+            "SELECT dars, COALESCE(SUM(baho),0) AS s, COUNT(*) AS n FROM dars_baho WHERE user_id=? GROUP BY dars", (int(uid),))}
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+    def fan(kod):
+        jami = dars_soni(kod)
+        ul = min(1.0, dar.get(kod, 0) / float(jami)) if jami else 0.0
+        s, n = bah.get(kod, (0, 0))
+        return 100.0 * (0.7 * ul + 0.3 * (ul * (s / float(n) - 1) / 4 if n else ul))
+    return [{"id": k, "score": int(round(sum(round(fan(f)) for f in fl) / float(len(fl))))} for k, fl in QOBILIYAT]
 
 
 def _daraja(uid, dars):
@@ -419,6 +474,13 @@ def _ish(uid, body):
         dars = str(dars)
         if dars not in DARSLAR:
             return {"ok": False, "error": "unknown"}
+    if isinstance(body.get("grades"), dict):
+        # Qurilmada saqlangan eski baholarni bir marta ko'chirish: {fan: {dars raqami: baho}}
+        juft = []
+        for f, m in list(body["grades"].items())[:20]:
+            if isinstance(m, dict):
+                juft += [(str(f), k, v) for k, v in list(m.items())[:60]]
+        javob["synced"] = _baho_yoz(uid, juft)
     if body.get("quiz") is not None:
         # Tarix darsining savollari: o'tilgan yoki navbatdagi dars
         try:
@@ -437,6 +499,8 @@ def _ish(uid, body):
             n = 0
         javob["new"] = _dars_bajarildi(uid, dars, n)
         javob["pts"] = 0                          # mashq uchun ball yo'q - ball bellashuvdan
+        if body.get("grade") is not None:
+            _baho_yoz(uid, [(dars, n, body.get("grade"))])
     elif body.get("start"):
         if not _boshla(uid, dars, kun):
             javob.update(ok=False, error="no_tries")
@@ -481,7 +545,7 @@ async def api_dars(request):
     body = body if isinstance(body, dict) else {}
     # Holat so'rovi (amalsiz) bir odamdan 5 soniyada bir marta hisoblanadi - qolganiga oxirgi javob qaytadi.
     # Sabab: ilovaning 2026-10-07 dagi nusxasida bosh sahifa holatni to'xtovsiz so'rab turardi (cheksiz halqa).
-    amal = body.get("done") or body.get("start") or body.get("finish") or body.get("quiz")
+    amal = body.get("done") or body.get("start") or body.get("finish") or body.get("quiz") or body.get("grades")
     hozir = time.monotonic()
     if not amal:
         eski = _kesh.get(uid)

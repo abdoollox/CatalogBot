@@ -172,7 +172,7 @@ async def amain():
     d = json.loads(r.body)
     check("profil: boshqa odam", d["ok"] and d["name"] == "Garri" and d["house"] == "gryffindor" and d["me"] is False
           and d["wand"] == {"wood": "holly", "core": "phoenix", "flex": "rigid"} and d["patronus"] == "stag"
-          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] - 3 and d["creatures"] == [] and d["points"]["all"] >= 20)
+          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] - 3 and d["creatures"] == [] and isinstance(d["skills"], list) and d["points"]["all"] >= 20)
     d = json.loads((await hpprofil.api_profil(Req({}, init="3"))).body)
     check("profil: o'zi, fakultetsiz", d["me"] is True and d["house"] is None and d["wand"]["wood"] == "cherry" and d["chess"] is None)
     check("profil: yo'q odam 404, imzosiz 403", (await hpprofil.api_profil(Req({"uid": 999}, init="2"))).status == 404

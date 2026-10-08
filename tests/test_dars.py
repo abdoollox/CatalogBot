@@ -102,6 +102,20 @@ async def amain():
     check("o'tilgan darsni qayta o'ynash bosqichni oshirmaydi", d["new"] is False and d["lessons"]["afsun"]["level"] == 1)
     st, d = await ask(1, done="afsun", level=5)
     check("darsni sakrab o'tib bo'lmaydi", d["new"] is False and d["lessons"]["afsun"]["level"] == 1)
+    # Baholar (qobiliyatlar uchun): faqat o'tilgan dars, 3-5, eng yaxshisi qoladi
+    st, d = await ask(1, done="afsun", level=1, grade=4)
+    A = d["lessons"]["afsun"]
+    check("baho yozildi", A["gs"] == 4 and A["gn"] == 1)
+    st, d = await ask(1, done="afsun", level=1, grade=3)
+    check("pastroq baho eng yaxshisini o'zgartirmaydi", d["lessons"]["afsun"]["gs"] == 4)
+    st, d = await ask(1, done="afsun", level=1, grade=5)
+    st, d = await ask(1, done="afsun", level=9, grade=5)
+    st, d = await ask(1, done="afsun", level=1, grade=9)
+    check("yuqoriroq baho yangilanadi; o'tilmagan dars va noto'g'ri baho yozilmaydi", d["lessons"]["afsun"]["gs"] == 5 and d["lessons"]["afsun"]["gn"] == 1)
+    st, d = await ask(1, grades={"afsun": {"1": 4, "7": 5}, "runlar": {"1": 5}, "iksir": {"1": 5}})
+    check("eski baholarni ko'chirish: faqat o'tilganlari", d["synced"] == 1 and d["lessons"]["afsun"]["gs"] == 5 and d["lessons"]["iksir"]["gn"] == 0)
+    q = {x["id"]: x["score"] for x in hpdars.qobiliyat(1)}
+    check("qobiliyat: 8 soha, afsun 1/48 a'lo bahoda ~2, qolgani 0", len(q) == 8 and q["aniqlik"] == 2 and q["mantiq"] == 0 and hpdars.qobiliyat(999)[0]["score"] == 0)
     for n in (2, 3, 4):
         st, d = await ask(1, done="afsun", level=n)
     check("bir kunda xohlagancha dars", d["new"] is True and d["lessons"]["afsun"]["level"] == 4

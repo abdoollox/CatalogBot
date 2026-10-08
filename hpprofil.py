@@ -95,6 +95,12 @@ def profil(uid, men):
     except Exception as e:
         logging.error("Profil: qo'riqxona olinmadi (%s): %s", uid, e)
         out["creatures"] = []
+    try:
+        import hpdars
+        out["skills"] = hpdars.qobiliyat(uid)             # qobiliyatlar: [{id, score}]
+    except Exception as e:
+        logging.error("Profil: qobiliyatlar olinmadi (%s): %s", uid, e)
+        out["skills"] = []
     return out
 
 
