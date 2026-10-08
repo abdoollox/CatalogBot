@@ -89,6 +89,12 @@ def profil(uid, men):
     except Exception as e:
         logging.error("Profil: nishonlar olinmadi (%s): %s", uid, e)
         out["badges"], out["badges_total"] = [], len(hpnishon.KODLAR)
+    try:
+        import hpqoriq
+        out["creatures"] = hpqoriq.korinish(uid)          # qo'riqxonasi: [{kod, stage}]
+    except Exception as e:
+        logging.error("Profil: qo'riqxona olinmadi (%s): %s", uid, e)
+        out["creatures"] = []
     return out
 
 

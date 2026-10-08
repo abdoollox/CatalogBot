@@ -79,8 +79,8 @@ async def amain():
     await hpcup.touch_user(1, "Garri")
     await hpcup.touch_user(2, "Ron")
     d = await ask(1)
-    check("yangi odamda nishon yo'q, 19 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 19
-          and len(d["list"]) == 19 and d["new"] == [])
+    check("yangi odamda nishon yo'q, 19 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 22
+          and len(d["list"]) == 22 and d["new"] == [])
 
     # Filmlar: botdan, ilovadan (web_ va sifat bilan), 3 tilda
     for p in ("hp1_uz", "web_hp2_uz@hd", "hp3_ru", "hp4_en", "hp1_uz", "fb1_uz", "start", "share_hp1"):
@@ -140,7 +140,7 @@ async def amain():
         (season["id"], season["id"]))
     d = await ask(1, seen=True)
     check("o'quvchi, tayoqcha, ball, hafta, do'stlar, shaxmat, albom",
-          set(got(d)) == set(hpnishon.KODLAR) - {"kubok_golib", "top_3", "sandiq_1", "sandiq_7"})
+          set(got(d)) == set(hpnishon.KODLAR) - {"kubok_golib", "top_3", "sandiq_1", "sandiq_7", "maxluq_1", "maxluq_katta", "maxluq_12"})
 
     # Kunlik sandiq: 7 kun ketma-ket
     sql("CREATE TABLE IF NOT EXISTS sandiq (user_id INTEGER, kun TEXT, done TEXT, bosqich INTEGER, ochildi TEXT)")
@@ -172,7 +172,7 @@ async def amain():
     d = json.loads(r.body)
     check("profil: boshqa odam", d["ok"] and d["name"] == "Garri" and d["house"] == "gryffindor" and d["me"] is False
           and d["wand"] == {"wood": "holly", "core": "phoenix", "flex": "rigid"} and d["patronus"] == "stag"
-          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] and d["points"]["all"] >= 20)
+          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] - 3 and d["creatures"] == [] and d["points"]["all"] >= 20)
     d = json.loads((await hpprofil.api_profil(Req({}, init="3"))).body)
     check("profil: o'zi, fakultetsiz", d["me"] is True and d["house"] is None and d["wand"]["wood"] == "cherry" and d["chess"] is None)
     check("profil: yo'q odam 404, imzosiz 403", (await hpprofil.api_profil(Req({"uid": 999}, init="2"))).status == 404

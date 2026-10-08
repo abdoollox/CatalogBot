@@ -41,6 +41,7 @@ import hpserial
 import hpkitob
 import hpprofil
 import hpdars
+import hpqoriq
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2621,6 +2622,12 @@ async def main():
         hpdars.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
     except Exception as dars_error:
         logging.error("Darslar moduli ishga tushmadi: %s", dars_error)
+
+    # --- Qo'riqxona (o'quvchining maxluqlari; darslardan keyin ulanadi) ---
+    try:
+        hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
+    except Exception as qoriq_error:
+        logging.error("Qo'riqxona moduli ishga tushmadi: %s", qoriq_error)
 
     # --- Sehrgar profili (boshqa odamni ko'rish) ---
     try:

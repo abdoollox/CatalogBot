@@ -32,6 +32,8 @@ NISHONLAR = (
     ("kubok_golib", "kubok"), ("top_3", "kubok"), ("sandiq_1", "kubok"), ("sandiq_7", "kubok"),
     ("dost_1", "dostlik"), ("dost_5", "dostlik"), ("shaxmat", "dostlik"),
     ("albom", "kolleksiya"), ("serial_1", "kolleksiya"),
+    # Qo'riqxona (hpqoriq, 2026-10-08): birinchi maxluq, birinchi katta maxluq, o'n ikkitasining hammasi
+    ("maxluq_1", "maxluq"), ("maxluq_katta", "maxluq"), ("maxluq_12", "maxluq"),
 )
 KODLAR = tuple(k for k, _ in NISHONLAR)
 
@@ -139,7 +141,11 @@ def hisob(conn, uid):
         uzun = max(uzun, joriy)
         oldingi = d
 
+    mx = [int(r[0]) for r in _all(conn, "SELECT boqildi FROM qoriq WHERE user_id=?", (uid,))]
     return {
+        "maxluq_1": (min(len(mx), 1), 1),
+        "maxluq_katta": (1 if any(b >= 10 for b in mx) else 0, 1),
+        "maxluq_12": (min(len(mx), 12), 12),
         "film_1": (min(len(filmlar), 1), 1),
         "film_8": (hp, 8),
         "fb_3": (fb, 3),
