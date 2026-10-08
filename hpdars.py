@@ -118,6 +118,10 @@ def _init():
         conn.execute("CREATE TABLE IF NOT EXISTS dars_baho ("
                      " user_id INTEGER NOT NULL, dars TEXT NOT NULL, daraja INTEGER NOT NULL, baho INTEGER NOT NULL,"
                      " PRIMARY KEY (user_id, dars, daraja))")
+        # Rekord («kim uzoqqa boradi», egasi g'oyasi, 2026-10-08): xatosiz eng uzoq natija, hafta bo'yicha (dushanba sanasi)
+        conn.execute("CREATE TABLE IF NOT EXISTS dars_rekord ("
+                     " user_id INTEGER NOT NULL, dars TEXT NOT NULL, hafta TEXT NOT NULL, ball INTEGER NOT NULL, vaqt TEXT,"
+                     " PRIMARY KEY (user_id, dars, hafta))")
         conn.execute("CREATE TABLE IF NOT EXISTS dars_yakun ("
                      " kun TEXT NOT NULL, dars TEXT NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (kun, dars))")
         conn.commit()
@@ -387,6 +391,58 @@ def _baho_yoz(uid, juftlar):
         conn.close()
 
 
+REKORD_MAX = 999               # bitta urinishda bundan ko'p bo'lmaydi (ilova natijani o'zi aytadi - shunchaki chegara)
+REKORD_SAVOL = 60              # tarix rekordida bir yo'la beriladigan savollar
+
+
+def _hafta():
+    """Joriy hafta kaliti: dushanbaning sanasi (Toshkent)."""
+    y, m, d = (int(x) for x in hpcup.today_tk().split("-"))
+    kun = _dt.date(y, m, d)
+    return (kun - timedelta(days=kun.weekday())).strftime("%Y-%m-%d")
+
+
+def _rekord_yoz(uid, dars, ball):
+    """Shu haftadagi eng yaxshi natijani saqlaydi (kattasi qoladi)."""
+    try:
+        ball = max(0, min(REKORD_MAX, int(ball)))
+    except (TypeError, ValueError):
+        return
+    if ball < 1:
+        return
+    conn = hpcup._connect()
+    try:
+        conn.execute("INSERT INTO dars_rekord (user_id, dars, hafta, ball, vaqt) VALUES (?,?,?,?,?) "
+                     "ON CONFLICT(user_id, dars, hafta) DO UPDATE SET vaqt = CASE WHEN excluded.ball > ball THEN excluded.vaqt ELSE vaqt END, "
+                     "ball = MAX(ball, excluded.ball)", (uid, dars, _hafta(), ball, hpcup._utc_iso(hpcup.now_tk())))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _rekordlar(uid, faqat=None):
+    """{fan: {week, all, place, n, top: [{uid, name, house, score, me}]}} - shu hafta jadvali va o'z rekordlari."""
+    conn = hpcup._connect()
+    try:
+        hafta, out = _hafta(), {}
+        for kod in ([faqat] if faqat else list(DARSLAR)):
+            rows = conn.execute(
+                "SELECT r.user_id, r.ball, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM dars_rekord r "
+                "JOIN users u ON u.user_id = r.user_id WHERE r.dars=? AND r.hafta=? AND u.house IS NOT NULL AND r.user_id > 0 "
+                "ORDER BY r.ball DESC, r.vaqt ASC", (kod, hafta)).fetchall()
+            men = conn.execute("SELECT COALESCE(MAX(ball),0) AS a, COALESCE(MAX(CASE WHEN hafta=? THEN ball END),0) AS w "
+                               "FROM dars_rekord WHERE user_id=? AND dars=?", (hafta, uid, kod)).fetchone()
+            out[kod] = {
+                "week": int(men["w"] or 0), "all": int(men["a"] or 0), "n": len(rows),
+                "place": next((i + 1 for i, r in enumerate(rows) if r["user_id"] == uid), None),
+                "top": [{"uid": r["user_id"], "name": _ism(r["name"]), "house": r["house"], "score": int(r["ball"]),
+                         "me": r["user_id"] == uid} for r in rows[:TOP_N]],
+            }
+        return out
+    finally:
+        conn.close()
+
+
 # Qobiliyatlar: har fan boshqa qobiliyatni mashq qildiradi (ilova: js/09-darslar.js QOB bilan BIR XIL bo'lsin)
 QOBILIYAT = (("bilim", ("tarix",)), ("aniqlik", ("afsun",)), ("xotira", ("iksir", "maxluq")), ("tezlik", ("himoya",)),
              ("koord", ("uchish",)), ("fazo", ("astro",)), ("diqqat", ("osimlik",)), ("mantiq", ("trans",)))
@@ -469,11 +525,24 @@ def _ish(uid, body):
     lang = str(body.get("lang") or "uz")
     if lang not in ("uz", "ru", "en"):
         lang = "uz"
-    dars = body.get("done") or body.get("start") or body.get("finish")
+    dars = body.get("done") or body.get("start") or body.get("finish") or body.get("record")
     if dars is not None:
         dars = str(dars)
         if dars not in DARSLAR:
             return {"ok": False, "error": "unknown"}
+    if body.get("record"):
+        # Rekord urinishi tugadi: {record: fan, score: n}
+        _rekord_yoz(uid, dars, body.get("score"))
+        javob["records"] = _rekordlar(uid, dars)
+        return javob
+    if body.get("records"):
+        javob["records"] = _rekordlar(uid)
+        return javob
+    if body.get("quiz_rek"):
+        # Tarix rekordi uchun tasodifiy savollar (to'g'ri javobi bilan - mashqdagi kabi)
+        s_ = bell_savollar()
+        javob["questions"] = [_savol(s_[i], lang, True) for i in random.sample(range(len(s_)), min(REKORD_SAVOL, len(s_)))]
+        return javob
     if isinstance(body.get("grades"), dict):
         # Qurilmada saqlangan eski baholarni bir marta ko'chirish: {fan: {dars raqami: baho}}
         juft = []
@@ -545,7 +614,8 @@ async def api_dars(request):
     body = body if isinstance(body, dict) else {}
     # Holat so'rovi (amalsiz) bir odamdan 5 soniyada bir marta hisoblanadi - qolganiga oxirgi javob qaytadi.
     # Sabab: ilovaning 2026-10-07 dagi nusxasida bosh sahifa holatni to'xtovsiz so'rab turardi (cheksiz halqa).
-    amal = body.get("done") or body.get("start") or body.get("finish") or body.get("quiz") or body.get("grades")
+    amal = (body.get("done") or body.get("start") or body.get("finish") or body.get("quiz") or body.get("grades")
+            or body.get("record") or body.get("records") or body.get("quiz_rek"))
     hozir = time.monotonic()
     if not amal:
         eski = _kesh.get(uid)

@@ -114,6 +114,27 @@ async def amain():
     check("yuqoriroq baho yangilanadi; o'tilmagan dars va noto'g'ri baho yozilmaydi", d["lessons"]["afsun"]["gs"] == 5 and d["lessons"]["afsun"]["gn"] == 1)
     st, d = await ask(1, grades={"afsun": {"1": 4, "7": 5}, "runlar": {"1": 5}, "iksir": {"1": 5}})
     check("eski baholarni ko'chirish: faqat o'tilganlari", d["synced"] == 1 and d["lessons"]["afsun"]["gs"] == 5 and d["lessons"]["iksir"]["gn"] == 0)
+    # Rekord («kim uzoqqa boradi»): haftalik eng yaxshi natija, jadval
+    st, d = await ask(1, record="afsun", score=7)
+    R = d["records"]["afsun"]
+    check("rekord yozildi", d["ok"] and R["week"] == 7 and R["all"] == 7 and R["place"] == 1 and R["top"][0]["score"] == 7 and R["top"][0]["me"])
+    st, d = await ask(1, record="afsun", score=4)
+    check("pastroq natija rekordni o'zgartirmaydi", d["records"]["afsun"]["week"] == 7)
+    await hpcup.set_house(2, "ravenclaw")
+    st, d = await ask(2, record="afsun", score=12)
+    st, d = await ask(1, record="afsun", score=99999)
+    check("chegara: 999 dan oshmaydi", d["records"]["afsun"]["all"] == 999)
+    st, d = await ask(2, records=1)
+    check("hamma fan rekordlari: 2-o'rin, boshqa fanlar bo'sh", set(d["records"]) == set(hpdars.DARSLAR) and d["records"]["afsun"]["place"] == 2 and d["records"]["afsun"]["week"] == 12
+          and d["records"]["afsun"]["n"] == 2 and d["records"]["trans"]["top"] == [] and d["records"]["trans"]["all"] == 0)
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    c.execute("UPDATE dars_rekord SET hafta='2000-01-03' WHERE user_id=1"); c.commit(); c.close()
+    st, d = await ask(1, records=1)
+    check("yangi haftada jadval yangidan, umumiy rekord qoladi", d["records"]["afsun"]["week"] == 0 and d["records"]["afsun"]["all"] == 999 and d["records"]["afsun"]["n"] == 1)
+    st, d = await ask(1, quiz_rek=1, lang="uz")
+    check("tarix rekordi: 60 ta tasodifiy savol, javobi bilan", len(d["questions"]) == 60 and "c" in d["questions"][0])
+    st, d = await ask(1, record="runlar", score=5)
+    check("noma'lum fanga rekord yo'q", d == {"ok": False, "error": "unknown"})
     q = {x["id"]: x["score"] for x in hpdars.qobiliyat(1)}
     check("qobiliyat: 8 soha, afsun 1/48 a'lo bahoda ~2, qolgani 0", len(q) == 8 and q["aniqlik"] == 2 and q["mantiq"] == 0 and hpdars.qobiliyat(999)[0]["score"] == 0)
     for n in (2, 3, 4):
