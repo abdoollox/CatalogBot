@@ -62,6 +62,9 @@ DARSLAR = {
 # 37-48 ketma-ket uch afsun (tartib ilovada: js/09-darslar.js afPlan). 2026-10-08 gacha 12 afsun edi:
 # bellashuv mavzusi o'sha kunlar uchun eski ro'yxatdan (jadval o'zgarmasin).
 AFSUN_DARS = 48
+# Damlamalar (o'zbekcha nomi 2026-10-08 dan; kodda "iksir"): 12 damlama x 3 bosqich - oddiy, ko'proq masalliq,
+# imtihon (retsept o'zi yopiladi). Tartib ilovada: js/09-darslar.js IK_BOSQ.
+IKSIR_DARS = 36
 AFSUN_ESKI = 12
 # Sehrgarlik tarixi darslari (egasi, 2026-10-08: bir kunda 4 kishi 24 darsni tugatdi - dars ko'proq, darsda savol
 # ko'proq bo'lsin va HAMMA savolga to'g'ri javob bergan odamgina keyingi darsga o'tsin):
@@ -168,6 +171,8 @@ def dars_soni(dars):
         return max(1, len(bell_savollar()) // TARIX_DARS)
     if dars == "afsun":
         return AFSUN_DARS
+    if dars == "iksir":
+        return IKSIR_DARS
     return DARS_SONI
 
 

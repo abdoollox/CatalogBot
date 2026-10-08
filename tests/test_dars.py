@@ -79,7 +79,7 @@ async def amain():
     d1, d2, d46 = hpdars.tarix_dars(1, "uz"), hpdars.tarix_dars(2, "uz"), hpdars.tarix_dars(46, "uz")
     birinchi6 = {q["uz"]["q"] for q in hpdars.bell_savollar()[:6]}
     check("tarix darslari: 46 ta; 1-darsda 6 savol, keyin 6 yangi + 2 takror", hpdars.dars_soni("tarix") == 46
-          and hpdars.dars_soni("afsun") == 48 and hpdars.dars_soni("iksir") == 24 and len(d1) == 6 and len(d2) == 8 and len(d46) == 8
+          and hpdars.dars_soni("afsun") == 48 and hpdars.dars_soni("iksir") == 36 and len(d1) == 6 and len(d2) == 8 and len(d46) == 8
           and {q["q"] for q in d1} == birinchi6 and len({q["q"] for q in d2} & birinchi6) == 2
           and len({q["q"] for q in d2}) == 8 and hpdars.tarix_dars(2, "uz") == d2 and "c" in hpdars.tarix_dars(1, "ru")[0]
           and hpdars.tarix_bell("2026-10-08") == hpdars.tarix_bell("2026-10-08") and len(set(hpdars.tarix_bell("2026-10-08"))) == 10
@@ -93,7 +93,7 @@ async def amain():
     st, d = await ask(1)
     L = d["lessons"]
     check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir"}
-          and all(x["level"] == 0 for x in L.values()) and L["afsun"]["total"] == 48 and L["iksir"]["total"] == 24 and L["tarix"]["total"] == 46
+          and all(x["level"] == 0 for x in L.values()) and L["afsun"]["total"] == 48 and L["iksir"]["total"] == 36 and L["tarix"]["total"] == 46
           and "daily" not in L["tarix"]
           and "contest" in L["tarix"])
     st, d = await ask(1, done="afsun", level=1)
