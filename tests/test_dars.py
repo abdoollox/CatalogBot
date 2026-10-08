@@ -92,7 +92,7 @@ async def amain():
     await hpcup.set_house(1, "gryffindor")
     st, d = await ask(1)
     L = d["lessons"]
-    check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir", "himoya"} and L["himoya"]["total"] == 36 and L["himoya"]["contest"]["item"] in hpdars.DARSLAR["himoya"]["items"]
+    check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir", "himoya", "uchish"} and L["uchish"]["total"] == 36 and L["himoya"]["total"] == 36 and L["himoya"]["contest"]["item"] in hpdars.DARSLAR["himoya"]["items"]
           and all(x["level"] == 0 for x in L.values()) and L["afsun"]["total"] == 48 and L["iksir"]["total"] == 36 and L["tarix"]["total"] == 46
           and "daily" not in L["tarix"]
           and "contest" in L["tarix"])
@@ -111,7 +111,7 @@ async def amain():
     c.commit(); c.close()
     st, d = await ask(1, done="afsun", level=49)
     check("oxirgi darsdan keyin dars yo'q", d["new"] is False and d["lessons"]["afsun"]["level"] == 48)
-    st, d = await ask(1, done="uchish", level=1)
+    st, d = await ask(1, done="runlar", level=1)
     check("noma'lum fan", d == {"ok": False, "error": "unknown"})
 
     st, d = await ask(1, quiz=1, lang="en")
