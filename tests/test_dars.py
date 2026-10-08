@@ -63,7 +63,7 @@ async def amain():
 
     k = hpdars.kun_mavzusi
     check("bellashuv mavzusi: sana bo'yicha aylanadi", k("afsun", "2026-10-07") == "lumos"
-          and k("afsun", "2026-10-08") == "leviosa" and k("afsun", "2026-10-19") == "lumos"
+          and k("afsun", "2026-10-08") == "leviosa" and k("afsun", "2026-10-19") == "petrificus" and k("afsun", "2026-10-31") == "lumos"
           and k("iksir", "2026-10-07") == "boils" and k("iksir", "2026-10-19") == "boils"
           and k("tarix", "2026-10-07") == "5" and k("tarix", "2026-10-08") == "10")
     check("kubok: 'dars' manbasi, mashq ballsiz", hpcup.SOURCE_GROUP["dars"] == "lesson" and "lesson" in hpcup.SOURCE_KEYS
@@ -79,7 +79,7 @@ async def amain():
     d1, d2, d46 = hpdars.tarix_dars(1, "uz"), hpdars.tarix_dars(2, "uz"), hpdars.tarix_dars(46, "uz")
     birinchi6 = {q["uz"]["q"] for q in hpdars.bell_savollar()[:6]}
     check("tarix darslari: 46 ta; 1-darsda 6 savol, keyin 6 yangi + 2 takror", hpdars.dars_soni("tarix") == 46
-          and hpdars.dars_soni("afsun") == 24 and len(d1) == 6 and len(d2) == 8 and len(d46) == 8
+          and hpdars.dars_soni("afsun") == 48 and hpdars.dars_soni("iksir") == 24 and len(d1) == 6 and len(d2) == 8 and len(d46) == 8
           and {q["q"] for q in d1} == birinchi6 and len({q["q"] for q in d2} & birinchi6) == 2
           and len({q["q"] for q in d2}) == 8 and hpdars.tarix_dars(2, "uz") == d2 and "c" in hpdars.tarix_dars(1, "ru")[0]
           and hpdars.tarix_bell("2026-10-08") == hpdars.tarix_bell("2026-10-08") and len(set(hpdars.tarix_bell("2026-10-08"))) == 10
@@ -93,7 +93,7 @@ async def amain():
     st, d = await ask(1)
     L = d["lessons"]
     check("holat: uch fan, 24 dars, bosqich 0", d["ok"] and set(L) == {"tarix", "afsun", "iksir"}
-          and all(x["level"] == 0 for x in L.values()) and L["afsun"]["total"] == 24 and L["tarix"]["total"] == 46
+          and all(x["level"] == 0 for x in L.values()) and L["afsun"]["total"] == 48 and L["iksir"]["total"] == 24 and L["tarix"]["total"] == 46
           and "daily" not in L["tarix"]
           and "contest" in L["tarix"])
     st, d = await ask(1, done="afsun", level=1)
@@ -107,10 +107,10 @@ async def amain():
     check("bir kunda xohlagancha dars", d["new"] is True and d["lessons"]["afsun"]["level"] == 4
           and d["lessons"]["iksir"]["level"] == 0)
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
-    c.execute("UPDATE dars_daraja SET daraja=24 WHERE user_id=1 AND dars='afsun'")
+    c.execute("UPDATE dars_daraja SET daraja=48 WHERE user_id=1 AND dars='afsun'")
     c.commit(); c.close()
-    st, d = await ask(1, done="afsun", level=25)
-    check("oxirgi darsdan keyin dars yo'q", d["new"] is False and d["lessons"]["afsun"]["level"] == 24)
+    st, d = await ask(1, done="afsun", level=49)
+    check("oxirgi darsdan keyin dars yo'q", d["new"] is False and d["lessons"]["afsun"]["level"] == 48)
     st, d = await ask(1, done="uchish", level=1)
     check("noma'lum fan", d == {"ok": False, "error": "unknown"})
 
@@ -126,14 +126,14 @@ async def amain():
     # Bir martalik ko'chirish: eski 24-dars (4 savoldan) -> yangi 16-dars
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     c.execute("DELETE FROM dars_yakun WHERE kun='migr'")
-    c.execute("INSERT OR REPLACE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (77, 'tarix', 24, NULL), (78, 'tarix', 5, NULL), (77, 'afsun', 24, NULL)")
+    c.execute("INSERT OR REPLACE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (77, 'tarix', 24, NULL), (78, 'tarix', 5, NULL), (77, 'afsun', 24, NULL), (78, 'afsun', 7, NULL), (77, 'iksir', 24, NULL)")
     c.commit(); c.close()
     hpdars._init(); hpdars._init()
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     kochdi = dict(((u, f), d) for u, f, d in c.execute("SELECT user_id, dars, daraja FROM dars_daraja WHERE user_id IN (77, 78)"))
     c.close()
-    check("ko'chirish: tarix 24 -> 16, 5 -> 3, bir marta; boshqa fan tegilmaydi",
-          kochdi == {(77, "tarix"): 16, (78, "tarix"): 3, (77, "afsun"): 24})
+    check("ko'chirish: tarix 24 -> 16, 5 -> 3; afsun 24 -> 12, 7 qoladi; bir marta; iksir tegilmaydi",
+          kochdi == {(77, "tarix"): 16, (78, "tarix"): 3, (77, "afsun"): 12, (78, "afsun"): 7, (77, "iksir"): 24})
 
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     ball = c.execute("SELECT COALESCE(SUM(points),0) FROM points WHERE user_id=1").fetchone()[0]

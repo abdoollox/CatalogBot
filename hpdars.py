@@ -52,10 +52,17 @@ DARS_SONI = 24                 # fanda nechta dars (bosqich); tarixda ko'proq - 
 DARSLAR = {
     "tarix": {"items": ()},
     "afsun": {"items": ("lumos", "leviosa", "alohomora", "expelliarmus", "accio", "protego",
-                        "incendio", "reparo", "stupefy", "aguamenti", "nox", "patronum")},
+                        "incendio", "reparo", "stupefy", "aguamenti", "nox", "patronum",
+                        "petrificus", "impedimenta", "riddikulus", "finite", "reducto", "diffindo",
+                        "episkey", "silencio", "engorgio", "reducio", "colloportus", "obliviate")},
     "iksir": {"items": ("boils", "forget", "shrink", "antidote", "wiggenweld", "uyqu",
                         "skelegro", "living", "wit", "peace", "polyjuice", "felix")},
 }
+# Afsunlar (egasi, 2026-10-08): 24 afsun, 48 dars - 1-24 o'rganish, 25-36 vaziyat (afsunni o'zi topadi),
+# 37-48 ketma-ket uch afsun (tartib ilovada: js/09-darslar.js afPlan). 2026-10-08 gacha 12 afsun edi:
+# bellashuv mavzusi o'sha kunlar uchun eski ro'yxatdan (jadval o'zgarmasin).
+AFSUN_DARS = 48
+AFSUN_ESKI = 12
 # Sehrgarlik tarixi darslari (egasi, 2026-10-08: bir kunda 4 kishi 24 darsni tugatdi - dars ko'proq, darsda savol
 # ko'proq bo'lsin va HAMMA savolga to'g'ri javob bergan odamgina keyingi darsga o'tsin):
 #   har darsda TARIX_DARS ta YANGI savol + TARIX_TAKROR ta oldingi darslardan takror (1-darsda takror yo'q);
@@ -96,6 +103,12 @@ def _init():
         if cur.rowcount > 0:
             conn.execute("UPDATE dars_daraja SET daraja = daraja * ? / ? WHERE dars = 'tarix'",
                          (TARIX_ESKI_DARS, TARIX_DARS))
+        # Bir martalik ko'chirish (2026-10-08): afsunlarda 13-24-darslar eski 12 afsunning takrori edi, endi ular
+        # YANGI afsunlar - o'rganilmagan afsun o'tilgan bo'lib qolmasin: 12 dan yuqori bosqich 12 ga tushadi.
+        cur = conn.execute("INSERT OR IGNORE INTO dars_yakun (kun, dars, vaqt) VALUES ('migr', 'afsun-48', ?)",
+                           (hpcup._utc_iso(hpcup.now_tk()),))
+        if cur.rowcount > 0:
+            conn.execute("UPDATE dars_daraja SET daraja = ? WHERE dars = 'afsun' AND daraja > ?", (AFSUN_ESKI, AFSUN_ESKI))
         conn.commit()
     finally:
         conn.close()
@@ -153,6 +166,8 @@ def dars_soni(dars):
     """Fanda nechta dars bor."""
     if dars == "tarix":
         return max(1, len(bell_savollar()) // TARIX_DARS)
+    if dars == "afsun":
+        return AFSUN_DARS
     return DARS_SONI
 
 
@@ -188,6 +203,8 @@ def kun_mavzusi(dars, kun):
     items = DARSLAR[dars]["items"]
     if not items:
         return str(tarix_soni(kun))         # tarix: savollar soni (savollarning o'zi tarix_bell(kun) dan)
+    if dars == "afsun" and kun < "2026-10-09":
+        items = items[:AFSUN_ESKI]
     return items[n % len(items)]
 
 
