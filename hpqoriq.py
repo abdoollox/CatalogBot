@@ -24,6 +24,7 @@ import logging
 from aiohttp import web
 
 import hpcup
+import hpissiq
 
 # Tartib - olinish tartibi (ilova: js/09-darslar.js QR_TARTIB bilan bir xil); oxirgisi noyob
 MAXLUQLAR = ("gippo", "boyogli", "niffler", "flobber", "testral", "qurbaqa",
@@ -94,7 +95,7 @@ def _holat(uid):
                 "food": int(r["yemish"]) if r else 0, "today": bool(r and r["oxirgi"] == kun),
                 "gift": (SOVGA_HAR - (b - KATTA) % SOVGA_HAR) if (st == 2 and k in SOVGALAR) else 0,
             })
-        return {"ok": True, "gal": int(g[0] or 0) if g else 0, "list": lst,
+        return {"ok": True, "gal": int(g[0] or 0) if g else 0, "list": lst, "hosil": hpissiq.hosil_soni(conn, uid),
                 "prices": {"gal": NARX, "n": PORSIYA, "teen": OSMIR, "adult": KATTA, "gift_every": SOVGA_HAR,
                            "gifts": {k: {"type": t, "n": n} for k, (t, n) in SOVGALAR.items()}}}
     finally:
@@ -122,8 +123,9 @@ def _ol(uid, kod):
         conn.close()
 
 
-def _boq(uid, kod):
-    """Boqish: (holat, o'sdimi, sovg'a). holat: "ok" | "yoq" | "yemish" | "bugun"."""
+def _boq(uid, kod, hosil=False):
+    """Boqish: (holat, o'sdimi, sovg'a). holat: "ok" | "yoq" | "yemish" | "bugun".
+    hosil=True - yemish o'rniga Issiqxona hosili (hpissiq) sarflanadi: 1 hosil = 1 boqish, istalgan maxluqqa."""
     uid, kun = int(uid), _bugun()
     conn = hpcup._connect()
     try:
@@ -132,13 +134,23 @@ def _boq(uid, kod):
             return "yoq", None, 0
         if r["oxirgi"] == kun:
             return "bugun", None, 0
-        if int(r["yemish"]) < 1:
-            return "yemish", None, 0
-        cur = conn.execute("UPDATE qoriq SET boqildi = boqildi + 1, yemish = yemish - 1, oxirgi = ? "
-                           "WHERE user_id=? AND kod=? AND yemish >= 1 AND (oxirgi IS NULL OR oxirgi <> ?)", (kun, uid, kod, kun))
-        if cur.rowcount < 1:
-            conn.rollback()
-            return "bugun", None, 0
+        if hosil:
+            cur = conn.execute("UPDATE qoriq SET boqildi = boqildi + 1, oxirgi = ? "
+                               "WHERE user_id=? AND kod=? AND (oxirgi IS NULL OR oxirgi <> ?)", (kun, uid, kod, kun))
+            if cur.rowcount < 1:
+                conn.rollback()
+                return "bugun", None, 0
+            if not hpissiq.hosil_ol(conn, uid):
+                conn.rollback()
+                return "yemish", None, 0
+        else:
+            if int(r["yemish"]) < 1:
+                return "yemish", None, 0
+            cur = conn.execute("UPDATE qoriq SET boqildi = boqildi + 1, yemish = yemish - 1, oxirgi = ? "
+                               "WHERE user_id=? AND kod=? AND yemish >= 1 AND (oxirgi IS NULL OR oxirgi <> ?)", (kun, uid, kod, kun))
+            if cur.rowcount < 1:
+                conn.rollback()
+                return "bugun", None, 0
         b = int(r["boqildi"]) + 1
         osdi = bosqich(b) if bosqich(b) != bosqich(b - 1) else None
         sovga = 0
@@ -192,8 +204,8 @@ async def api_qoriq(request):
             holat = await asyncio.to_thread(_ol, uid, kod)
             log = "qoriq_yemish_" + kod
         else:
-            holat, osdi, sovga = await asyncio.to_thread(_boq, uid, kod)
-            log = "qoriq_boq_" + kod
+            holat, osdi, sovga = await asyncio.to_thread(_boq, uid, kod, bool(body.get("hosil")))
+            log = "qoriq_boq_" + kod + ("_hosil" if body.get("hosil") else "")
             if holat == "ok":
                 qosh = {"fed": kod, "grew": osdi, "gift": sovga}
         if holat != "ok":
