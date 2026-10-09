@@ -43,6 +43,7 @@ import hpprofil
 import hpdars
 import hpqoriq
 import hpissiq
+import hpduel
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2627,6 +2628,7 @@ async def main():
     # --- Qo'riqxona (o'quvchining maxluqlari; darslardan keyin ulanadi) ---
     try:
         hpissiq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
+        hpduel.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
     except Exception as qoriq_error:
         logging.error("Qo'riqxona moduli ishga tushmadi: %s", qoriq_error)
