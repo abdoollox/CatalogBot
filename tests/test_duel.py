@@ -150,6 +150,108 @@ async def amain():
     check("yangi haftada jadval yangidan", d["mine"]["total"] == 0 and d["top"] == [])
     check("log", any(x.startswith("duel_1_") for x in loglar))
 
+    # ================= PLEY-OFF =================
+    from datetime import datetime, timedelta
+    TZ = hpcup.TASHKENT
+    soat = [datetime(2026, 10, 14, 23, 0, tzinfo=TZ)]          # chorshanba kechasi
+    hpduel._now = lambda: soat[0]
+    hpdars._hafta = lambda: "2026-10-12"
+    hpduel._cfg["admin_ids"] = {42}
+    xatlar = []
+    async def xat(uid, matnlar):
+        xatlar.append((uid, matnlar["uz"][0]))
+    hpduel._cfg["xat"] = xat
+    def vaqt(kun, s, d=0, sek=0):
+        soat[0] = datetime(2026, 10, kun, s, d, sek, tzinfo=TZ)
+    def ilgari(sek):
+        soat[0] = soat[0] + timedelta(seconds=sek)
+    def ball(u):
+        return db("SELECT COALESCE(SUM(points),0) FROM points WHERE user_id=? AND source_ref LIKE 'duel:%'", (u,))[0][0]
+    for u in range(11, 20):                                     # 9 duelchi: 11 eng kuchli ... 19 eng kuchsiz
+        db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (?,?,?,?)", (u, "D%d" % u, "ravenclaw", "2026-10-01T00:00:00Z"))
+        db("INSERT INTO duel_saral (user_id, hafta, daraja, ball, vaqt) VALUES (?,?,1,?,?)", (u, "2026-10-12", 400 - u, "2026-10-13T00:00:%02dZ" % u))
+    check("to'r tartibi", hpduel._tartib(8) == [1, 8, 4, 5, 2, 7, 3, 6] and hpduel._tartib(16)[:4] == [1, 16, 8, 9])
+    await hpduel.tick()
+    st, d = await ask(11)
+    check("chorshanba: to'r hali yo'q", d["cup"]["size"] is None and ball(11) == 0)
+    vaqt(15, 0, 30)
+    await hpduel.tick(); await hpduel.tick()
+    st, d = await ask(11)
+    C = d["cup"]
+    q = C["stages"][0]["matches"]
+    check("payshanba: 9 kishidan 8 talik to'r, 1-8, 4-5, 2-7, 3-6", C["size"] == 8 and [x["stage"] for x in C["stages"]] == [8, 4, 2]
+          and [(m["a"]["uid"], m["b"]["uid"]) for m in q] == [(11, 18), (14, 15), (12, 17), (13, 16)] and len(C["stages"][1]["matches"]) == 2)
+    check("kirish bali +5, bir marta; to'qqizinchi kirmadi; o'z uchrashuvi", ball(11) == 5 and ball(18) == 5 and ball(19) == 0 and C["my"]["stage"] == 8 and xatlar == [])
+    vaqt(15, 10, 5)
+    await hpduel.tick(); await hpduel.tick()
+    check("payshanba 10:00: «pley-offga chiqdingiz» xati, 8 kishiga bir marta", len(xatlar) == 8 and "chiqdingiz" in xatlar[0][1])
+    vaqt(16, 10, 5); await hpduel.tick()
+    vaqt(16, 20, 51); await hpduel.tick(); await hpduel.tick()
+    check("juma: ertalab va 10 daqiqa oldin eslatma", len(xatlar) == 24 and "21:00" in xatlar[8][1] and "10 daqiqa" in xatlar[-1][1])
+
+    async def ar(u, mid, **kw):
+        st, d = await ask(u, arena=mid, **kw)
+        return d.get("arena")
+    m1, m2, m3, m4 = [m["id"] for m in q]
+    vaqt(16, 20, 55)
+    A = await ar(11, m1)
+    check("vaqtidan oldin: kutish", A["phase"] == "early" and A["starts_in"] == 300 and A["opp"]["name"] == "D18")
+    check("begona odam arenaga kira olmaydi", (await ask(12, arena=m1))[1].get("error") == "no_match")
+    vaqt(16, 21, 0, 5)
+    A = await ar(11, m1)
+    check("raqib kelmagan: kutmoqda", A["phase"] == "wait" and not A["opp"]["here"])
+    B = await ar(18, m1)
+    check("ikkalasi keldi: duel boshlandi", B["phase"] == "pick" and B["round"] == 1 and B["lives"] == 3 and B["deadline_in"] == 30)
+    A = await ar(11, m1, move="hujum", acc=90)
+    check("yurish yozildi, raqib kutilmoqda", A["phase"] == "pick" and A["moved"])
+    B = await ar(18, m1, move="hiyla", acc=80)
+    check("raund hal bo'ldi: natija ikkalasiga o'z tomonidan", B["phase"] == "reveal" and B["last"]["win"] == -1 and B["lives"] == 2 and B["last"]["mine"] == "hiyla" and B["last"]["racc"] == 90)
+    A = await ar(11, m1)
+    check("g'olib tomonda", A["last"]["win"] == 1 and A["rlives"] == 2 and A["phase"] == "reveal")
+    for i in range(2):
+        ilgari(7)
+        await ar(11, m1); await ar(18, m1)
+        await ar(11, m1, move="hujum", acc=90)
+        B = await ar(18, m1, move="hiyla", acc=80)
+    A = await ar(11, m1)
+    check("uch raundda g'alaba: +15 ball darhol, yarim finalga o'tdi", A["over"] and A["won"] and B["over"] and not B["won"] and ball(11) == 20 and ball(18) == 5)
+    # Raund vaqti tugadi
+    vaqt(16, 21, 1, 0)
+    await ar(13, m4); await ar(16, m4)
+    A = await ar(13, m4, move="himoya", acc=70)
+    ilgari(14); await ar(13, m4); await ar(16, m4)
+    ilgari(14); await ar(13, m4); await ar(16, m4)
+    ilgari(4)
+    A = await ar(13, m4)
+    check("yurmagan duelchining afsuni chiqmaydi", A["phase"] == "reveal" and A["last"]["win"] == 1 and A["last"]["racc"] == 0 and A["rlives"] == 2)
+    # Kelmagan raqib
+    vaqt(16, 21, 0, 20)
+    await ar(14, m2)
+    vaqt(16, 21, 5, 2)
+    A = await ar(14, m2)
+    check("raqib 5 daqiqada kelmadi: g'alaba", A["over"] and A["won"] and A["why"] == "kelmadi" and ball(14) == 20)
+    # Hech kim kelmadi: yuqori o'rindagi o'tadi (fon aylanasi)
+    vaqt(16, 21, 5, 30)
+    await hpduel.tick()
+    st, d = await ask(12)
+    s8 = d["cup"]["stages"][0]["matches"]; s4 = d["cup"]["stages"][1]["matches"]
+    check("ikkalasi kelmadi: saralashda yuqori turgani o'tadi", s8[2]["winner"] == 12 and s8[2]["why"] == "ikkalasi" and ball(12) == 20)
+    check("yarim final juftlari to'ldi", (s4[0]["a"]["uid"], s4[0]["b"]["uid"]) == (11, 14) and s4[1]["a"]["uid"] == 12 and d["cup"]["my"]["stage"] == 4)
+    # Sinov uchrashuvi (admin): kompyuter raqib, ballsiz
+    db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (42,'Admin','gryffindor','2026-10-01T00:00:00Z')")
+    st, d = await ask(11, sinov=1)
+    check("oddiy odam sinov ocholmaydi", "test_id" not in d)
+    st, d = await ask(42, sinov=1)
+    tid = d["test_id"]
+    A = await ar(42, tid)
+    ilgari(13)
+    A2 = await ar(42, tid)
+    A3 = await ar(42, tid, move="hujum", acc=95)
+    ilgari(4)
+    A4 = await ar(42, tid)
+    check("sinov: kompyuter raqib o'zi keladi va yuradi, ball yo'q", A["phase"] == "early" and A["test"] and A2["phase"] == "pick" and A2["opp"]["here"]
+          and A3["moved"] and A4["phase"] == "reveal" and A4["last"]["his"] in hpduel.TURLAR and ball(42) == 0)
+
     print("Duel: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     return fail
 

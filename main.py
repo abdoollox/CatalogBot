@@ -2628,7 +2628,9 @@ async def main():
     # --- Qo'riqxona (o'quvchining maxluqlari; darslardan keyin ulanadi) ---
     try:
         hpissiq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
-        hpduel.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
+        hpduel.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log,
+                              "admin_ids": ADMIN_IDS, "xat": hppochta.odamga_xat})
+        asyncio.create_task(hpduel.kuzatuvchi())
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
     except Exception as qoriq_error:
         logging.error("Qo'riqxona moduli ishga tushmadi: %s", qoriq_error)

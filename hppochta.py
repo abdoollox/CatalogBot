@@ -841,6 +841,17 @@ async def _tarqat(bot, tid, pidlar, sarlavha, matn, botga):
         _tarqatma_band["id"] = None
 
 
+async def odamga_xat(uid, matnlar, botga=True):
+    """Bitta odamga o'z tilida xat (va bot xabari): matnlar = {til: (sarlavha, matn)}. Duel eslatmalari uchun."""
+    lang = (await hpcup.get_lang(uid)) or "uz"
+    sarlavha, matn = matnlar.get(lang) or matnlar["uz"]
+    tid, pidlar = await asyncio.to_thread(_tarqatma_yarat, sarlavha, matn, {"tur": "odam", "uid": int(uid)}, botga, False, [int(uid)])
+    if botga:
+        for pid, u in pidlar:
+            await _botga(_cfg["bot"], u, pid, lambda l: xabar_matni(sarlavha, matn, l))
+    await asyncio.to_thread(_tarqatma_sana, tid, True)
+
+
 async def tilda_tarqat(matnlar, botga=True):
     """{til: (sarlavha, matn)} - har tildagi odamlarga o'z tilida xat (va bot xabari).
     Ketma-ket yuboradi; boshqa tarqatma ketayotgan bo'lsa navbat kutadi. Serial e'loni uchun."""
