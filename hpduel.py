@@ -17,7 +17,7 @@ hisoblanadi (har so'rovda va 15 soniyada bir fon aylanasi - `kuzatuvchi`). BALL:
 ya'ni SHU hafta kubogiga. ESLATMA: o'sha kuni 10:00 da va duelga 10 daqiqa qolganda (20:50) - boyo'g'li + bot.
 Sinov: admin {sinov: 1} - kompyuter raqib bilan arena (ballsiz), jonli oqimni tekshirish uchun.
 
-QOIDA: har duelchida 3 jon. Har raundda ikkalasi bir vaqtda tur tanlaydi - hujum / himoya / hiyla - va afsunni
+QOIDA: har duelchida 5 jon (JON). Har raundda ikkalasi bir vaqtda tur tanlaydi - hujum / himoya / hiyla - va afsunni
 chizadi (aniqlik 0..100, ilova o'lchaydi). Hujum hiylani, hiyla himoyani, himoya hujumni yengadi; turlar bir xil
 bo'lsa aniqrog'i yutadi (farq 5 dan kam - durang). Aniqlik 35 dan past - afsun chiqmadi. Yutqazgan 1 jon yo'qotadi.
 
@@ -42,10 +42,10 @@ import hpdars
 
 TURLAR = ("hujum", "himoya", "hiyla")
 YENGADI = {"hujum": "hiyla", "hiyla": "himoya", "himoya": "hujum"}
-JON = 3
+JON = 5                        # egasi, 2026-10-09: 3 emas, 5 jon
 KAM = 35                       # bundan past aniqlik - afsun chiqmadi
 DURANG = 5                     # bir xil turda aniqlik farqi shundan kam bo'lsa durang
-RAUND_MAX = 12
+RAUND_MAX = 20
 # Kompyuter raqiblar: (o'rtacha aniqlik, tarqoqlik, o'yinchining odatiga qarshi o'ynash ehtimoli)
 RAQIBLAR = {1: (50, 15, 0.0), 2: (68, 11, 0.3), 3: (84, 8, 0.5)}
 TOP = 16
@@ -401,7 +401,7 @@ def _arena(uid, mid, tur=None, acc=0, rnd=random):
             "starts_in": max(0, int(m["bosh"] - now)), "wait_left": max(0, int(m["bosh"] + KUTISH - now)),
             "round": m["raund"], "deadline_in": max(0, int((m["r_bosh"] or now) + RAUND_T - now)) if phase == "pick" else 0,
             "next_in": max(0, int((m["r_bosh"] or now) - now)) if phase == "reveal" else 0,
-            "lives": m[yon + "_jon"], "rlives": m[u + "_jon"], "moved": m[yon + "_yur"] is not None,
+            "lives": JON if m["holat"] == "kutmoqda" else m[yon + "_jon"], "rlives": JON if m["holat"] == "kutmoqda" else m[u + "_jon"], "moved": m[yon + "_yur"] is not None,
             "opp": dict(_kim(od, m[u], m[u + "_seed"]), here=(m[u] == BOT_UID or (m[u + "_keldi"] is not None and now - m[u + "_keldi"] <= BOR))),
             "last": last, "over": m["holat"] == "tugadi", "won": m["golib"] == uid, "why": m["sabab"],
         }, berish

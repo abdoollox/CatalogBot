@@ -93,58 +93,58 @@ async def amain():
     st, d = await ask(3)
     check("saralanmagan o'ynay olmaydi", d == {"ok": False, "error": "no_house"})
     st, d = await ask(1)
-    check("boshida bo'sh holat", d["ok"] and d["mine"]["total"] == 0 and d["top"] == [] and d["place"] is None and d["rules"]["lives"] == 3)
+    check("boshida bo'sh holat", d["ok"] and d["mine"]["total"] == 0 and d["top"] == [] and d["place"] is None and d["rules"]["lives"] == 5)
     st, d = await ask(1, start=7)
     check("noma'lum raqib 404", st == 404)
     st, d = await ask(1, start=2)
     g = d["game"]
-    check("duel boshlandi", g["level"] == 2 and g["lives"] == 3 and g["rlives"] == 3 and g["round"] == 0)
+    check("duel boshlandi", g["level"] == 2 and g["lives"] == 5 and g["rlives"] == 5 and g["round"] == 0)
     st, d = await ask(1, game=g["id"], move="sehr", acc=90)
     check("noma'lum tur 404", st == 404)
 
     # Uch raundda g'alaba: raqib hiyla qiladi, men hujum
     r = None
-    for i in range(3):
+    for i in range(5):
         r = hpduel._yur(1, g["id"], "hujum", 90, Rnd("hiyla", 70))
-    check("uch raundda yutdi, ball = 200 + 3 jon + aniqlik", r["game"]["over"] and r["game"]["won"] and r["game"]["rlives"] == 0 and r["game"]["lives"] == 3
-          and r["game"]["score"] == 200 + 60 + 45 and r["round"]["win"] == 1)
+    check("besh raundda yutdi, ball = 200 + 5 jon + aniqlik", r["game"]["over"] and r["game"]["won"] and r["game"]["rlives"] == 0 and r["game"]["lives"] == 5
+          and r["game"]["score"] == 200 + 100 + 45 and r["round"]["win"] == 1)
     check("tugagan duelga yurish yo'q", hpduel._yur(1, g["id"], "hujum", 90) is None)
     st, d = await ask(1)
-    check("saralash jadvalida", d["mine"]["2"] == 305 and d["mine"]["total"] == 305 and d["place"] == 1 and d["top"][0]["me"] and d["top"][0]["score"] == 305)
+    check("saralash jadvalida", d["mine"]["2"] == 345 and d["mine"]["total"] == 345 and d["place"] == 1 and d["top"][0]["me"] and d["top"][0]["score"] == 345)
 
     # Yomonroq g'alaba eng yaxshi natijani pasaytirmaydi; boshqa daraja qo'shiladi
     g2 = hpduel._boshla(1, 2)
     hpduel._yur(1, g2["id"], "hujum", 90, Rnd("himoya", 70))
-    for i in range(3):
+    for i in range(5):
         r = hpduel._yur(1, g2["id"], "hujum", 60, Rnd("hiyla", 70))
-    check("pastroq natija saqlanmaydi", r["game"]["won"] and r["game"]["score"] < 305 and (await ask(1))[1]["mine"]["2"] == 305)
+    check("pastroq natija saqlanmaydi", r["game"]["won"] and r["game"]["score"] < 345 and (await ask(1))[1]["mine"]["2"] == 345)
     g3 = hpduel._boshla(1, 1)
-    for i in range(3):
+    for i in range(5):
         r = hpduel._yur(1, g3["id"], "himoya", 80, Rnd("hujum", 70))
     st, d = await ask(1)
-    check("darajalar yig'iladi", d["mine"]["1"] == 100 + 60 + 40 and d["mine"]["total"] == 505)
+    check("darajalar yig'iladi", d["mine"]["1"] == 100 + 100 + 40 and d["mine"]["total"] == 585)
 
     # Mag'lubiyat va ikkinchi o'yinchi
     g4 = hpduel._boshla(2, 3)
-    for i in range(3):
+    for i in range(5):
         r = hpduel._yur(2, g4["id"], "hujum", 90, Rnd("himoya", 70))
     check("yutqazdi: ball yo'q", r["game"]["over"] and not r["game"]["won"] and r["game"]["score"] == 0 and r["game"]["lives"] == 0)
     g5 = hpduel._boshla(2, 1)
-    for i in range(3):
+    for i in range(5):
         hpduel._yur(2, g5["id"], "hujum", 100, Rnd("hiyla", 70))
     st, d = await ask(2)
-    check("jadval: ikki kishi, o'rin", d["n"] == 2 and d["place"] == 2 and [x["score"] for x in d["top"]] == [505, 210])
+    check("jadval: ikki kishi, o'rin", d["n"] == 2 and d["place"] == 2 and [x["score"] for x in d["top"]] == [585, 250])
 
     # Yangi duel eskisini tashlaydi; API orqali to'liq duel
     a = hpduel._boshla(1, 1); b = hpduel._boshla(1, 1)
     check("yangi duel boshlansa eskisi tashlanadi", hpduel._yur(1, a["id"], "hujum", 90) is None)
     over = False
-    for i in range(20):
+    for i in range(30):
         st, d = await ask(1, game=b["id"], move="hujum", acc=95)
         if d.get("game", {}).get("over"):
             over = True
             break
-    check("API orqali duel tugaydi (12 raunddan oshmaydi)", over and d["game"]["round"] <= 12 and "round" in d)
+    check("API orqali duel tugaydi (20 raunddan oshmaydi)", over and d["game"]["round"] <= 20 and "round" in d)
     db("UPDATE duel_saral SET hafta='2000-01-03'")
     st, d = await ask(1)
     check("yangi haftada jadval yangidan", d["mine"]["total"] == 0 and d["top"] == [])
@@ -201,20 +201,20 @@ async def amain():
     A = await ar(11, m1)
     check("raqib kelmagan: kutmoqda", A["phase"] == "wait" and not A["opp"]["here"])
     B = await ar(18, m1)
-    check("ikkalasi keldi: duel boshlandi", B["phase"] == "pick" and B["round"] == 1 and B["lives"] == 3 and B["deadline_in"] == 30)
+    check("ikkalasi keldi: duel boshlandi", B["phase"] == "pick" and B["round"] == 1 and B["lives"] == 5 and B["deadline_in"] == 30)
     A = await ar(11, m1, move="hujum", acc=90)
     check("yurish yozildi, raqib kutilmoqda", A["phase"] == "pick" and A["moved"])
     B = await ar(18, m1, move="hiyla", acc=80)
-    check("raund hal bo'ldi: natija ikkalasiga o'z tomonidan", B["phase"] == "reveal" and B["last"]["win"] == -1 and B["lives"] == 2 and B["last"]["mine"] == "hiyla" and B["last"]["racc"] == 90)
+    check("raund hal bo'ldi: natija ikkalasiga o'z tomonidan", B["phase"] == "reveal" and B["last"]["win"] == -1 and B["lives"] == 4 and B["last"]["mine"] == "hiyla" and B["last"]["racc"] == 90)
     A = await ar(11, m1)
-    check("g'olib tomonda", A["last"]["win"] == 1 and A["rlives"] == 2 and A["phase"] == "reveal")
-    for i in range(2):
+    check("g'olib tomonda", A["last"]["win"] == 1 and A["rlives"] == 4 and A["phase"] == "reveal")
+    for i in range(4):
         ilgari(7)
         await ar(11, m1); await ar(18, m1)
         await ar(11, m1, move="hujum", acc=90)
         B = await ar(18, m1, move="hiyla", acc=80)
     A = await ar(11, m1)
-    check("uch raundda g'alaba: +15 ball darhol, yarim finalga o'tdi", A["over"] and A["won"] and B["over"] and not B["won"] and ball(11) == 20 and ball(18) == 5)
+    check("besh raundda g'alaba: +15 ball darhol, yarim finalga o'tdi", A["over"] and A["won"] and B["over"] and not B["won"] and ball(11) == 20 and ball(18) == 5)
     # Raund vaqti tugadi
     vaqt(16, 21, 1, 0)
     await ar(13, m4); await ar(16, m4)
@@ -223,7 +223,7 @@ async def amain():
     ilgari(14); await ar(13, m4); await ar(16, m4)
     ilgari(4)
     A = await ar(13, m4)
-    check("yurmagan duelchining afsuni chiqmaydi", A["phase"] == "reveal" and A["last"]["win"] == 1 and A["last"]["racc"] == 0 and A["rlives"] == 2)
+    check("yurmagan duelchining afsuni chiqmaydi", A["phase"] == "reveal" and A["last"]["win"] == 1 and A["last"]["racc"] == 0 and A["rlives"] == 4)
     # Kelmagan raqib
     vaqt(16, 21, 0, 20)
     await ar(14, m2)
