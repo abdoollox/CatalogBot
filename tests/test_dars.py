@@ -8,6 +8,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+import time
 import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -116,12 +117,23 @@ async def amain():
     check("eski baholarni ko'chirish: faqat o'tilganlari", d["synced"] == 1 and d["lessons"]["afsun"]["gs"] == 5 and d["lessons"]["iksir"]["gn"] == 0)
     # Rekord («kim uzoqqa boradi»): haftalik eng yaxshi natija, jadval
     st, d = await ask(1, record="afsun", score=7)
+    check("boshlanmagan urinish rekordga yozilmaydi", d["records"]["afsun"]["all"] == 0)
+    st, d = await ask(1, rek_start="afsun")
+    st, d = await ask(1, record="afsun", score=50)
+    check("vaqtga sig'magan natija yozilmaydi", d["ok"] and d["records"]["afsun"]["all"] == 0)
+    def bosh(u):
+        hpdars._rek_bosh[(u, "afsun")] = time.time() - 100000
+    bosh(1)
+    st, d = await ask(1, record="afsun", score=7)
     R = d["records"]["afsun"]
     check("rekord yozildi", d["ok"] and R["week"] == 7 and R["all"] == 7 and R["place"] == 1 and R["top"][0]["score"] == 7 and R["top"][0]["me"])
+    bosh(1)
     st, d = await ask(1, record="afsun", score=4)
     check("pastroq natija rekordni o'zgartirmaydi", d["records"]["afsun"]["week"] == 7)
     await hpcup.set_house(2, "ravenclaw")
+    bosh(2)
     st, d = await ask(2, record="afsun", score=12)
+    bosh(1)
     st, d = await ask(1, record="afsun", score=99999)
     check("chegara: 999 dan oshmaydi", d["records"]["afsun"]["all"] == 999)
     st, d = await ask(2, records=1)
@@ -131,6 +143,16 @@ async def amain():
     c.execute("UPDATE dars_rekord SET hafta='2000-01-03' WHERE user_id=1"); c.commit(); c.close()
     st, d = await ask(1, records=1)
     check("jadval doimiy: eski hafta natijasi ham jadvalda", d["records"]["afsun"]["week"] == 0 and d["records"]["afsun"]["all"] == 999 and d["records"]["afsun"]["n"] == 2 and d["records"]["afsun"]["place"] == 1)
+    # Kunlik rekord sovg'asi: jadvaldagi birinchi uchlikka ball, bir kunda bir marta
+    def ball(u):
+        c = sqlite3.connect(os.environ["HP_DB_PATH"])
+        n = c.execute("SELECT COALESCE(SUM(points),0) FROM points WHERE user_id=? AND source_ref LIKE 'r:afsun:%'", (u,)).fetchone()[0]
+        c.close(); return n
+    c = sqlite3.connect(os.environ["HP_DB_PATH"]); c.execute("DELETE FROM dars_yakun WHERE dars LIKE 'rek:%'"); c.commit(); c.close()
+    n1 = hpdars.rekord_yakunla(hpcup.today_tk())
+    n2 = hpdars.rekord_yakunla(hpcup.today_tk())
+    check("rekord sovg'asi: 1-o'rin +5, 2-o'rin +3, takror berilmaydi", n1 == 2 and n2 == 0 and ball(1) == 5 and ball(2) == 3)
+    c = sqlite3.connect(os.environ["HP_DB_PATH"]); c.execute("DELETE FROM points WHERE source_ref LIKE 'r:%'"); c.commit(); c.close()
     st, d = await ask(1, quiz_rek=1, lang="uz")
     check("tarix rekordi: 60 ta tasodifiy savol, javobi bilan", len(d["questions"]) == 60 and "c" in d["questions"][0])
     st, d = await ask(1, record="runlar", score=5)

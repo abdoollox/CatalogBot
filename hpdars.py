@@ -393,6 +393,56 @@ def _baho_yoz(uid, juftlar):
 
 REKORD_MAX = 999               # bitta urinishda bundan ko'p bo'lmaydi (ilova natijani o'zi aytadi - shunchaki chegara)
 REKORD_SAVOL = 60              # tarix rekordida bir yo'la beriladigan savollar
+# Kunlik rekord sovg'asi (egasi, 2026-10-09): kun tugaganda har fanning DOIMIY rekord jadvalida 1-3-o'rinda
+# turganlarga ball ('dars' manbasi, ref r:<fan>:<kun>). Rekordchi o'rnini saqlab tursa - har kuni oladi.
+REK_SOVRIN = (5, 3, 2)
+# Natijani ilova aytadi, shuning uchun eng oddiy tekshiruv: urinish serverda boshlanadi ({rek_start}) va
+# natija o'tgan vaqtga sig'ishi kerak (bir qadamga eng kam soniya). Boshlanmagan urinish qabul qilinmaydi.
+REK_QADAM = {"tarix": 1.0, "afsun": 1.0, "iksir": 0.4, "himoya": 0.5, "uchish": 0.5, "maxluq": 1.0,
+             "astro": 0.7, "osimlik": 0.5, "trans": 0.7}
+_rek_bosh = {}                 # (uid, fan) -> boshlangan vaqt
+
+
+def _rek_sigadi(uid, dars, ball):
+    t0 = _rek_bosh.pop((uid, dars), None)
+    try:
+        ball = int(ball)
+    except (TypeError, ValueError):
+        return False
+    return t0 is not None and ball <= (time.time() - t0) / REK_QADAM.get(dars, 1.0) + 2
+
+
+def _rek_top(conn, dars, n=None):
+    rows = conn.execute(
+        "SELECT r.user_id, MAX(r.ball) AS ball, r.vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM dars_rekord r "
+        "JOIN users u ON u.user_id = r.user_id WHERE r.dars=? AND u.house IS NOT NULL AND r.user_id > 0 "
+        "GROUP BY r.user_id ORDER BY ball DESC, r.vaqt ASC", (dars,)).fetchall()
+    return rows[:n] if n else rows
+
+
+def rekord_yakunla(bugun):
+    """Kecha tugadi: har fan rekord jadvalining birinchi uchligiga ball. Takror chaqirilsa - hech narsa qilmaydi."""
+    kecha, berish = _kecha(bugun), []
+    conn = hpcup._connect()
+    try:
+        for dars in DARSLAR:
+            top = _rek_top(conn, dars, len(REK_SOVRIN))
+            if not top:
+                continue
+            cur = conn.execute("INSERT OR IGNORE INTO dars_yakun (kun, dars, vaqt) VALUES (?,?,?)",
+                               (kecha, "rek:" + dars, hpcup._utc_iso(hpcup.now_tk())))
+            conn.commit()
+            if cur.rowcount < 1:
+                continue
+            for i, r in enumerate(top):
+                berish.append((r["user_id"], "r:%s:%s" % (dars, kecha), REK_SOVRIN[i]))
+    except sqlite3.OperationalError as e:
+        logging.error("Rekord yakunlanmadi: %s", e)
+    finally:
+        conn.close()
+    for uid, ref, pts in berish:
+        hpcup._award(uid, "dars", ref, pts)
+    return len(berish)
 
 
 def _hafta():
@@ -426,14 +476,11 @@ def _rekordlar(uid, faqat=None):
     try:
         hafta, out = _hafta(), {}
         for kod in ([faqat] if faqat else list(DARSLAR)):
-            rows = conn.execute(
-                "SELECT r.user_id, MAX(r.ball) AS ball, r.vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM dars_rekord r "
-                "JOIN users u ON u.user_id = r.user_id WHERE r.dars=? AND u.house IS NOT NULL AND r.user_id > 0 "
-                "GROUP BY r.user_id ORDER BY ball DESC, r.vaqt ASC", (kod,)).fetchall()
+            rows = _rek_top(conn, kod)
             men = conn.execute("SELECT COALESCE(MAX(ball),0) AS a, COALESCE(MAX(CASE WHEN hafta=? THEN ball END),0) AS w "
                                "FROM dars_rekord WHERE user_id=? AND dars=?", (hafta, uid, kod)).fetchone()
             out[kod] = {
-                "week": int(men["w"] or 0), "all": int(men["a"] or 0), "n": len(rows),
+                "week": int(men["w"] or 0), "all": int(men["a"] or 0), "n": len(rows), "prizes": list(REK_SOVRIN),
                 "place": next((i + 1 for i, r in enumerate(rows) if r["user_id"] == uid), None),
                 "top": [{"uid": r["user_id"], "name": _ism(r["name"]), "house": r["house"], "score": int(r["ball"]),
                          "me": r["user_id"] == uid} for r in rows[:TOP_N]],
@@ -519,21 +566,28 @@ def _ish(uid, body):
         return {"ok": False, "error": "no_house"}
     try:
         yakunla(kun)
+        rekord_yakunla(kun)
     except Exception as e:
         logging.error("Bellashuv yakuni: %s", e)
     javob = {"ok": True, "kun": kun}
     lang = str(body.get("lang") or "uz")
     if lang not in ("uz", "ru", "en"):
         lang = "uz"
-    dars = body.get("done") or body.get("start") or body.get("finish") or body.get("record")
+    dars = body.get("done") or body.get("start") or body.get("finish") or body.get("record") or body.get("rek_start")
     if dars is not None:
         dars = str(dars)
         if dars not in DARSLAR:
             return {"ok": False, "error": "unknown"}
     if body.get("record"):
         # Rekord urinishi tugadi: {record: fan, score: n}
-        _rekord_yoz(uid, dars, body.get("score"))
+        if _rek_sigadi(uid, dars, body.get("score")):
+            _rekord_yoz(uid, dars, body.get("score"))
         javob["records"] = _rekordlar(uid, dars)
+        return javob
+    if body.get("rek_start"):
+        _rek_bosh[(uid, dars)] = time.time()
+        if len(_rek_bosh) > 5000:
+            _rek_bosh.clear()
         return javob
     if body.get("records"):
         javob["records"] = _rekordlar(uid)
