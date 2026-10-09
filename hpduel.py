@@ -18,8 +18,9 @@ ya'ni SHU hafta kubogiga. ESLATMA: o'sha kuni 10:00 da va duelga 10 daqiqa qolga
 Sinov: admin {sinov: 1} - kompyuter raqib bilan arena (ballsiz), jonli oqimni tekshirish uchun.
 
 QOIDA: har duelchida 5 jon (JON). Har raundda ikkalasi bir vaqtda tur tanlaydi - hujum / himoya / hiyla - va afsunni
-chizadi (aniqlik 0..100, ilova o'lchaydi). Hujum hiylani, hiyla himoyani, himoya hujumni yengadi; turlar bir xil
-bo'lsa aniqrog'i yutadi (farq 5 dan kam - durang). Aniqlik 35 dan past - afsun chiqmadi. Yutqazgan 1 jon yo'qotadi.
+chizadi (aniqlik 0..100, ilova o'lchaydi). Afsun KUCHI = aniqlik, ustun tur bo'lsa +25 (hujum hiyladan, hiyla himoyadan,
+himoya hujumdan ustun). Kuchi baland yutadi (farq 5 dan kam - durang). Aniqlik 35 dan past - afsun chiqmadi (kuch 0).
+Yutqazgan 1 jon yo'qotadi. Ya'ni yaxshi chizgan odam noqulay turda ham yuta oladi - mahorat omaddan muhimroq.
 
 POST /api/duel  (initData)
   {}                         -> holat: {week, mine:{1,2,3,total}, top:[...], place, n, rules}
@@ -44,7 +45,8 @@ TURLAR = ("hujum", "himoya", "hiyla")
 YENGADI = {"hujum": "hiyla", "hiyla": "himoya", "himoya": "hujum"}
 JON = 5                        # egasi, 2026-10-09: 3 emas, 5 jon
 KAM = 35                       # bundan past aniqlik - afsun chiqmadi
-DURANG = 5                     # bir xil turda aniqlik farqi shundan kam bo'lsa durang
+DURANG = 5                     # kuchlar farqi shundan kam bo'lsa durang
+USTUN = 25                     # ustun tur uchun kuchga qo'shimcha (hujum > hiyla > himoya > hujum)
 RAUND_MAX = 20
 # Kompyuter raqiblar: (o'rtacha aniqlik, tarqoqlik, o'yinchining odatiga qarshi o'ynash ehtimoli)
 RAQIBLAR = {1: (50, 15, 0.0), 2: (68, 11, 0.3), 3: (84, 8, 0.5)}
@@ -98,16 +100,20 @@ def _init():
         conn.close()
 
 
-def hal_qil(men, macc, u, uacc):
-    """Raund natijasi: 1 - men yutdim, -1 - yutqazdim, 0 - durang."""
-    mok, uok = macc >= KAM, uacc >= KAM
-    if not mok and not uok:
+def kuch(tur, acc, raqib_turi):
+    """Afsun kuchi: chizish aniqligi + ustun tur uchun qo'shimcha. Aniqlik KAM dan past - afsun chiqmadi (0)."""
+    if acc < KAM:
         return 0
-    if mok != uok:
-        return 1 if mok else -1
-    if men == u:
-        return 0 if abs(macc - uacc) < DURANG else (1 if macc > uacc else -1)
-    return 1 if YENGADI[men] == u else -1
+    return acc + (USTUN if YENGADI[tur] == raqib_turi else 0)
+
+
+def hal_qil(men, macc, u, uacc):
+    """Raund natijasi: 1 - men yutdim, -1 - yutqazdim, 0 - durang. KUCHI baland yutadi (egasi, 2026-10-09:
+    ilgari tur hal qilardi - bu omad o'yini edi; endi aniqlik hal qiladi, to'g'ri tur esa ustunlik beradi)."""
+    mk, uk = kuch(men, macc, u), kuch(u, uacc, men)
+    if abs(mk - uk) < DURANG:
+        return 0
+    return 1 if mk > uk else -1
 
 
 def _raqib_yurishi(daraja, turlar, rnd=random):
@@ -437,7 +443,7 @@ def _holat(uid):
             "n": len(rows), "place": next((i + 1 for i, r in enumerate(rows) if r["user_id"] == uid), None),
             "top": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "score": int(r["ball"]),
                      "me": r["user_id"] == uid} for r in rows[:TOP]],
-            "rules": {"lives": JON, "fail": KAM, "top": TOP, "round": RAUND_T},
+            "rules": {"lives": JON, "fail": KAM, "top": TOP, "round": RAUND_T, "bonus": USTUN},
             "cup": _kubok(conn, uid, hafta), "admin": uid in set(_cfg.get("admin_ids") or ()),
         }
     finally:

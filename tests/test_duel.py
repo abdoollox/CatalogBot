@@ -85,6 +85,8 @@ async def amain():
     H = hpduel.hal_qil
     check("uchburchak: hujum > hiyla > himoya > hujum", H("hujum", 80, "hiyla", 80) == 1 and H("hiyla", 80, "himoya", 80) == 1
           and H("himoya", 80, "hujum", 80) == 1 and H("hiyla", 80, "hujum", 80) == -1)
+    check("aniqlik hal qiladi: a'lo chizilgan afsun noqulay turda ham yutadi; o'rtachasi - yo'q", H("hiyla", 95, "hujum", 60) == 1 and H("hiyla", 80, "hujum", 60) == -1
+          and H("hujum", 60, "hiyla", 95) == -1 and H("hujum", 72, "hiyla", 95) == 0 and hpduel.kuch("hujum", 60, "hiyla") == 85 and hpduel.kuch("hujum", 30, "hiyla") == 0)
     check("bir xil tur: aniqrog'i yutadi, farq kichik bo'lsa durang", H("hujum", 80, "hujum", 60) == 1 and H("hujum", 60, "hujum", 80) == -1 and H("hujum", 80, "hujum", 78) == 0)
     check("afsun chiqmasa (aniqlik past) - raqib uradi; ikkalasi chiqmasa durang", H("hujum", 20, "hiyla", 50) == -1 and H("hiyla", 50, "hujum", 20) == 1 and H("hujum", 10, "hiyla", 10) == 0)
 
