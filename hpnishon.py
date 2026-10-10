@@ -34,10 +34,15 @@ NISHONLAR = (
     ("albom", "kolleksiya"), ("serial_1", "kolleksiya"),
     # Qo'riqxona (hpqoriq, 2026-10-08): birinchi maxluq, birinchi katta maxluq, o'n ikkitasining hammasi
     ("maxluq_1", "maxluq"), ("maxluq_katta", "maxluq"), ("maxluq_12", "maxluq"),
+    # Issiqxona (hpissiq, 2026-10-10): birinchi urug', birinchi yetilgan o'simlik, birinchi hosil, o'n ikkitasining hammasi
+    ("issiq_1", "issiq"), ("issiq_yetilgan", "issiq"), ("issiq_hosil", "issiq"), ("issiq_12", "issiq"),
+    # Kitoblar (hpkitob, 2026-10-10): ilovada birinchi kitobni ochgan, yettala kitobni ochgan (istalgan tilda)
+    ("kitob_1", "kitob"), ("kitob_7", "kitob"),
 )
 KODLAR = tuple(k for k, _ in NISHONLAR)
 
 _FILM = re.compile(r"^(?:web_)?((?:hp[1-8])|(?:fb[1-3]))_(uz|ru|en)(?:~\w+)?(?:@\w+)?$")
+_KITOB = re.compile(r"^read_(kt[1-7])_(?:uz|ru|en)$")
 _SERIAL = re.compile(r"^(?:web_)?sr_s\d+e\d+_")
 
 
@@ -92,8 +97,12 @@ def _top3(conn, uid):
 def hisob(conn, uid):
     """{kod: (bor, kerak)} - bor >= kerak bo'lsa nishon olingan."""
     uid = int(uid)
-    filmlar, tillar, serial = set(), set(), False
+    filmlar, tillar, serial, kitoblar = set(), set(), False, set()
     for r in _all(conn, "SELECT DISTINCT payload FROM events WHERE user_id=?", (uid,)):
+        mk = _KITOB.match(r[0] or "")
+        if mk:
+            kitoblar.add(mk.group(1))
+            continue
         m = _FILM.match(r[0] or "")
         if m:
             filmlar.add(m.group(1))
@@ -142,7 +151,16 @@ def hisob(conn, uid):
         oldingi = d
 
     mx = [int(r[0]) for r in _all(conn, "SELECT boqildi FROM qoriq WHERE user_id=?", (uid,))]
+    # Issiqxona: o'simliklar va ularning sug'orilgani. Hosil - yetilgan (10) o'simlik har 3-sug'orishda beradi,
+    # zaxira sarflanib nolga tushishi mumkin, shuning uchun «bergan» ekani sug'orishlar sonidan bilinadi.
+    os_ = [int(r[0]) for r in _all(conn, "SELECT sugorildi FROM issiq WHERE user_id=?", (uid,))]
     return {
+        "issiq_1": (min(len(os_), 1), 1),
+        "issiq_yetilgan": (1 if any(b >= 10 for b in os_) else 0, 1),
+        "issiq_hosil": (1 if any(b >= 13 for b in os_) else 0, 1),
+        "issiq_12": (min(len(os_), 12), 12),
+        "kitob_1": (min(len(kitoblar), 1), 1),
+        "kitob_7": (len(kitoblar), 7),
         "maxluq_1": (min(len(mx), 1), 1),
         "maxluq_katta": (1 if any(b >= 10 for b in mx) else 0, 1),
         "maxluq_12": (min(len(mx), 12), 12),
