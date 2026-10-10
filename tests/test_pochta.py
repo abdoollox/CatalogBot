@@ -285,6 +285,14 @@ async def test_shaxsiy():
     await hpcup.mark_chat_read(room, 302, m3["id"])          # chatda turib o'qidi
     check("darhol o'qisa - xat yo'q", await hppochta.shaxsiy_ishla(302, 301, "Dm", "Rahmat", room, m3["id"], kut=0) is None)
 
+    # Xabar haqida: kim o'qigan, kim reaksiya bosgan
+    await hpcup.react_chat_message(room, 302, m3["id"], hpcup.CHAT_REACTIONS[0])
+    inf = await hpcup.chat_message_info(room, m3["id"], 301)
+    check("xabar haqida: o'qigan va reaksiya", inf["readers_n"] == 1 and inf["readers"][0]["uid"] == 302
+          and len(inf["reactions"]) == 1 and inf["reactions"][0]["uid"] == 302 and inf["reactions"][0]["e"] == hpcup.CHAT_REACTIONS[0])
+    check("xabar haqida: muallif o'qiganlar ichida emas, yo'q xabar - None",
+          all(r["uid"] != 301 for r in inf["readers"]) and await hpcup.chat_message_info(room, 999999, 301) is None)
+
     m4 = await hpcup.post_chat_message(room, 301, "Yana", None)
     yuborildi = len(bot.sent)
     r = await hppochta.shaxsiy_ishla(302, 301, "Dm", "Yana", room, m4["id"], kut=0)   # haqiqiy vaqt

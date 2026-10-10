@@ -2756,6 +2756,34 @@ async def delete_chat_message(house, user_id, msg_id, admin=False):
     return await asyncio.to_thread(_do)
 
 
+async def chat_message_info(house, msg_id, viewer=0):
+    """Xabar haqida: kim reaksiya bosgan va kim o'qigan (egasi, 2026-10-10).
+    O'qigan = shu xonada o'qilgan joyi (chat_reads.last_id) shu xabarga yetgan yoki o'tgan odam; muallifning o'zi kirmaydi.
+    Sinov o'quvchilari (manfiy raqam) faqat sinov o'quvchisiga ko'rinadi."""
+    def _do():
+        conn = _connect()
+        try:
+            row = _own_live_message(conn, house, msg_id)
+            if not row:
+                return None
+            sinov = "" if int(viewer or 0) < 0 else " AND x.user_id > 0"
+            reak = [{"e": r["emoji"], "uid": r["user_id"], "name": (r["first_name"] or "").strip()[:40] or "Sehrgar", "house": r["house"]}
+                    for r in conn.execute(
+                        "SELECT x.emoji, x.user_id, u.first_name, u.house FROM chat_reactions x "
+                        "LEFT JOIN users u ON u.user_id = x.user_id WHERE x.message_id=?" + sinov + " ORDER BY x.rowid",
+                        (row["id"],))]
+            oq = conn.execute(
+                "SELECT x.user_id, u.first_name, u.house FROM chat_reads x LEFT JOIN users u ON u.user_id = x.user_id "
+                "WHERE x.room=? AND x.last_id>=? AND x.user_id<>?" + sinov + " ORDER BY u.last_seen_at DESC",
+                (house, row["id"], row["user_id"])).fetchall()
+            return {"reactions": reak, "readers_n": len(oq),
+                    "readers": [{"uid": r["user_id"], "name": (r["first_name"] or "").strip()[:40] or "Sehrgar", "house": r["house"]}
+                                for r in oq[:200]]}
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
 async def react_chat_message(house, user_id, msg_id, emoji):
     """Reaksiya: bir odam - bir xabarga bitta. Xuddi shu belgini qayta bosish uni olib tashlaydi."""
     def _do():

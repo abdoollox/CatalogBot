@@ -933,6 +933,15 @@ def register(dp, bot, app, cfg):
                     # Suhbatni ochdi - boyo'g'li pochtasidagi "falonchi yozdi" xati yopiladi
                     await hppochta.dm_oqidi(uid, hpcup._dm_peer(target, uid))
                 return cors(web.json_response({"ok": True}))
+            if action == "info":                      # kim o'qigan va kim reaksiya bosgan
+                msg_id = chat_int(body.get("id"))
+                if msg_id is None:
+                    return cors(web.json_response({"error": "invalid id"}, status=400))
+                info = await hpcup.chat_message_info(target, msg_id, uid)
+                if info is None:
+                    return cors(web.json_response({"error": "not_found"}, status=404))
+                info["ok"] = True
+                return cors(web.json_response(info))
             if banned is not False and action in ("send", "edit", "react", "chess"):
                 return cors(web.json_response({"error": "banned", "until": banned}, status=403))
             if action in ("edit", "delete", "react"):
