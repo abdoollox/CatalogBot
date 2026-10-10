@@ -294,6 +294,31 @@ async def amain():
     c.close()
     check("jadval cheklovida 'dars' bor", "'dars'" in ddl)
 
+    # ---------- KURSLAR: bo'limlar bosqichma-bosqich ochiladi ----------
+    def q(sql_, a_=()):
+        c_ = sqlite3.connect(os.environ["HP_DB_PATH"]); r_ = c_.execute(sql_, a_).fetchall(); c_.commit(); c_.close(); return r_
+    await hpcup.touch_user(77, "Yangi")
+    await hpcup.set_house(77, "hufflepuff")
+    q("UPDATE users SET sorted_at='2026-10-12T05:00:00Z' WHERE user_id=77")
+    q("DELETE FROM dars_daraja WHERE user_id=77"); q("DELETE FROM dars_bellashuv WHERE user_id=77")
+    check("kurs: yangi saralangan - 1-kurs", hpdars.kurs(77)["n"] == 1 and hpdars.kurs(77)["need2"] == 3)
+    q("INSERT INTO dars_daraja (user_id, dars, daraja, kun) VALUES (77,'afsun',2,'2026-10-12')")
+    check("kurs: 2 ta dars - hali 1-kurs", hpdars.kurs(77)["n"] == 1 and hpdars.kurs(77)["lessons"] == 2)
+    q("INSERT INTO dars_daraja (user_id, dars, daraja, kun) VALUES (77,'iksir',1,'2026-10-12')")
+    check("kurs: 3 ta dars - 2-kurs", hpdars.kurs(77)["n"] == 2)
+    q("UPDATE dars_daraja SET daraja=12 WHERE user_id=77 AND dars='afsun'")
+    check("kurs: darslar ko'p, lekin bellashmagan - 2-kursda qoladi", hpdars.kurs(77)["n"] == 2)
+    q("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES ('2026-10-12','afsun',77,9000,'x')")
+    check("kurs: bellashdi va 10+ dars - 4-kurs", hpdars.kurs(77)["n"] == 4)
+    q("UPDATE dars_daraja SET daraja=3 WHERE user_id=77 AND dars='afsun'")
+    check("kurs: bellashgan, 10 darsga yetmagan - 3-kurs", hpdars.kurs(77)["n"] == 3)
+    q("UPDATE users SET sorted_at='2026-10-01T05:00:00Z' WHERE user_id=77")
+    q("DELETE FROM dars_daraja WHERE user_id=77")
+    check("kurs: joriy qilinishidan oldin saralangan - darhol 4-kurs", hpdars.kurs(77)["n"] == 4)
+    hpdars._kesh.clear() if hasattr(hpdars, "_kesh") and hasattr(hpdars._kesh, "clear") else None
+    st, d = await ask(77)
+    check("kurs holat javobida keladi", d.get("kurs", {}).get("n") == 4)
+
     print("Darslar: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
 

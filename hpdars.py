@@ -358,6 +358,39 @@ def _holat(uid, kun):
         conn.close()
 
 
+# --- KURSLAR (egasi, 2026-10-11): fakultet aniqlangach bosh sahifa bir yo'la og'ir edi - bo'limlar bosqichma-bosqich ochiladi.
+#   1-kurs (saralangan zahoti): Darslar va Umumiy xona
+#   2-kurs (KURS_2 ta dars o'tgach): Bellashuv, Shokolad qurbaqa, kubok
+#   3-kurs (birinchi bellashuvdan keyin): Rekordlar, Qo'riqxona, Issiqxona
+#   4-kurs (KURS_4 ta dars o'tgach): Maydon (Duel, Shaxmat, Viktorina) va Jadval
+# Faqat ISH bilan ochiladi (kunlar bilan emas). KURS_ESKI dan oldin saralanganlar hech narsa yo'qotmaydi - ular 4-kursda.
+# Bu faqat bosh sahifadagi ko'rinish (ilova qulflaydi); server hech narsani taqiqlamaydi.
+KURS_2, KURS_4 = 3, 10
+KURS_ESKI = "2026-10-10T23:40:00Z"
+
+
+def kurs(uid):
+    """{n: 1..4, lessons: jami o'tilgan darslar, bell: bellashuvda qatnashganmi, need2, need4}."""
+    conn = hpcup._connect()
+    try:
+        u = conn.execute("SELECT sorted_at FROM users WHERE user_id=?", (int(uid),)).fetchone()
+        darslar = conn.execute("SELECT COALESCE(SUM(daraja),0) FROM dars_daraja WHERE user_id=?", (int(uid),)).fetchone()[0]
+        bell = conn.execute("SELECT 1 FROM dars_bellashuv WHERE user_id=? AND ms IS NOT NULL LIMIT 1", (int(uid),)).fetchone() is not None
+    finally:
+        conn.close()
+    if int(uid) > 0 and u and (u["sorted_at"] or "") < KURS_ESKI:
+        n = 4                                    # joriy qilinishidan oldin saralanganlar (sinov o'quvchisi - yangi odamdek)
+    else:
+        n = 1
+        if darslar >= KURS_2:
+            n = 2
+        if n == 2 and bell:
+            n = 3
+        if n == 3 and darslar >= KURS_4:
+            n = 4
+    return {"n": n, "lessons": int(darslar), "bell": bell, "need2": KURS_2, "need4": KURS_4}
+
+
 def _dars_bajarildi(uid, dars, daraja):
     """N-dars o'tildi. Faqat NAVBATDAGI dars (bosqich + 1) bosqichni oshiradi. Oshgan bo'lsa True."""
     daraja = int(daraja)
@@ -654,6 +687,10 @@ def _ish(uid, body):
             return javob
         javob["ms"], javob["best"] = r
     javob["lessons"] = _holat(uid, kun)
+    try:
+        javob["kurs"] = kurs(uid)
+    except Exception as e:
+        logging.error("Kurs hisoblanmadi (%s): %s", uid, e)
     return javob
 
 
