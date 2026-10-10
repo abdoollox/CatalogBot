@@ -112,7 +112,8 @@ async def amain():
           and r["game"]["score"] == 200 + 100 + 45 and r["round"]["win"] == 1)
     check("tugagan duelga yurish yo'q", hpduel._yur(1, g["id"], "hujum", 90) is None)
     st, d = await ask(1)
-    check("saralash jadvalida", d["mine"]["2"] == 345 and d["mine"]["total"] == 345 and d["place"] == 1 and d["top"][0]["me"] and d["top"][0]["score"] == 345)
+    check("g'alabadan keyin: eng yaxshi natija va REYTING (1000 dan oshdi), jadvalda birinchi", d["mine"]["2"] == 345 and d["rating"]["r"] > 1000 and d["rating"]["games"] == 1
+          and d["rating"]["wins"] == 1 and d["place"] == 1 and d["top"][0]["me"] and d["top"][0]["score"] == d["rating"]["r"] and r["game"]["delta"] > 0)
 
     # TARIX: har raund yozilgan, duelni raund-raund qayta ko'rsa bo'ladi; begona ko'ra olmaydi
     st, d = await ask(1, history=1)
@@ -126,7 +127,7 @@ async def amain():
     check("mashq duelini begona ko'ra olmaydi; yo'q duel - xato", d == {"ok": False, "error": "no_duel"}
           and (await ask(1, replay={"k": "o", "id": 99999}))[1]["error"] == "no_duel")
     st, d = await ask(1)
-    check("holatda pley-off chegarasi va to'r vaqti", d["cut"] == 0 and d["draw_ts"] > 0 and d["now"] > 0)
+    check("holatda turnir ma'lumoti", d["tour"]["ts"] > 0 and d["tour"]["n"] == 0 and d["tour"]["joined"] is False and d["now"] > 0 and d["rules"]["match"] == 300)
 
     # Yomonroq g'alaba eng yaxshi natijani pasaytirmaydi; boshqa daraja qo'shiladi
     g2 = hpduel._boshla(1, 2)
@@ -149,7 +150,10 @@ async def amain():
     for i in range(5):
         hpduel._yur(2, g5["id"], "hujum", 100, Rnd("hiyla", 70))
     st, d = await ask(2)
-    check("jadval: ikki kishi, o'rin", d["n"] == 2 and d["place"] == 2 and [x["score"] for x in d["top"]] == [585, 250])
+    check("reyting jadvali: ikki kishi; kuchli raqibga yutqazib, kuchsizni yengan - reytingi pastroq", d["n"] == 2 and d["place"] == 2 and d["top"][0]["uid"] == 1
+          and d["top"][0]["score"] > d["top"][1]["score"] and d["rating"]["games"] == 2 and d["rating"]["wins"] == 1)
+    r1 = hpduel._kutilgan(1000, 850); r2 = hpduel._kutilgan(1000, 1250)
+    check("Elo: kuchsiz raqibni yengish oz, kuchlini yengish ko'p beradi", 16 * (1 - r1) < 5 < 16 * (1 - r2) and abs(hpduel._kutilgan(1000, 1000) - 0.5) < 1e-9)
 
     # Yangi duel eskisini tashlaydi; API orqali to'liq duel
     a = hpduel._boshla(1, 1); b = hpduel._boshla(1, 1)
@@ -163,13 +167,13 @@ async def amain():
     check("API orqali duel tugaydi (20 raunddan oshmaydi)", over and d["game"]["round"] <= 20 and "round" in d)
     db("UPDATE duel_saral SET hafta='2000-01-03'")
     st, d = await ask(1)
-    check("yangi haftada jadval yangidan", d["mine"]["total"] == 0 and d["top"] == [])
+    check("yangi haftada haftalik natija noldan, reyting esa saqlanadi", d["mine"]["total"] == 0 and len(d["top"]) == 2 and d["rating"]["games"] > 0)
     check("log", any(x.startswith("duel_1_") for x in loglar))
 
-    # ================= PLEY-OFF =================
+    # ================= TURNIR: yozilish, reyting bo'yicha to'r, bir oqshomda =================
     from datetime import datetime, timedelta
     TZ = hpcup.TASHKENT
-    soat = [datetime(2026, 10, 14, 23, 0, tzinfo=TZ)]          # chorshanba kechasi
+    soat = [datetime(2026, 10, 17, 12, 0, tzinfo=TZ)]          # shanba, turnir - yakshanba 18-oktabr 21:00
     hpduel._now = lambda: soat[0]
     hpdars._hafta = lambda: "2026-10-12"
     hpduel._cfg["admin_ids"] = {42}
@@ -183,89 +187,120 @@ async def amain():
         soat[0] = soat[0] + timedelta(seconds=sek)
     def ball(u):
         return db("SELECT COALESCE(SUM(points),0) FROM points WHERE user_id=? AND source_ref LIKE 'duel:%'", (u,))[0][0]
-    for u in range(11, 20):                                     # 9 duelchi: 11 eng kuchli ... 19 eng kuchsiz
+    def rey(u):
+        return db("SELECT reyting FROM duel_reyting WHERE user_id=?", (u,))[0][0]
+    for u in range(11, 21):                                     # 11 eng kuchli ... 19 eng kuchsiz; 20 - yozilmaydi
         db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (?,?,?,?)", (u, "D%d" % u, "ravenclaw", "2026-10-01T00:00:00Z"))
-        db("INSERT INTO duel_saral (user_id, hafta, daraja, ball, vaqt) VALUES (?,?,1,?,?)", (u, "2026-10-12", 400 - u, "2026-10-13T00:00:%02dZ" % u))
+        db("INSERT INTO duel_reyting (user_id, reyting, oyin, galaba) VALUES (?,?,5,3)", (u, 1400 - u * 10))
     check("to'r tartibi", hpduel._tartib(8) == [1, 8, 4, 5, 2, 7, 3, 6] and hpduel._tartib(16)[:4] == [1, 16, 8, 9])
+    for u in range(11, 20):
+        st, d = await ask(u, join=1)
+    check("yozilish: 9 kishi, o'zi yozilgan, ro'yxat reyting bo'yicha", d["join_ok"] and d["tour"]["n"] == 9 and d["tour"]["joined"] and d["tour"]["open"]
+          and [p["uid"] for p in d["tour"]["players"]][:3] == [11, 12, 13] and d["tour"]["players"][-1]["me"])
+    st, d = await ask(12, join=0)
+    check("chiqish va qayta yozilish", d["tour"]["n"] == 8 and not d["tour"]["joined"] and (await ask(12, join=1))[1]["tour"]["n"] == 9)
     await hpduel.tick()
     st, d = await ask(11)
-    check("chorshanba: to'r hali yo'q", d["cup"]["size"] is None and ball(11) == 0)
-    vaqt(15, 0, 30)
+    check("turnirdan oldin: to'r yo'q, ball yo'q", d["cup"]["size"] is None and ball(11) == 0)
+    vaqt(18, 10, 5)
     await hpduel.tick(); await hpduel.tick()
+    check("turnir kuni 10:00: yozilgan 9 kishiga eslatma, bir marta", len(xatlar) == 9 and "21:00" in xatlar[0][1])
+    vaqt(18, 20, 51); await hpduel.tick(); await hpduel.tick()
+    check("10 daqiqa qolganda yana eslatma", len(xatlar) == 18 and "10 daqiqa" in xatlar[-1][1])
+    st, d = await ask(11)
+    check("20:51: yozilish hali ochiq, to'r yo'q", d["tour"]["open"] and d["cup"]["size"] is None)
+    vaqt(18, 20, 56)
+    await hpduel.tick(); await hpduel.tick()
+    st, d = await ask(20, join=1)
+    check("20:55 dan keyin yozilish yopiq", d["join_ok"] is False and not d["tour"]["open"] and not d["tour"]["joined"])
     st, d = await ask(11)
     C = d["cup"]
     q = C["stages"][0]["matches"]
-    check("payshanba: 9 kishidan 8 talik to'r, 1-8, 4-5, 2-7, 3-6", C["size"] == 8 and [x["stage"] for x in C["stages"]] == [8, 4, 2]
-          and [(m["a"]["uid"], m["b"]["uid"]) for m in q] == [(11, 18), (14, 15), (12, 17), (13, 16)] and len(C["stages"][1]["matches"]) == 2)
-    check("kirish bali +5, bir marta; to'qqizinchi kirmadi; o'z uchrashuvi", ball(11) == 5 and ball(18) == 5 and ball(19) == 0 and C["my"]["stage"] == 8 and xatlar == [])
-    vaqt(15, 10, 5)
-    await hpduel.tick(); await hpduel.tick()
-    check("payshanba 10:00: «pley-offga chiqdingiz» xati, 8 kishiga bir marta", len(xatlar) == 8 and "chiqdingiz" in xatlar[0][1])
-    vaqt(16, 10, 5); await hpduel.tick()
-    vaqt(16, 20, 51); await hpduel.tick(); await hpduel.tick()
-    check("juma: ertalab va 10 daqiqa oldin eslatma", len(xatlar) == 24 and "21:00" in xatlar[8][1] and "10 daqiqa" in xatlar[-1][1])
+    haqiqiy = [m for m in q if m["why"] != "bye"]
+    check("9 kishi: 16 talik to'r, 7 kuchli birinchi bosqichni o'tkazib yuboradi, 8- va 9-o'rin o'ynaydi", C["size"] == 16 and [x["stage"] for x in C["stages"]] == [16, 8, 4, 2]
+          and len(q) == 8 and len(haqiqiy) == 1 and (haqiqiy[0]["a"]["uid"], haqiqiy[0]["b"]["uid"]) == (18, 19)
+          and sum(1 for m in q if m["why"] == "bye" and m["winner"] == m["a"]["uid"] and m["b"] is None) == 7)
+    s8 = C["stages"][1]["matches"]
+    check("chorak final: kutganlar joyida, birinchi juftlik g'olibni kutmoqda; o'tkazib yuborganga ball yo'q", s8[0]["a"]["uid"] == 11 and s8[0]["b"] is None
+          and [(m["a"]["uid"], m["b"]["uid"]) for m in s8[1:]] == [(14, 15), (12, 17), (13, 16)] and ball(11) == 0 and C["my"]["stage"] == 8)
+    check("bosqichlar 6 daqiqadan: 21:00, 21:06, 21:12, 21:18", [int(x["ts"] - C["stages"][0]["ts"]) for x in C["stages"]] == [0, 360, 720, 1080]
+          and [x["points"] for x in C["stages"]] == [5, 10, 20, 30])
 
     async def ar(u, mid, **kw):
         st, d = await ask(u, arena=mid, **kw)
         return d.get("arena")
-    m1, m2, m3, m4 = [m["id"] for m in q]
-    vaqt(16, 20, 55)
-    A = await ar(11, m1)
-    check("vaqtidan oldin: kutish", A["phase"] == "early" and A["starts_in"] == 300 and A["opp"]["name"] == "D18")
+    m1 = haqiqiy[0]["id"]
+    vaqt(18, 20, 58)
+    A = await ar(18, m1)
+    check("vaqtidan oldin: kutish", A["phase"] == "early" and A["starts_in"] == 120 and A["opp"]["name"] == "D19")
     check("begona odam arenaga kira olmaydi", (await ask(12, arena=m1))[1].get("error") == "no_match")
-    vaqt(16, 21, 0, 5)
-    A = await ar(11, m1)
+    vaqt(18, 21, 0, 5)
+    A = await ar(18, m1)
     check("raqib kelmagan: kutmoqda", A["phase"] == "wait" and not A["opp"]["here"])
-    B = await ar(18, m1)
-    check("ikkalasi keldi: duel boshlandi", B["phase"] == "pick" and B["round"] == 1 and B["lives"] == 5 and B["deadline_in"] == 30)
-    A = await ar(11, m1, move="hujum", acc=90)
+    B = await ar(19, m1)
+    check("ikkalasi keldi: duel boshlandi, raundga 20 soniya", B["phase"] == "pick" and B["round"] == 1 and B["lives"] == 5 and B["deadline_in"] == 20)
+    A = await ar(18, m1, move="hujum", acc=90)
     check("yurish yozildi, raqib kutilmoqda", A["phase"] == "pick" and A["moved"])
-    B = await ar(18, m1, move="hiyla", acc=80)
+    B = await ar(19, m1, move="hiyla", acc=80)
     check("raund hal bo'ldi: natija ikkalasiga o'z tomonidan", B["phase"] == "reveal" and B["last"]["win"] == -1 and B["lives"] == 4 and B["last"]["mine"] == "hiyla" and B["last"]["racc"] == 90)
-    A = await ar(11, m1)
-    check("g'olib tomonda", A["last"]["win"] == 1 and A["rlives"] == 4 and A["phase"] == "reveal")
+    r18, r19 = rey(18), rey(19)
     for i in range(4):
-        ilgari(7)
-        await ar(11, m1); await ar(18, m1)
-        await ar(11, m1, move="hujum", acc=90)
-        B = await ar(18, m1, move="hiyla", acc=80)
-    A = await ar(11, m1)
-    check("besh raundda g'alaba: +15 ball darhol, yarim finalga o'tdi", A["over"] and A["won"] and B["over"] and not B["won"] and ball(11) == 20 and ball(18) == 5)
-    # Pley-off duelini raund-raund qayta ko'rish: o'ynaganlar o'z tomonidan, boshqalar - 1-tomondan
-    rp = (await ask(11, replay={"k": "m", "id": m1}))[1]["replay"]
-    check("pley-off tarixi: g'olib tomonidan", len(rp["rounds"]) == 5 and rp["rounds"][0] == {"mine": "hujum", "acc": 90, "his": "hiyla", "racc": 80, "win": 1}
-          and rp["me"] and rp["won"] and rp["p1"]["uid"] == 11 and rp["p2"]["uid"] == 18 and rp["lives"] == [5, 0] and rp["stage"] == 8)
+        ilgari(6)
+        await ar(18, m1); await ar(19, m1)
+        await ar(18, m1, move="hujum", acc=90)
+        B = await ar(19, m1, move="hiyla", acc=80)
+    A = await ar(18, m1)
+    check("besh raundda g'alaba: 1/8 uchun +5 ball darhol, reyting o'zgardi", A["over"] and A["won"] and B["over"] and not B["won"] and ball(18) == 5 and ball(19) == 0
+          and rey(18) > r18 and rey(19) < r19 and abs((rey(18) - r18) + (rey(19) - r19)) < 1e-6)
+    check("g'olibga keyingi dueli aytiladi (chorak final, 21:06)", A["next"] and A["next"]["id"] == s8[0]["id"] and 300 < A["next"]["in"] <= 360 and B["next"] is None)
+    # Duelni raund-raund qayta ko'rish: o'ynaganlar o'z tomonidan, boshqalar - 1-tomondan
     rp = (await ask(18, replay={"k": "m", "id": m1}))[1]["replay"]
-    check("pley-off tarixi: yutqazgan tomonidan", rp["rounds"][0]["mine"] == "hiyla" and rp["rounds"][0]["win"] == -1 and not rp["won"] and rp["p1"]["uid"] == 18)
+    check("turnir dueli tarixi: g'olib tomonidan", len(rp["rounds"]) == 5 and rp["rounds"][0] == {"mine": "hujum", "acc": 90, "his": "hiyla", "racc": 80, "win": 1}
+          and rp["me"] and rp["won"] and rp["p1"]["uid"] == 18 and rp["p2"]["uid"] == 19 and rp["lives"] == [5, 0] and rp["stage"] == 16)
+    rp = (await ask(19, replay={"k": "m", "id": m1}))[1]["replay"]
+    check("turnir dueli tarixi: yutqazgan tomonidan", rp["rounds"][0]["mine"] == "hiyla" and rp["rounds"][0]["win"] == -1 and not rp["won"] and rp["p1"]["uid"] == 19)
     rp = (await ask(12, replay={"k": "m", "id": m1}))[1]["replay"]
-    check("pley-off tarixi: tomoshabin ham ko'ra oladi", not rp["me"] and rp["p1"]["uid"] == 11 and len(rp["rounds"]) == 5 and rp["won"])
-    check("tugamagan uchrashuvni ko'rib bo'lmaydi", (await ask(12, replay={"k": "m", "id": m4}))[1].get("error") == "no_duel")
-    h = (await ask(11, history=1))[1]["history"]
-    check("tarix ro'yxatida pley-off dueli", any(x["k"] == "m" and x["id"] == m1 and x["won"] and x["rounds"] == 5 and x["stage"] == 8 and x["opp"]["uid"] == 18 for x in h))
+    check("turnir dueli tarixi: tomoshabin ham ko'ra oladi", not rp["me"] and rp["p1"]["uid"] == 18 and len(rp["rounds"]) == 5 and rp["won"])
+    check("tugamagan uchrashuvni ko'rib bo'lmaydi", (await ask(12, replay={"k": "m", "id": s8[1]["id"]}))[1].get("error") == "no_duel")
+    h = (await ask(18, history=1))[1]["history"]
+    check("tarix ro'yxatida turnir dueli", any(x["k"] == "m" and x["id"] == m1 and x["won"] and x["rounds"] == 5 and x["stage"] == 16 and x["opp"]["uid"] == 19 for x in h))
     d = (await ask(11))[1]
-    check("to'rda raundlar soni", [m for st in d["cup"]["stages"] for m in st["matches"] if m["id"] == m1][0]["rounds"] == 5)
-    # Raund vaqti tugadi
-    vaqt(16, 21, 1, 0)
-    await ar(13, m4); await ar(16, m4)
-    A = await ar(13, m4, move="himoya", acc=70)
-    ilgari(14); await ar(13, m4); await ar(16, m4)
-    ilgari(14); await ar(13, m4); await ar(16, m4)
-    ilgari(4)
-    A = await ar(13, m4)
-    check("yurmagan duelchining afsuni chiqmaydi", A["phase"] == "reveal" and A["last"]["win"] == 1 and A["last"]["racc"] == 0 and A["rlives"] == 4)
-    # Kelmagan raqib
-    vaqt(16, 21, 0, 20)
-    await ar(14, m2)
-    vaqt(16, 21, 5, 2)
-    A = await ar(14, m2)
-    check("raqib 5 daqiqada kelmadi: g'alaba", A["over"] and A["won"] and A["why"] == "kelmadi" and ball(14) == 20)
-    # Hech kim kelmadi: yuqori o'rindagi o'tadi (fon aylanasi)
-    vaqt(16, 21, 5, 30)
+    check("to'rda raundlar soni; chorak finalda g'olib joyiga tushdi", [m for st_ in d["cup"]["stages"] for m in st_["matches"] if m["id"] == m1][0]["rounds"] == 5
+          and d["cup"]["stages"][1]["matches"][0]["b"]["uid"] == 18)
+
+    # ----- chorak final (21:06): to'liq duel, kelmagan raqib, ikkalasi kelmadi, vaqt tugadi -----
+    k1, k2, k3, k4 = [m["id"] for m in d["cup"]["stages"][1]["matches"]]
+    # (vaqt faqat oldinga yuradi: har so'rov butun turnirni hozirgi vaqtga keltiradi)
+    vaqt(18, 21, 6, 2)
+    await ar(14, k2)                                  # 14 keldi, raqibi (15) kelmaydi
+    await ar(13, k4); await ar(16, k4)                # 13 va 16: bitta raund o'ynab, keyin yurmay qo'yishadi
+    await ar(13, k4, move="hujum", acc=90)
+    await ar(16, k4, move="hiyla", acc=80)
+    await ar(11, k1); await ar(18, k1)                # 11 va 18: to'liq duel
+    for i in range(5):
+        await ar(11, k1, move="hujum", acc=90)
+        await ar(18, k1, move="hiyla", acc=80)
+        ilgari(6)
+        await ar(11, k1); await ar(18, k1)
+    A = await ar(11, k1)
+    check("chorak finalda g'alaba: +10", A["over"] and A["won"] and ball(11) == 10 and ball(18) == 5)
+    vaqt(18, 21, 7, 2)
+    A = await ar(14, k2)
+    check("raqib 1 daqiqada kelmadi: g'alaba, reyting o'zgarmaydi", A["over"] and A["won"] and A["why"] == "kelmadi" and ball(14) == 10 and rey(14) == 1400 - 140 and rey(15) == 1400 - 150)
+    vaqt(18, 21, 11, 1)
     await hpduel.tick()
     st, d = await ask(12)
-    s8 = d["cup"]["stages"][0]["matches"]; s4 = d["cup"]["stages"][1]["matches"]
-    check("ikkalasi kelmadi: saralashda yuqori turgani o'tadi", s8[2]["winner"] == 12 and s8[2]["why"] == "ikkalasi" and ball(12) == 20)
-    check("yarim final juftlari to'ldi", (s4[0]["a"]["uid"], s4[0]["b"]["uid"]) == (11, 14) and s4[1]["a"]["uid"] == 12 and d["cup"]["my"]["stage"] == 4)
+    s8 = d["cup"]["stages"][1]["matches"]; s4 = d["cup"]["stages"][2]["matches"]
+    check("ikkalasi kelmadi: reytingi yuqori o'tadi", s8[2]["winner"] == 12 and s8[2]["why"] == "ikkalasi" and ball(12) == 10)
+    check("duelga 5 daqiqa: vaqt tugadi - joni ko'p yutadi", s8[3]["winner"] == 13 and s8[3]["why"] == "vaqt" and s8[3]["lives"] == [5, 4] and ball(13) == 10 and rey(13) > 1400 - 130)
+    check("yarim final juftlari to'ldi (21:12)", (s4[0]["a"]["uid"], s4[0]["b"]["uid"]) == (11, 14) and (s4[1]["a"]["uid"], s4[1]["b"]["uid"]) == (12, 13) and d["cup"]["my"]["stage"] == 4)
+    # yarim final va final: hech kim kelmaydi - reytingi yuqorilar o'tadi, turnir shu oqshom tugaydi
+    vaqt(18, 21, 13, 5); await hpduel.tick()
+    vaqt(18, 21, 19, 5); await hpduel.tick()
+    st, d = await ask(11)
+    fin = d["cup"]["stages"][3]["matches"][0]
+    check("turnir bir oqshomda tugadi: final g'olibi aniqlandi, ballar 5/10/20/30 bo'yicha", fin["winner"] == 11 and fin["state"] == "tugadi" and d["cup"]["my"] is None
+          and ball(11) == 10 + 20 + 30 and ball(12) == 10 + 20 and ball(14) == 10)
     # Sinov uchrashuvi (admin): kompyuter raqib, ballsiz
     db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (42,'Admin','gryffindor','2026-10-01T00:00:00Z')")
     st, d = await ask(11, sinov=1)

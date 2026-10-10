@@ -22,7 +22,19 @@ chizadi (aniqlik 0..100, ilova o'lchaydi). Afsun KUCHI = aniqlik, ustun tur bo'l
 himoya hujumdan ustun). Kuchi baland yutadi (farq 5 dan kam - durang). Aniqlik 35 dan past - afsun chiqmadi (kuch 0).
 Yutqazgan 1 jon yo'qotadi. Ya'ni yaxshi chizgan odam noqulay turda ham yuta oladi - mahorat omaddan muhimroq.
 
+YANGI FORMAT (egasi, 2026-10-10) - yuqoridagi «saralash + 4 kunlik pley-off» o'rniga:
+  SARALASH YO'Q, 16 CHEGARASI YO'Q. Turnir HAFTADA BIR MARTA, BIR OQSHOMDA: TURNIR_KUN (yakshanba) soat 21:00 da boshlanib,
+  g'olib shu kuni aniqlanadi. Qatnashish - «Qatnashaman» tugmasi ({join: 1}), yozilish turnirdan YOPILISH (5 daqiqa) oldin yopiladi.
+  ISTALGAN SONDAGI ishtirokchi: to'r eng yaqin 2 ning darajasiga to'ldiriladi, REYTINGI yuqorilar birinchi bosqichni
+  o'tkazib yuboradi («bye» - futbol kubogidagi kabi), pastdagilar dastlabki bosqichda o'ynaydi. Har duelga eng ko'pi MATCH_T
+  (5 daqiqa), bosqichlar orasida ORALIQ (1 daqiqa); raund RAUND_T (20 s) + natija PAUZA (5 s). Vaqt tugasa: joni ko'p,
+  keyin aniqliklar yig'indisi, keyin reytingdagi o'rni. Kelmagan duelchi KUTISH (1 daqiqa) kutiladi.
+  REYTING (duel_reyting): hamma 1000 dan boshlaydi, har duel natijasi bo'yicha (Elo usuli): jonli duelda K=32,
+  kompyuter raqib bilan K=16 (raqib reytingi qat'iy: 850 / 1050 / 1250). Kuchli raqibni yengsa ko'p, kuchsizni yengsa oz qo'shiladi.
+  BALL: g'alaba uchun 1/8 da +5, chorakda +10, yarim finalda +20, finalda +30; undan oldingi bosqichlarga berilmaydi.
+
 POST /api/duel  (initData)
+  {join: 1|0}                -> turnirga yozilish / chiqish
   {}                         -> holat: {week, mine:{1,2,3,total}, top:[...], place, n, rules}
   {start: 1|2|3}             -> yangi duel: {game:{id, level, lives, rlives, round}}
   {game: id, move: tur, acc} -> raund: {round:{mine, his, acc, racc, win}, game:{..., over, won, score}}
@@ -52,15 +64,19 @@ RAUND_MAX = 20
 RAQIBLAR = {1: (50, 15, 0.0), 2: (68, 11, 0.3), 3: (84, 8, 0.5)}
 TOP = 16
 
-PLEYOFF_DAN = "2026-10-12"     # shu haftadan (dushanba sanasi) boshlab pley-off o'tkaziladi
-SOAT = 21                      # duellar boshlanadigan soat (Toshkent)
-KUTISH = 300                   # kelmagan duelchi shuncha soniya kutiladi
-RAUND_T = 30                   # raundga vaqt (tur tanlash + chizish)
-PAUZA = 6                      # raund natijasi ko'rsatiladigan vaqt
+PLEYOFF_DAN = "2026-10-12"     # shu haftadan (dushanba sanasi) boshlab turnir o'tkaziladi
+TURNIR_KUN = 6                 # haftaning kuni (0 - dushanba): yakshanba. Kelajakda har kunga alohida turnir bo'lishi mumkin
+SOAT = 21                      # turnir boshlanadigan soat (Toshkent)
+MATCH_T = 300                  # bitta duelga eng ko'p vaqt (s)
+ORALIQ = 60                    # bosqichlar orasidagi tanaffus (s)
+YOPILISH = 300                 # yozilish turnirdan shuncha oldin yopiladi va to'r tuziladi
+KUTISH = 60                    # kelmagan duelchi shuncha soniya kutiladi
+RAUND_T = 20                   # raundga vaqt (tur tanlash + chizish)
+PAUZA = 5                      # raund natijasi ko'rsatiladigan vaqt
 BOR = 15                       # oxirgi so'rovdan shuncha soniya o'tmagan bo'lsa - arenada
-BOSQICH_KUN = {16: 3, 8: 4, 4: 5, 2: 6}        # dushanbadan necha kun keyin
-BOSQICH_BALL = {16: 10, 8: 15, 4: 20, 2: 30}   # shu bosqichdagi g'alaba uchun
-KIRISH_BALL = 5
+BOSQICH_BALL = {16: 5, 8: 10, 4: 20, 2: 30}    # shu bosqichdagi G'ALABA uchun (egasi, 2026-10-10); oldingi bosqichlarga yo'q
+REYTING0, K_JONLI, K_BOT = 1000, 32, 16
+BOT_R = {1: 850, 2: 1050, 3: 1250}              # kompyuter raqiblarning qat'iy reytingi
 BOT_UID = -999                 # sinov raqibi (kompyuter)
 
 _cfg = {}
@@ -95,10 +111,18 @@ def _init():
                      " UNIQUE (hafta, bosqich, joy))")
         conn.execute("CREATE TABLE IF NOT EXISTS duel_eslatma (hafta TEXT NOT NULL, bosqich INTEGER NOT NULL, tur TEXT NOT NULL,"
                      " PRIMARY KEY (hafta, bosqich, tur))")
+        conn.execute("CREATE TABLE IF NOT EXISTS duel_qatnash (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, vaqt TEXT NOT NULL,"
+                     " PRIMARY KEY (hafta, user_id))")
+        conn.execute("CREATE TABLE IF NOT EXISTS duel_reyting (user_id INTEGER PRIMARY KEY, reyting REAL NOT NULL, oyin INTEGER NOT NULL DEFAULT 0,"
+                     " galaba INTEGER NOT NULL DEFAULT 0)")
         # Duel TARIXI (egasi, 2026-10-10): har raund yoziladi - keyin raund-raund qayta ko'rish uchun
         for jadval in ("duel_oyin", "duel_match"):
             if "tarix" not in [r[1] for r in conn.execute("PRAGMA table_info(%s)" % jadval)]:
                 conn.execute("ALTER TABLE %s ADD COLUMN tarix TEXT NOT NULL DEFAULT '[]'" % jadval)
+        # Reyting BIR MARTA eski duellardan hisoblanadi (kompyuter raqiblar bilan o'ynalganlari, tartibi bilan)
+        if conn.execute("INSERT OR IGNORE INTO duel_eslatma (hafta, bosqich, tur) VALUES ('migr', 0, 'reyting')").rowcount > 0:
+            for g in conn.execute("SELECT user_id, daraja, holat FROM duel_oyin WHERE holat IN ('yutdi','yutqazdi') ORDER BY id").fetchall():
+                _elo_bot(conn, g["user_id"], g["daraja"], g["holat"] == "yutdi")
         conn.commit()
     finally:
         conn.close()
@@ -146,51 +170,105 @@ def _tartib(n):
     return t
 
 
-def _bosqich_vaqti(hafta, bosqich):
-    """Bosqich boshlanadigan vaqt (epoch): hafta dushanbasi + kun, 21:00 Toshkent."""
+def _turnir_vaqti(hafta):
+    """Turnir boshlanadigan payt (epoch): hafta dushanbasi + TURNIR_KUN, SOAT:00 Toshkent."""
     y, m, d = (int(x) for x in hafta.split("-"))
-    dt = datetime(y, m, d, SOAT, 0, 0, tzinfo=_now().tzinfo) + timedelta(days=BOSQICH_KUN[bosqich])
-    return dt.timestamp()
+    return (datetime(y, m, d, SOAT, 0, 0, tzinfo=_now().tzinfo) + timedelta(days=TURNIR_KUN)).timestamp()
 
 
-def _saral(conn, hafta):
+def _bosqich_vaqti(hafta, bosqich, hajm):
+    """Bosqich boshlanadigan vaqt: birinchi bosqich (hajm) - turnir boshida, keyingilari har MATCH_T + ORALIQ da."""
+    n, b = 0, hajm
+    while b > bosqich:
+        b //= 2
+        n += 1
+    return _turnir_vaqti(hafta) + n * (MATCH_T + ORALIQ)
+
+
+# ---------- reyting (Elo) ----------
+def _reyting(conn, uid):
+    r = conn.execute("SELECT reyting, oyin, galaba FROM duel_reyting WHERE user_id=?", (int(uid),)).fetchone()
+    return (float(r["reyting"]), int(r["oyin"]), int(r["galaba"])) if r else (float(REYTING0), 0, 0)
+
+
+def _reyting_yoz(conn, uid, r, yutdi):
+    conn.execute("INSERT INTO duel_reyting (user_id, reyting, oyin, galaba) VALUES (?,?,1,?) "
+                 "ON CONFLICT(user_id) DO UPDATE SET reyting=excluded.reyting, oyin=oyin+1, galaba=galaba+excluded.galaba",
+                 (int(uid), float(r), 1 if yutdi else 0))
+
+
+def _kutilgan(ra, rb):
+    return 1.0 / (1.0 + 10 ** ((rb - ra) / 400.0))
+
+
+def _elo_bot(conn, uid, daraja, yutdi):
+    """Kompyuter raqib bilan duel: raqib reytingi qat'iy (BOT_R), K kichik - oson raqibni yengib reyting «bosib» bo'lmaydi."""
+    if int(uid) <= 0:
+        return 0
+    r = _reyting(conn, uid)[0]
+    farq = K_BOT * ((1.0 if yutdi else 0.0) - _kutilgan(r, BOT_R.get(int(daraja), REYTING0)))
+    _reyting_yoz(conn, uid, r + farq, yutdi)
+    return int(round(farq))
+
+
+def _elo_jonli(conn, golib, yutqazgan):
+    """Jonli duel: ikkala tomonning reytingi o'zgaradi."""
+    if not golib or not yutqazgan or golib <= 0 or yutqazgan <= 0:
+        return
+    rg, ry = _reyting(conn, golib)[0], _reyting(conn, yutqazgan)[0]
+    farq = K_JONLI * (1.0 - _kutilgan(rg, ry))
+    _reyting_yoz(conn, golib, rg + farq, True)
+    _reyting_yoz(conn, yutqazgan, ry - farq, False)
+
+
+def _qatnashchilar(conn, hafta):
+    """Yozilganlar - REYTING bo'yicha (yuqoridan), teng bo'lsa ko'proq o'ynagan, keyin oldin yozilgan."""
     return conn.execute(
-        "SELECT s.user_id, SUM(s.ball) AS ball, MAX(s.vaqt) AS vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house "
-        "FROM duel_saral s JOIN users u ON u.user_id = s.user_id WHERE s.hafta=? AND u.house IS NOT NULL AND s.user_id > 0 "
-        "GROUP BY s.user_id ORDER BY ball DESC, vaqt ASC", (hafta,)).fetchall()
+        "SELECT q.user_id, COALESCE(r.reyting, ?) AS reyting, COALESCE(r.oyin, 0) AS oyin, q.vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house "
+        "FROM duel_qatnash q JOIN users u ON u.user_id = q.user_id LEFT JOIN duel_reyting r ON r.user_id = q.user_id "
+        "WHERE q.hafta=? AND u.house IS NOT NULL AND q.user_id > 0 ORDER BY reyting DESC, oyin DESC, q.vaqt ASC", (REYTING0, hafta)).fetchall()
 
 
 def _tor_tuz(conn, hafta, berish):
-    """Payshanbadan boshlab bir marta: saralash jadvalidan to'r. Qatnashchilarga kirish bali."""
-    if hafta < PLEYOFF_DAN or _now().weekday() < 3:
+    """Turnirdan YOPILISH soniya oldin bir marta: yozilganlardan to'r. Istalgan son: to'r eng yaqin 2 ning darajasiga
+    to'ldiriladi, reytingi yuqorilar birinchi bosqichni o'tkazib yuboradi (raqibi yo'q - «bye»)."""
+    if hafta < PLEYOFF_DAN or _ep() < _turnir_vaqti(hafta) - YOPILISH:
         return
     cur = conn.execute("INSERT OR IGNORE INTO duel_turnir (hafta, hajm, vaqt) VALUES (?,0,?)", (hafta, hpcup._utc_iso(_now())))
     if cur.rowcount < 1:
         return
-    rows = _saral(conn, hafta)
-    hajm = 16 if len(rows) >= 16 else 8 if len(rows) >= 8 else 4 if len(rows) >= 4 else 2 if len(rows) >= 2 else 0
-    conn.execute("UPDATE duel_turnir SET hajm=? WHERE hafta=?", (hajm, hafta))
-    if not hajm:
+    rows = _qatnashchilar(conn, hafta)
+    n = len(rows)
+    if n < 2:
         return
-    t, s = _tartib(hajm), hajm
+    hajm = 2
+    while hajm < n:
+        hajm *= 2
+    conn.execute("UPDATE duel_turnir SET hajm=? WHERE hafta=?", (hajm, hafta))
+    s = hajm
+    while s >= 2:                                # hamma bosqich uchrashuvlari oldindan (bo'sh) yaratiladi
+        for i in range(s // 2):
+            conn.execute("INSERT INTO duel_match (hafta, bosqich, joy, bosh, a_jon, b_jon) VALUES (?,?,?,?,?,?)",
+                         (hafta, s, i, _bosqich_vaqti(hafta, s, hajm), JON, JON))
+        s //= 2
+    t = _tartib(hajm)
     for i in range(hajm // 2):
         a, b = t[2 * i], t[2 * i + 1]
-        conn.execute("INSERT INTO duel_match (hafta, bosqich, joy, a, b, a_seed, b_seed, bosh) VALUES (?,?,?,?,?,?,?,?)",
-                     (hafta, hajm, i, rows[a - 1]["user_id"], rows[b - 1]["user_id"], a, b, _bosqich_vaqti(hafta, hajm)))
-    s = hajm // 2
-    while s >= 2:
-        for i in range(s // 2):
-            conn.execute("INSERT INTO duel_match (hafta, bosqich, joy, bosh) VALUES (?,?,?,?)", (hafta, s, i, _bosqich_vaqti(hafta, s)))
-        s //= 2
-    for r in rows[:hajm]:
-        berish.append((r["user_id"], "duel:%s:k" % hafta, KIRISH_BALL))
+        conn.execute("UPDATE duel_match SET a=?, a_seed=?, b=?, b_seed=? WHERE hafta=? AND bosqich=? AND joy=?",
+                     (rows[a - 1]["user_id"], a, rows[b - 1]["user_id"] if b <= n else None, b if b <= n else None, hafta, hajm, i))
+        if b > n:                                # raqibi yo'q: kuchli duelchi keyingi bosqichga o'tadi
+            m = conn.execute("SELECT * FROM duel_match WHERE hafta=? AND bosqich=? AND joy=?", (hafta, hajm, i)).fetchone()
+            _tugat(conn, m, m["a"], "bye", berish)
 
 
 def _tugat(conn, m, golib, sabab, berish):
     conn.execute("UPDATE duel_match SET holat='tugadi', golib=?, sabab=? WHERE id=?", (golib, sabab, m["id"]))
     if m["hafta"].startswith("sinov"):
         return
-    berish.append((golib, "duel:%s:%d" % (m["hafta"], m["bosqich"]), BOSQICH_BALL.get(m["bosqich"], 0)))
+    if sabab != "bye":
+        berish.append((golib, "duel:%s:%d" % (m["hafta"], m["bosqich"]), BOSQICH_BALL.get(m["bosqich"], 0)))
+    if sabab in ("duel", "vaqt"):                # haqiqatan o'ynalgan duel - reytingga ta'sir qiladi
+        _elo_jonli(conn, golib, m["b"] if golib == m["a"] else m["a"])
     nb = m["bosqich"] // 2
     if nb >= 2:
         yon = "a" if m["joy"] % 2 == 0 else "b"
@@ -214,6 +292,16 @@ def _match_yur(conn, m, now, berish, rnd=random):
                 _tugat(conn, m, m["a"] if keldi("a") else m["b"], "kelmadi", berish)
             else:
                 _tugat(conn, m, m["a"] if (m["a_seed"] or 99) < (m["b_seed"] or 99) else m["b"], "ikkalasi", berish)
+        return
+    if now >= m["bosh"] + MATCH_T and not m["hafta"].startswith("sinov"):
+        # Duelga ajratilgan vaqt tugadi: joni ko'p, keyin aniqliklar yig'indisi, keyin reytingdagi o'rni
+        if m["a_jon"] != m["b_jon"]:
+            g = m["a"] if m["a_jon"] > m["b_jon"] else m["b"]
+        elif m["a_sum"] != m["b_sum"]:
+            g = m["a"] if m["a_sum"] > m["b_sum"] else m["b"]
+        else:
+            g = m["a"] if (m["a_seed"] or 99) < (m["b_seed"] or 99) else m["b"]
+        _tugat(conn, m, g, "vaqt", berish)
         return
     if now < (m["r_bosh"] or 0):
         return                                  # raund natijasi ko'rsatilmoqda
@@ -253,29 +341,20 @@ def _match_yur(conn, m, now, berish, rnd=random):
 
 
 def _eslatmalar(conn, hafta, xabarlar):
-    """Bugungi eslatmalar: to'rga kirganlar (payshanba 10:00), duel kuni 10:00 va 20:50."""
-    t = conn.execute("SELECT hajm FROM duel_turnir WHERE hafta=?", (hafta,)).fetchone()
-    if not t or not t["hajm"]:
+    """Turnir kuni yozilganlarga: ertalab 10:00 va boshlanishiga 10 daqiqa qolganda."""
+    if hafta < PLEYOFF_DAN:
         return
     hozir = _now()
-    kun, daq = hozir.weekday(), hozir.hour * 60 + hozir.minute
-    def belgi(bosqich, tur):
-        return conn.execute("INSERT OR IGNORE INTO duel_eslatma (hafta, bosqich, tur) VALUES (?,?,?)", (hafta, bosqich, tur)).rowcount > 0
-    if (kun > 3 or (kun == 3 and daq >= 600)) and belgi(0, "kirdi"):
-        for m in conn.execute("SELECT a, b, bosqich FROM duel_match WHERE hafta=? AND bosqich=?", (hafta, t["hajm"])).fetchall():
-            for u in (m["a"], m["b"]):
-                xabarlar.append((u, "kirdi", m["bosqich"]))
-    for bosqich, k in BOSQICH_KUN.items():
-        if bosqich > t["hajm"] or k != kun:
-            continue
-        tur = "on" if SOAT * 60 - 10 <= daq < SOAT * 60 + 5 else "ertalab" if 600 <= daq < SOAT * 60 - 10 else None
-        if tur == "ertalab" and bosqich == t["hajm"] and k == 3:
-            continue                            # payshanba: «kirdi» xatining o'zi yetadi
-        if tur and belgi(bosqich, tur):
-            for m in conn.execute("SELECT a, b FROM duel_match WHERE hafta=? AND bosqich=? AND holat<>'tugadi' "
-                                  "AND a IS NOT NULL AND b IS NOT NULL", (hafta, bosqich)).fetchall():
-                for u in (m["a"], m["b"]):
-                    xabarlar.append((u, tur, bosqich))
+    if hozir.weekday() != TURNIR_KUN:
+        return
+    daq = hozir.hour * 60 + hozir.minute
+    tur = "on" if SOAT * 60 - 10 <= daq < SOAT * 60 else "ertalab" if 600 <= daq < SOAT * 60 - 10 else None
+    if not tur:
+        return
+    if conn.execute("INSERT OR IGNORE INTO duel_eslatma (hafta, bosqich, tur) VALUES (?,0,?)", (hafta, tur)).rowcount < 1:
+        return
+    for r in conn.execute("SELECT user_id FROM duel_qatnash WHERE hafta=?", (hafta,)).fetchall():
+        xabarlar.append((r["user_id"], tur, 0))
 
 
 def _tick():
@@ -295,26 +374,17 @@ def _tick():
     return berish, xabarlar
 
 
-KUN_NOMI = {"uz": {16: "payshanba", 8: "juma", 4: "shanba", 2: "yakshanba"}, "ru": {16: "четверг", 8: "пятница", 4: "суббота", 2: "воскресенье"},
-            "en": {16: "Thursday", 8: "Friday", 4: "Saturday", 2: "Sunday"}}
-BOSQICH_NOMI = {"uz": {16: "1/8 final", 8: "chorak final", 4: "yarim final", 2: "final"}, "ru": {16: "1/8 финала", 8: "четвертьфинал", 4: "полуфинал", 2: "финал"},
-                "en": {16: "round of 16", 8: "quarter-final", 4: "semi-final", 2: "final"}}
 
 
-def xat_matni(tur, bosqich):
-    """{til: (sarlavha, matn)} - duel xatlari."""
-    k, b = KUN_NOMI, BOSQICH_NOMI
-    if tur == "kirdi":
-        return {"uz": ("Siz duel turnirining pley-offiga chiqdingiz!", "Birinchi duelingiz — %s: %s kuni soat 21:00 da. Vaqtida ilovaga kiring: Xogvarts → Duel. 5 daqiqa ichida kelmagan duelchi yutqazadi." % (b["uz"][bosqich], k["uz"][bosqich])),
-                "ru": ("Вы вышли в плей-офф дуэльного турнира!", "Ваша первая дуэль — %s: %s, 21:00. Зайдите вовремя: Хогвартс → Дуэль. Кто не придёт в течение 5 минут — проигрывает." % (b["ru"][bosqich], k["ru"][bosqich])),
-                "en": ("You are through to the duelling play-offs!", "Your first duel is the %s: %s at 21:00. Be on time: Hogwarts → Duel. Anyone who fails to turn up within 5 minutes loses." % (b["en"][bosqich], k["en"][bosqich]))}
+def xat_matni(tur, bosqich=0):
+    """{til: (sarlavha, matn)} - duel turniri xatlari (yozilganlarga)."""
     if tur == "ertalab":
-        return {"uz": ("Bugun 21:00 da duelingiz bor", "Duel turniri, %s. Soat 21:00 da ilovaga kiring: Xogvarts → Duel. Kelmagan duelchi yutqazadi." % b["uz"][bosqich]),
-                "ru": ("Сегодня в 21:00 ваша дуэль", "Дуэльный турнир, %s. Зайдите в 21:00: Хогвартс → Дуэль. Не пришедший проигрывает." % b["ru"][bosqich]),
-                "en": ("Your duel is today at 21:00", "Duelling tournament, %s. Come in at 21:00: Hogwarts → Duel. A duellist who does not turn up loses." % b["en"][bosqich])}
-    return {"uz": ("Duelga 10 daqiqa qoldi!", "Raqibingiz kutmoqda (%s). Hoziroq ilovaga kiring: Xogvarts → Duel." % b["uz"][bosqich]),
-            "ru": ("До дуэли 10 минут!", "Соперник ждёт (%s). Зайдите прямо сейчас: Хогвартс → Дуэль." % b["ru"][bosqich]),
-            "en": ("10 minutes to your duel!", "Your opponent is waiting (%s). Come in now: Hogwarts → Duel." % b["en"][bosqich])}
+        return {"uz": ("Bugun 21:00 da duel turniri", "Siz turnirga yozilgansiz. Soat 21:00 da ilovaga kiring: Xogvarts → Duel. Turnir bir oqshomda tugaydi; 1 daqiqa ichida kelmagan duelchi yutqazadi."),
+                "ru": ("Сегодня в 21:00 дуэльный турнир", "Вы записаны на турнир. Зайдите в 21:00: Хогвартс → Дуэль. Турнир проходит за один вечер; кто не придёт в течение минуты — проигрывает."),
+                "en": ("The duelling tournament is today at 21:00", "You are signed up. Come in at 21:00: Hogwarts → Duel. The tournament is played in one evening; anyone who is a minute late loses.")}
+    return {"uz": ("Turnirga 10 daqiqa qoldi!", "Duel turniri 21:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Duel."),
+            "ru": ("До турнира 10 минут!", "Дуэльный турнир начнётся в 21:00. Зайдите прямо сейчас: Хогвартс → Дуэль."),
+            "en": ("10 minutes to the tournament!", "The duelling tournament starts at 21:00. Come in now: Hogwarts → Duel.")}
 
 
 async def tick():
@@ -338,7 +408,12 @@ async def kuzatuvchi(interval=15):
             await tick()
         except Exception as e:
             logging.error("Duel kuzatuvchisi: %s", e)
-        await asyncio.sleep(interval)
+        # turnir oqshomida (boshlanishdan 6 daqiqa oldin - 1,5 soat keyin) tez-tez: bosqichlar oralig'i atigi 1 daqiqa
+        try:
+            farq = _ep() - _turnir_vaqti(hpdars._hafta())
+        except Exception:
+            farq = None
+        await asyncio.sleep(3 if (farq is not None and -360 <= farq <= 5400) else interval)
 
 
 def _tarix_ol(row):
@@ -347,12 +422,6 @@ def _tarix_ol(row):
         return json.loads(row["tarix"] or "[]")
     except (KeyError, IndexError, TypeError, ValueError):
         return []
-
-
-def _tor_vaqti(hafta):
-    """To'r tuziladigan payt (epoch): hafta dushanbasi + 3 kun, 00:00 Toshkent."""
-    y, m, d = (int(x) for x in hafta.split("-"))
-    return (datetime(y, m, d, 0, 0, 0, tzinfo=_now().tzinfo) + timedelta(days=3)).timestamp()
 
 
 def _raundlar(tarix, men_a=True):
@@ -438,6 +507,8 @@ def _kubok(conn, uid, hafta):
     t = conn.execute("SELECT hajm FROM duel_turnir WHERE hafta=?", (hafta,)).fetchone()
     if not t:
         return {"size": None, "hour": SOAT}
+    if not t["hajm"]:
+        return {"size": 0, "hour": SOAT}
     ms = conn.execute("SELECT * FROM duel_match WHERE hafta=? ORDER BY bosqich DESC, joy", (hafta,)).fetchall()
     od = _odamlar(conn, [x for m in ms for x in (m["a"], m["b"])])
     bosq, men = {}, None
@@ -449,7 +520,9 @@ def _kubok(conn, uid, hafta):
             # eng yaqin (eng katta bosqichli) tugamagan uchrashuvi; raqibi hali aniqlanmagan bo'lishi mumkin
             men = men or {"id": m["id"], "stage": m["bosqich"], "ts": m["bosh"], "ready": m["a"] is not None and m["b"] is not None}
     return {"size": t["hajm"], "hour": SOAT, "wait": KUTISH, "now": _ep(), "my": men,
-            "stages": [{"stage": b, "ts": _bosqich_vaqti(hafta, b), "matches": bosq[b]} for b in sorted(bosq, reverse=True)]}
+            "match_t": MATCH_T, "gap": ORALIQ,
+            "stages": [{"stage": b, "ts": _bosqich_vaqti(hafta, b, t["hajm"]), "points": BOSQICH_BALL.get(b, 0), "matches": bosq[b]}
+                       for b in sorted(bosq, reverse=True)]}
 
 
 def _arena(uid, mid, tur=None, acc=0, rnd=random):
@@ -490,7 +563,34 @@ def _arena(uid, mid, tur=None, acc=0, rnd=random):
             "lives": JON if m["holat"] == "kutmoqda" else m[yon + "_jon"], "rlives": JON if m["holat"] == "kutmoqda" else m[u + "_jon"], "moved": m[yon + "_yur"] is not None,
             "opp": dict(_kim(od, m[u], m[u + "_seed"]), here=(m[u] == BOT_UID or (m[u + "_keldi"] is not None and now - m[u + "_keldi"] <= BOR))),
             "last": last, "over": m["holat"] == "tugadi", "won": m["golib"] == uid, "why": m["sabab"],
+            "next": _keyingi(conn, uid, m, now), "match_left": max(0, int(m["bosh"] + MATCH_T - now)),
         }, berish
+    finally:
+        conn.close()
+
+
+def _keyingi(conn, uid, m, now):
+    """Shu turnirdagi navbatdagi (tugamagan) dueli: {id, in} - g'olib keyingi bosqichga shu orqali o'tadi."""
+    if m["holat"] != "tugadi" or m["golib"] != uid or m["hafta"].startswith("sinov"):
+        return None
+    k = conn.execute("SELECT id, bosh FROM duel_match WHERE hafta=? AND holat<>'tugadi' AND (a=? OR b=?) ORDER BY bosqich DESC LIMIT 1",
+                     (m["hafta"], uid, uid)).fetchone()
+    return {"id": k["id"], "in": max(0, int(k["bosh"] - now))} if k else None
+
+
+def _yozil(uid, on):
+    """Turnirga yozilish / chiqish. Yozilish turnirdan YOPILISH soniya oldin yopiladi."""
+    uid, hafta = int(uid), hpdars._hafta()
+    if hafta < PLEYOFF_DAN or _ep() >= _turnir_vaqti(hafta) - YOPILISH:
+        return False
+    conn = hpcup._connect()
+    try:
+        if on:
+            conn.execute("INSERT OR IGNORE INTO duel_qatnash (hafta, user_id, vaqt) VALUES (?,?,?)", (hafta, uid, hpcup._utc_iso(hpcup.now_tk())))
+        else:
+            conn.execute("DELETE FROM duel_qatnash WHERE hafta=? AND user_id=?", (hafta, uid))
+        conn.commit()
+        return True
     finally:
         conn.close()
 
@@ -514,19 +614,29 @@ def _holat(uid):
     try:
         men = {int(r["daraja"]): int(r["ball"]) for r in conn.execute(
             "SELECT daraja, ball FROM duel_saral WHERE user_id=? AND hafta=?", (uid, hafta))}
+        # REYTING jadvali: kamida bitta duel o'ynaganlar
         rows = conn.execute(
-            "SELECT s.user_id, SUM(s.ball) AS ball, MAX(s.vaqt) AS vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house "
-            "FROM duel_saral s JOIN users u ON u.user_id = s.user_id WHERE s.hafta=? AND u.house IS NOT NULL AND s.user_id > 0 "
-            "GROUP BY s.user_id ORDER BY ball DESC, vaqt ASC", (hafta,)).fetchall()
+            "SELECT r.user_id, r.reyting, r.oyin, r.galaba, COALESCE(u.first_name, 'Sehrgar') AS name, u.house "
+            "FROM duel_reyting r JOIN users u ON u.user_id = r.user_id WHERE u.house IS NOT NULL AND r.user_id > 0 AND r.oyin > 0 "
+            "ORDER BY r.reyting DESC, r.oyin DESC").fetchall()
+        rm = _reyting(conn, uid)
+        orin = next((i + 1 for i, r in enumerate(rows) if r["user_id"] == uid), None)
+        ts = _turnir_vaqti(hafta) if hafta >= PLEYOFF_DAN else _turnir_vaqti(PLEYOFF_DAN)
+        qat = _qatnashchilar(conn, hafta) if hafta >= PLEYOFF_DAN else []
         return {
             "ok": True, "week": hafta, "mine": {"1": men.get(1, 0), "2": men.get(2, 0), "3": men.get(3, 0), "total": sum(men.values())},
-            "n": len(rows), "place": next((i + 1 for i, r in enumerate(rows) if r["user_id"] == uid), None),
-            "top": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "score": int(r["ball"]),
-                     "me": r["user_id"] == uid} for r in rows[:TOP]],
-            "rules": {"lives": JON, "fail": KAM, "top": TOP, "round": RAUND_T, "bonus": USTUN},
-            # pley-offga chiqish chegarasi (TOP-o'rindagi ball; joy bo'sh bo'lsa 0) va to'r tuziladigan payt (payshanba 00:00)
-            "cut": int(rows[TOP - 1]["ball"]) if len(rows) >= TOP else 0, "draw_ts": _tor_vaqti(hafta), "now": _ep(),
-            "cup": _kubok(conn, uid, hafta), "admin": uid in set(_cfg.get("admin_ids") or ()),
+            "rating": {"r": int(round(rm[0])), "games": rm[1], "wins": rm[2], "place": orin, "n": len(rows)},
+            "n": len(rows), "place": orin,
+            "top": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "score": int(round(r["reyting"])),
+                     "games": int(r["oyin"]), "me": r["user_id"] == uid} for r in rows[:TOP]],
+            "rules": {"lives": JON, "fail": KAM, "top": TOP, "round": RAUND_T, "bonus": USTUN, "match": MATCH_T, "gap": ORALIQ, "wait": KUTISH,
+                      "points": {str(k): v for k, v in BOSQICH_BALL.items()}},
+            # Turnir: qachon, yozilish ochiqmi, o'zi yozilganmi, nechta odam yozilgan (reyting bo'yicha birinchi 30 tasi)
+            "tour": {"ts": ts, "now": _ep(), "open": hafta >= PLEYOFF_DAN and _ep() < ts - YOPILISH, "joined": any(r["user_id"] == uid for r in qat),
+                     "n": len(qat), "close": YOPILISH,
+                     "players": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "r": int(round(r["reyting"])),
+                                  "me": r["user_id"] == uid} for r in qat[:30]]},
+            "cup": _kubok(conn, uid, hafta), "admin": uid in set(_cfg.get("admin_ids") or ()), "now": _ep(),
         }
     finally:
         conn.close()
@@ -572,10 +682,11 @@ def _yur(uid, oyin, tur, acc, rnd=random):
         conn.execute("UPDATE duel_oyin SET jon=?, rjon=?, raund=?, acc_sum=?, turlar=?, holat=?, tarix=? WHERE id=?",
                      (jon, rjon, raund, acc_sum, g["turlar"] + tur[2], ("yutdi" if yutdi else "yutqazdi") if tugadi else "ketmoqda",
                       json.dumps(tarix), g["id"]))
+        farq = _elo_bot(conn, uid, daraja, yutdi) if tugadi else 0
         conn.commit()
         return {"round": {"mine": tur, "his": utur, "acc": acc, "racc": uacc, "win": w},
                 "game": {"id": g["id"], "level": daraja, "lives": jon, "rlives": rjon, "round": raund,
-                         "over": tugadi, "won": bool(yutdi), "score": natija}}
+                         "over": tugadi, "won": bool(yutdi), "score": natija, "delta": farq}}
     finally:
         conn.close()
 
@@ -599,7 +710,14 @@ async def api_duel(request):
         await tick()
     except Exception as e:
         logging.error("Duel tick: %s", e)
-    if body.get("history"):
+    if body.get("join") is not None:
+        qosh["join_ok"] = await asyncio.to_thread(_yozil, uid, bool(body.get("join")))
+        if _cfg.get("log"):
+            try:
+                await _cfg["log"](user, "duel_turnir_" + ("yozildi" if body.get("join") else "chiqdi"))
+            except Exception:
+                pass
+    elif body.get("history"):
         qosh["history"] = await asyncio.to_thread(_tarixim, uid)
     elif isinstance(body.get("replay"), dict):
         try:
