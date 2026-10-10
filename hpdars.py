@@ -122,6 +122,8 @@ def _init():
         conn.execute("CREATE TABLE IF NOT EXISTS dars_rekord ("
                      " user_id INTEGER NOT NULL, dars TEXT NOT NULL, hafta TEXT NOT NULL, ball INTEGER NOT NULL, vaqt TEXT,"
                      " PRIMARY KEY (user_id, dars, hafta))")
+        conn.execute("CREATE TABLE IF NOT EXISTS dars_eslatma ("
+                     " user_id INTEGER NOT NULL, tur TEXT NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (user_id, tur))")
         conn.execute("CREATE TABLE IF NOT EXISTS dars_yakun ("
                      " kun TEXT NOT NULL, dars TEXT NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (kun, dars))")
         conn.commit()
@@ -389,6 +391,77 @@ def kurs(uid):
         if n == 3 and darslar >= KURS_4:
             n = 4
     return {"n": n, "lessons": int(darslar), "bell": bell, "need2": KURS_2, "need4": KURS_4}
+
+
+# ---------- Yangi saralanganlarga eslatma (egasi, 2026-10-11; boyo'g'li pochtasi + bot) ----------
+# "ilk"  - saralanganiga bir kun bo'ldi, hali birorta dars o'tmagan;
+# "bell" - 2-kursga yetgan (3 dars), ertasiga ham bellashuvda qatnashmagan.
+# Har biri bir odamga BIR MARTA. Faqat kurslar joriy qilingandan keyin saralanganlarga (eskilariga ommaviy xat ketmaydi).
+ESL_KUT = 20 * 3600            # saralangandan keyin shuncha kutiladi
+ESL_ESKI = 7 * 86400           # bir haftadan ortiq jim odamga yuborilmaydi
+ESL_SOAT = (10, 21)            # Toshkent vaqti bilan shu oraliqda
+ESL_MATN = {
+    "ilk": {
+        "uz": ("Professor Flitvik sizni kutyapti", "Fakultetingiz aniqlandi, lekin birinchi darsingiz hali o'tilmadi. Afsunlar darsi bir daqiqa vaqt oladi: Xogvarts → Darslar → Afsunlar."),
+        "ru": ("Профессор Флитвик ждёт вас", "Факультет определён, но первый урок ещё не пройден. Урок Заклинаний займёт минуту: Хогвартс → Уроки → Заклинания."),
+        "en": ("Professor Flitwick is waiting", "You have a house, but your first lesson is still ahead. Charms takes a minute: Hogwarts → Lessons → Charms."),
+    },
+    "bell": {
+        "uz": ("Bugungi bellashuvda hali joy bor", "Siz 2-kursdasiz — endi bellashuvlarda qatnashib, fakultetingizga ball keltira olasiz. Bir marta qatnashsangiz 3-kurs ochiladi: Xogvarts → Bellashuv."),
+        "ru": ("В сегодняшнем состязании ещё есть место", "Вы на 2 курсе — теперь можно участвовать в состязаниях и приносить баллы факультету. Одно участие открывает 3 курс: Хогвартс → Состязание."),
+        "en": ("Today's contest still has room", "You are in year 2 — you can now enter contests and earn points for your house. One entry opens year 3: Hogwarts → Contest."),
+    },
+}
+
+
+def _eslatma_nomzodlar(hozir=None):
+    """[(uid, tur)] - hozir eslatma olishi kerak bo'lganlar; shu yerning o'zida belgilanadi (takror ketmaydi)."""
+    hozir = hozir or hpcup.now_tk()
+    if not (ESL_SOAT[0] <= hozir.hour < ESL_SOAT[1]):
+        return []
+    ep = hozir.timestamp()
+    bugun = hozir.strftime("%Y-%m-%d")
+    out = []
+    conn = hpcup._connect()
+    try:
+        bor = {(r["user_id"], r["tur"]) for r in conn.execute("SELECT user_id, tur FROM dars_eslatma")}
+        for u in conn.execute("SELECT user_id, sorted_at FROM users WHERE user_id > 0 AND house IS NOT NULL AND sorted_at >= ?", (KURS_ESKI,)).fetchall():
+            uid = u["user_id"]
+            try:
+                yosh = ep - hpcup._parse_iso(u["sorted_at"]).timestamp()
+            except Exception:
+                continue
+            if yosh < ESL_KUT:
+                continue
+            d = conn.execute("SELECT COALESCE(SUM(daraja),0) AS n, MAX(kun) AS kun FROM dars_daraja WHERE user_id=?", (uid,)).fetchone()
+            tur = None
+            if d["n"] == 0:
+                if yosh < ESL_ESKI:
+                    tur = "ilk"
+            elif d["n"] >= KURS_2 and (d["kun"] or bugun) < bugun and (d["kun"] or "") >= (hozir - timedelta(days=7)).strftime("%Y-%m-%d"):
+                if not conn.execute("SELECT 1 FROM dars_bellashuv WHERE user_id=? LIMIT 1", (uid,)).fetchone():
+                    tur = "bell"
+            if tur and (uid, tur) not in bor:
+                conn.execute("INSERT OR IGNORE INTO dars_eslatma (user_id, tur, vaqt) VALUES (?,?,?)", (uid, tur, hpcup._utc_iso(hozir)))
+                out.append((uid, tur))
+        conn.commit()
+    finally:
+        conn.close()
+    return out
+
+
+async def eslatma_kuzatuvchi(xat, interval=600):
+    """Fon aylanasi: har 10 daqiqada nomzodlarni topib, boyo'g'li xati (va bot xabari) yuboradi."""
+    while True:
+        try:
+            for uid, tur in await asyncio.to_thread(_eslatma_nomzodlar):
+                try:
+                    await xat(uid, ESL_MATN[tur], True)
+                except Exception as e:
+                    logging.error("Dars eslatmasi %s/%s: %s", uid, tur, e)
+        except Exception as e:
+            logging.error("Dars eslatmalari: %s", e)
+        await asyncio.sleep(interval)
 
 
 def _dars_bajarildi(uid, dars, daraja):

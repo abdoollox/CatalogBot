@@ -2894,6 +2894,20 @@ async def test_reset(user_id):
                     "DELETE FROM chess_games WHERE white_uid=? OR black_uid=?",
                     "DELETE FROM chess_ratings WHERE user_id=?",
                     "DELETE FROM chess_bot_results WHERE user_id=?",
+                    "DELETE FROM dars_daraja WHERE user_id=?",
+                    "DELETE FROM dars_baho WHERE user_id=?",
+                    "DELETE FROM dars_bellashuv WHERE user_id=?",
+                    "DELETE FROM dars_rekord WHERE user_id=?",
+                    "DELETE FROM issiq WHERE user_id=?",
+                    "DELETE FROM issiq_hosil WHERE user_id=?",
+                    "DELETE FROM qoriq WHERE user_id=?",
+                    "DELETE FROM duel_oyin WHERE user_id=?",
+                    "DELETE FROM duel_saral WHERE user_id=?",
+                    "DELETE FROM duel_reyting WHERE user_id=?",
+                    "DELETE FROM duel_qatnash WHERE user_id=?",
+                    "DELETE FROM sh_qatnash WHERE user_id=?",
+                    "DELETE FROM vk_qatnash WHERE user_id=?",
+                    "DELETE FROM pochta WHERE user_id=?",
                     "UPDATE users SET invited_by=NULL, ref_awarded_at=NULL WHERE invited_by=?",
                     "DELETE FROM users WHERE user_id=?"):
                 try:
@@ -2901,6 +2915,11 @@ async def test_reset(user_id):
                 except sqlite3.OperationalError:
                     # Jadval hali yaratilmagan bo'lsa (masalan shaxmat) - o'tamiz
                     pass
+            # Boshlanish nuqtasi - SARALANISH (egasi, 2026-10-11): Gringotts, tayoqcha va bilet olingan holda
+            _touch_user(conn, uid)
+            hozir = _utc_iso(now_tk())
+            conn.execute("UPDATE users SET galleons=?, vault_at=?, wand_at=?, ticket_at=? WHERE user_id=?",
+                         (START_GALLEONS - WAND_PRICE, hozir, hozir, hozir, uid))
             conn.commit()
         finally:
             conn.close()

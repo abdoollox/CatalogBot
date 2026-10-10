@@ -319,6 +319,38 @@ async def amain():
     st, d = await ask(77)
     check("kurs holat javobida keladi", d.get("kurs", {}).get("n") == 4)
 
+    # ---------- Yangi saralanganlarga eslatma ----------
+    import datetime as _d
+    q("DELETE FROM dars_eslatma")
+    T = hpcup._parse_iso("2026-10-14T08:00:00Z")           # Toshkentda 13:00
+    def nom(v): return hpdars._eslatma_nomzodlar(v.astimezone(hpcup.now_tk().tzinfo))
+    await hpcup.touch_user(81, "Ilk"); await hpcup.set_house(81, "ravenclaw")
+    q("DELETE FROM dars_daraja WHERE user_id IN (77,81)"); q("DELETE FROM dars_bellashuv WHERE user_id IN (77,81)")
+    q("UPDATE users SET sorted_at='2026-10-14T05:00:00Z' WHERE user_id=81")
+    check("eslatma: saralanganiga 3 soat - hali yo'q", (81, "ilk") not in nom(T))
+    q("UPDATE users SET sorted_at='2026-10-13T05:00:00Z' WHERE user_id=81")
+    check("eslatma: tunda yuborilmaydi", nom(hpcup._parse_iso("2026-10-14T20:00:00Z")) == [])
+    check("eslatma: ertasiga darssiz - «Flitvik kutyapti»", (81, "ilk") in nom(T))
+    check("eslatma: ikkinchi marta ketmaydi", (81, "ilk") not in nom(T))
+    check("eslatma: eski saralangan (77) olmaydi", not q("SELECT 1 FROM dars_eslatma WHERE user_id=77"))
+    q("INSERT INTO dars_daraja (user_id, dars, daraja, kun) VALUES (81,'afsun',3,'2026-10-14')")
+    check("eslatma: 2-kursga bugun yetgan - hali yo'q", (81, "bell") not in nom(T))
+    q("UPDATE dars_daraja SET kun='2026-10-13' WHERE user_id=81")
+    check("eslatma: 2-kurs, ertasiga bellashmagan - bellashuvga chaqiradi", (81, "bell") in nom(T))
+    q("DELETE FROM dars_eslatma WHERE tur='bell'")
+    q("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES ('2026-10-13','afsun',81,9000,'x')")
+    check("eslatma: bellashgan odamga ketmaydi", (81, "bell") not in nom(T))
+    check("eslatma matnlari uch tilda", all(set(v) == {"uz", "ru", "en"} for v in hpdars.ESL_MATN.values()))
+
+    # ---------- Sinov o'quvchisi: «Noldan» = saralanish boshi ----------
+    await hpcup.touch_user(-5, "Sinov"); await hpcup.set_house(-5, "slytherin")
+    q("INSERT OR REPLACE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (-5,'afsun',4,'2026-10-13')")
+    await hpcup.test_reset(-5)
+    w_ = await hpcup.wallet(-5)
+    r_ = q("SELECT house FROM users WHERE user_id=-5")
+    check("sinov: darslari o'chdi, fakulteti yo'q", not q("SELECT 1 FROM dars_daraja WHERE user_id=-5") and r_ and r_[0][0] is None)
+    check("sinov: Gringotts, tayoqcha, bilet tayyor", bool(w_.get("vault")) and bool(w_.get("wand")) and bool(w_.get("ticket")))
+
     print("Darslar: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
 
