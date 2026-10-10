@@ -774,6 +774,8 @@ def _kimlar(kimga):
         arg.append(kimga["fakultet"])
     elif tur == "saralanmagan":
         sql += " AND house IS NULL"
+    elif tur == "saralangan":
+        sql += " AND house IS NOT NULL"
     elif tur != "hamma":
         raise ValueError("tur")
     if til:
@@ -865,6 +867,24 @@ async def tilda_tarqat(matnlar, botga=True):
         tid, pidlar = await asyncio.to_thread(_tarqatma_yarat, sarlavha, matn, kimga, botga, False, uidlar)
         _tarqatma_band["id"] = tid
         await _tarqat(_cfg["bot"], tid, pidlar, sarlavha, matn, botga)
+
+
+async def saralanganlarga_tarqat(matnlar, botga=True):
+    """{til: (sarlavha, matn)} - SARALANGAN o'quvchilarga o'z tilida xat (va bot xabari). Turnir e'lonlari uchun.
+    Ketma-ket yuboradi; boshqa tarqatma ketayotgan bo'lsa navbat kutadi. Qaytaradi: nechta odamga."""
+    jami = 0
+    for til, (sarlavha, matn) in matnlar.items():
+        while _tarqatma_band["id"]:
+            await asyncio.sleep(2)
+        kimga = {"tur": "saralangan", "til": til}
+        uidlar = await asyncio.to_thread(_kimlar, kimga)
+        if not uidlar:
+            continue
+        tid, pidlar = await asyncio.to_thread(_tarqatma_yarat, sarlavha, matn, kimga, botga, False, uidlar)
+        _tarqatma_band["id"] = tid
+        await _tarqat(_cfg["bot"], tid, pidlar, sarlavha, matn, botga)
+        jami += len(uidlar)
+    return jami
 
 
 def _tarqatmalar():

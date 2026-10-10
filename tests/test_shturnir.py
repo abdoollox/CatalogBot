@@ -86,7 +86,11 @@ async def amain():
     xatlar = []
     async def xat(uid, matnlar):
         xatlar.append((uid, matnlar["uz"][0]))
-    T.register(app, dict(cfg, xat=xat))
+    elonlar = []
+    async def elon(matnlar):
+        elonlar.append(matnlar["uz"][0])
+        return 0
+    T.register(app, dict(cfg, xat=xat, elon=elon))
     soat = [datetime(2026, 10, 12, 12, 0, tzinfo=TZ)]          # dushanba; turnir - chorshanba 14-oktabr 21:00
     T._now = lambda: soat[0]
     hpdars._hafta = lambda: (soat[0].date() - timedelta(days=soat[0].weekday())).strftime("%Y-%m-%d")
@@ -116,7 +120,8 @@ async def amain():
     await T.tick()
     vaqt(14, 20, 52)
     await T.tick()
-    check("eslatmalar: ertalab va 10 daqiqa qolganda, faqat yozilganlarga", len(xatlar) == 18 and not any(u == 20 for u, _ in xatlar))
+    await asyncio.sleep(0.05)
+    check("birinchi turnir: ertalab hammaga BITTA e'lon, 20:50 da faqat yozilganlarga eslatma", len(elonlar) == 1 and len(xatlar) == 9 and not any(u == 20 for u, _ in xatlar))
     vaqt(14, 20, 56)
     st, d = await ask(20, join=1)
     check("yozilish 5 daqiqa oldin yopiladi", not d["join_ok"] and not d["tour"]["open"])

@@ -175,6 +175,10 @@ def _eslatmalar(conn, hafta, xabarlar):
         return
     if conn.execute("INSERT OR IGNORE INTO sh_eslatma (hafta, tur) VALUES (?,?)", (hafta, tur)).rowcount < 1:
         return
+    if tur == "ertalab" and hafta == BOSH_HAFTA:
+        # BIRINCHI turnir (egasi, 2026-10-11): ertalab HAMMA saralanganlarga e'lon - yozilganlarga alohida eslatma kerak emas
+        xabarlar.append((0, "elon"))
+        return
     for r in conn.execute("SELECT user_id FROM sh_qatnash WHERE hafta=?", (hafta,)).fetchall():
         xabarlar.append((r["user_id"], tur))
 
@@ -224,6 +228,10 @@ def _oyin_yoz(mid, gid):
 
 
 def xat_matni(tur):
+    if tur == "elon":
+        return {"uz": ("Bugun 21:00 da birinchi shaxmat turniri!", "Xogvartsda birinchi shaxmat turniri bugun soat 21:00 da o'tadi. Qatnashish uchun ilovada Xogvarts → Shaxmat sahifasiga kiring va «Qatnashaman» tugmasini bosing. Har o'yinchiga 5 daqiqa, g'alabalar fakultetingizga ball olib keladi. Yozilish 20:55 da yopiladi."),
+                "ru": ("Сегодня в 21:00 первый шахматный турнир!", "Первый шахматный турнир Хогвартса пройдёт сегодня в 21:00 (время Ташкента). Чтобы участвовать, откройте Хогвартс → Шахматы и нажмите «Участвую». Каждому игроку 5 минут, победы приносят очки факультету. Запись закрывается в 20:55."),
+                "en": ("The first chess tournament is today at 21:00!", "Hogwarts holds its first chess tournament today at 21:00 (Tashkent time). To take part, open Hogwarts → Chess in the app and tap “I'm in”. Each player has 5 minutes and wins earn points for your House. Sign-up closes at 20:55.")}
     if tur == "ertalab":
         return {"uz": ("Bugun 21:00 da shaxmat turniri", "Siz turnirga yozilgansiz. Soat 21:00 da ilovaga kiring: Xogvarts → Shaxmat. Birinchi yurishini 1 daqiqada qilmagan o'yinchi yutqazadi."),
                 "ru": ("Сегодня в 21:00 шахматный турнир", "Вы записаны на турнир. Зайдите в 21:00: Хогвартс → Шахматы. Кто не сделает первый ход за 1 минуту — проигрывает."),
@@ -255,12 +263,24 @@ async def tick():
         if pts > 0 and uid and uid > 0:
             await asyncio.to_thread(hpcup._award, uid, "dars", ref, pts)
     for uid, tur in xabarlar:
+        if tur == "elon":
+            if _cfg.get("elon"):
+                asyncio.create_task(_elon_yubor())
+            continue
         if uid and uid > 0 and _cfg.get("xat"):
             try:
                 await _cfg["xat"](uid, xat_matni(tur))
             except Exception as e:
                 logging.error("Shaxmat turniri xati yuborilmadi (%s): %s", uid, e)
     return len(berish), len(xabarlar), len(boshla)
+
+
+async def _elon_yubor():
+    try:
+        n = await _cfg["elon"](xat_matni("elon"))
+        logging.info("Shaxmat turniri e'loni yuborildi: %s kishi", n)
+    except Exception as e:
+        logging.error("Shaxmat turniri e'loni yuborilmadi: %s", e)
 
 
 async def kuzatuvchi(interval=15):
