@@ -64,7 +64,7 @@ RAUND_MAX = 20
 RAQIBLAR = {1: (50, 15, 0.0), 2: (68, 11, 0.3), 3: (84, 8, 0.5)}
 TOP = 16
 
-PLEYOFF_DAN = "2026-10-12"     # shu haftadan (dushanba sanasi) boshlab turnir o'tkaziladi
+PLEYOFF_DAN = "2026-10-05"     # shu haftadan (dushanba sanasi) boshlab turnir o'tkaziladi
 TURNIR_KUN = 6                 # haftaning kuni (0 - dushanba): yakshanba. Kelajakda har kunga alohida turnir bo'lishi mumkin
 SOAT = 21                      # turnir boshlanadigan soat (Toshkent)
 MATCH_T = 300                  # bitta duelga eng ko'p vaqt (s)
@@ -630,7 +630,7 @@ def _holat(uid):
             "top": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "score": int(round(r["reyting"])),
                      "games": int(r["oyin"]), "me": r["user_id"] == uid} for r in rows[:TOP]],
             "rules": {"lives": JON, "fail": KAM, "top": TOP, "round": RAUND_T, "bonus": USTUN, "match": MATCH_T, "gap": ORALIQ, "wait": KUTISH,
-                      "points": {str(k): v for k, v in BOSQICH_BALL.items()}},
+                      "points": {str(k): v for k, v in BOSQICH_BALL.items()}, "bots": {str(k): v for k, v in BOT_R.items()}},
             # Turnir: qachon, yozilish ochiqmi, o'zi yozilganmi, nechta odam yozilgan (reyting bo'yicha birinchi 30 tasi)
             "tour": {"ts": ts, "now": _ep(), "open": hafta >= PLEYOFF_DAN and _ep() < ts - YOPILISH, "joined": any(r["user_id"] == uid for r in qat),
                      "n": len(qat), "close": YOPILISH,
