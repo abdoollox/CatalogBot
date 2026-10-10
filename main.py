@@ -45,6 +45,7 @@ import hpqoriq
 import hpissiq
 import hpduel
 import hpshturnir
+import hpviktorina
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2635,6 +2636,9 @@ async def main():
         hpshturnir.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
                                   "elon": hppochta.saralanganlarga_tarqat})
         asyncio.create_task(hpshturnir.kuzatuvchi())
+        hpviktorina.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
+                                   "elon": hppochta.saralanganlarga_tarqat})
+        asyncio.create_task(hpviktorina.kuzatuvchi())
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
     except Exception as qoriq_error:
         logging.error("Qo'riqxona moduli ishga tushmadi: %s", qoriq_error)
