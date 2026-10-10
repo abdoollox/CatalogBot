@@ -183,16 +183,16 @@ def _tick():
 
 def xat_matni(tur):
     if tur == "elon":
-        return {"uz": ("Bugun 21:00 da birinchi viktorina — «Oxirgi sehrgar»!", "Hamma bir vaqtda bitta savolga javob beradi, xato qilgan chiqib ketadi — oxirida qolgan g'olib. Soat 21:00 da ilovada Xogvarts → Jadval → Viktorina sahifasida bo'ling. G'olibga +30 ball."),
-                "ru": ("Сегодня в 21:00 первая викторина — «Последний волшебник»!", "Все одновременно отвечают на один вопрос, ошибся — выбыл; побеждает тот, кто останется последним. В 21:00 будьте в приложении: Хогвартс → Расписание → Викторина. Победителю +30 очков."),
-                "en": ("The first quiz is today at 21:00 — “The Last Wizard”!", "Everyone answers the same question at once; one mistake and you are out — the last one standing wins. Be in the app at 21:00: Hogwarts → Schedule → Quiz. +30 points for the winner.")}
+        return {"uz": ("Bugun 21:00 da birinchi viktorina — «Oxirgi sehrgar»!", "Hamma bir vaqtda bitta savolga javob beradi, xato qilgan chiqib ketadi — oxirida qolgan g'olib. Soat 21:00 da ilovada Xogvarts → Viktorina sahifasida bo'ling. G'olibga +30 ball."),
+                "ru": ("Сегодня в 21:00 первая викторина — «Последний волшебник»!", "Все одновременно отвечают на один вопрос, ошибся — выбыл; побеждает тот, кто останется последним. В 21:00 будьте в приложении: Хогвартс → Викторина. Победителю +30 очков."),
+                "en": ("The first quiz is today at 21:00 — “The Last Wizard”!", "Everyone answers the same question at once; one mistake and you are out — the last one standing wins. Be in the app at 21:00: Hogwarts → Quiz. +30 points for the winner.")}
     if tur == "ertalab":
-        return {"uz": ("Bugun 21:00 da viktorina", "«Oxirgi sehrgar» bugun soat 21:00 da. Ilovaga kiring: Xogvarts → Jadval → Viktorina. Kechikkanlar faqat tomosha qiladi."),
-                "ru": ("Сегодня в 21:00 викторина", "«Последний волшебник» сегодня в 21:00. Зайдите: Хогвартс → Расписание → Викторина. Опоздавшие только смотрят."),
-                "en": ("The quiz is today at 21:00", "“The Last Wizard” is today at 21:00. Come in: Hogwarts → Schedule → Quiz. Latecomers can only watch.")}
-    return {"uz": ("Viktorinaga 10 daqiqa qoldi!", "«Oxirgi sehrgar» 21:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Jadval → Viktorina."),
-            "ru": ("До викторины 10 минут!", "«Последний волшебник» начнётся в 21:00. Зайдите прямо сейчас: Хогвартс → Расписание → Викторина."),
-            "en": ("10 minutes to the quiz!", "“The Last Wizard” starts at 21:00. Come in now: Hogwarts → Schedule → Quiz.")}
+        return {"uz": ("Bugun 21:00 da viktorina", "«Oxirgi sehrgar» bugun soat 21:00 da. Ilovaga kiring: Xogvarts → Viktorina. Kechikkanlar faqat tomosha qiladi."),
+                "ru": ("Сегодня в 21:00 викторина", "«Последний волшебник» сегодня в 21:00. Зайдите: Хогвартс → Викторина. Опоздавшие только смотрят."),
+                "en": ("The quiz is today at 21:00", "“The Last Wizard” is today at 21:00. Come in: Hogwarts → Quiz. Latecomers can only watch.")}
+    return {"uz": ("Viktorinaga 10 daqiqa qoldi!", "«Oxirgi sehrgar» 21:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Viktorina."),
+            "ru": ("До викторины 10 минут!", "«Последний волшебник» начнётся в 21:00. Зайдите прямо сейчас: Хогвартс → Викторина."),
+            "en": ("10 minutes to the quiz!", "“The Last Wizard” starts at 21:00. Come in now: Hogwarts → Quiz.")}
 
 
 async def _elon_yubor():
