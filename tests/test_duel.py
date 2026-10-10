@@ -114,6 +114,20 @@ async def amain():
     st, d = await ask(1)
     check("saralash jadvalida", d["mine"]["2"] == 345 and d["mine"]["total"] == 345 and d["place"] == 1 and d["top"][0]["me"] and d["top"][0]["score"] == 345)
 
+    # TARIX: har raund yozilgan, duelni raund-raund qayta ko'rsa bo'ladi; begona ko'ra olmaydi
+    st, d = await ask(1, history=1)
+    h = d["history"]
+    check("tarix: tugagan duel ro'yxatda", len(h) == 1 and h[0]["k"] == "o" and h[0]["won"] and h[0]["rounds"] == 5 and h[0]["saved"] and h[0]["lives"] == [5, 0])
+    st, d = await ask(1, replay={"k": "o", "id": g["id"]})
+    rp = d["replay"]
+    check("qayta ko'rish: besh raund, har birida ikki tomonning turi va aniqligi", len(rp["rounds"]) == 5 and rp["rounds"][0] == {"mine": "hujum", "acc": 90, "his": "hiyla", "racc": 70, "win": 1}
+          and rp["start"] == 5 and rp["won"])
+    st, d = await ask(2, replay={"k": "o", "id": g["id"]})
+    check("mashq duelini begona ko'ra olmaydi; yo'q duel - xato", d == {"ok": False, "error": "no_duel"}
+          and (await ask(1, replay={"k": "o", "id": 99999}))[1]["error"] == "no_duel")
+    st, d = await ask(1)
+    check("holatda pley-off chegarasi va to'r vaqti", d["cut"] == 0 and d["draw_ts"] > 0 and d["now"] > 0)
+
     # Yomonroq g'alaba eng yaxshi natijani pasaytirmaydi; boshqa daraja qo'shiladi
     g2 = hpduel._boshla(1, 2)
     hpduel._yur(1, g2["id"], "hujum", 90, Rnd("himoya", 70))
@@ -217,6 +231,19 @@ async def amain():
         B = await ar(18, m1, move="hiyla", acc=80)
     A = await ar(11, m1)
     check("besh raundda g'alaba: +15 ball darhol, yarim finalga o'tdi", A["over"] and A["won"] and B["over"] and not B["won"] and ball(11) == 20 and ball(18) == 5)
+    # Pley-off duelini raund-raund qayta ko'rish: o'ynaganlar o'z tomonidan, boshqalar - 1-tomondan
+    rp = (await ask(11, replay={"k": "m", "id": m1}))[1]["replay"]
+    check("pley-off tarixi: g'olib tomonidan", len(rp["rounds"]) == 5 and rp["rounds"][0] == {"mine": "hujum", "acc": 90, "his": "hiyla", "racc": 80, "win": 1}
+          and rp["me"] and rp["won"] and rp["p1"]["uid"] == 11 and rp["p2"]["uid"] == 18 and rp["lives"] == [5, 0] and rp["stage"] == 8)
+    rp = (await ask(18, replay={"k": "m", "id": m1}))[1]["replay"]
+    check("pley-off tarixi: yutqazgan tomonidan", rp["rounds"][0]["mine"] == "hiyla" and rp["rounds"][0]["win"] == -1 and not rp["won"] and rp["p1"]["uid"] == 18)
+    rp = (await ask(12, replay={"k": "m", "id": m1}))[1]["replay"]
+    check("pley-off tarixi: tomoshabin ham ko'ra oladi", not rp["me"] and rp["p1"]["uid"] == 11 and len(rp["rounds"]) == 5 and rp["won"])
+    check("tugamagan uchrashuvni ko'rib bo'lmaydi", (await ask(12, replay={"k": "m", "id": m4}))[1].get("error") == "no_duel")
+    h = (await ask(11, history=1))[1]["history"]
+    check("tarix ro'yxatida pley-off dueli", any(x["k"] == "m" and x["id"] == m1 and x["won"] and x["rounds"] == 5 and x["stage"] == 8 and x["opp"]["uid"] == 18 for x in h))
+    d = (await ask(11))[1]
+    check("to'rda raundlar soni", [m for st in d["cup"]["stages"] for m in st["matches"] if m["id"] == m1][0]["rounds"] == 5)
     # Raund vaqti tugadi
     vaqt(16, 21, 1, 0)
     await ar(13, m4); await ar(16, m4)
