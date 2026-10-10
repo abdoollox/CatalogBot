@@ -366,7 +366,7 @@ def _holat(uid, kun):
 # Faqat ISH bilan ochiladi (kunlar bilan emas). KURS_ESKI dan oldin saralanganlar hech narsa yo'qotmaydi - ular 4-kursda.
 # Bu faqat bosh sahifadagi ko'rinish (ilova qulflaydi); server hech narsani taqiqlamaydi.
 KURS_2, KURS_4 = 3, 10
-KURS_ESKI = "2026-10-10T23:40:00Z"
+KURS_ESKI = "2026-10-10T22:25:00Z"
 
 
 def kurs(uid):
