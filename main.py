@@ -44,6 +44,7 @@ import hpdars
 import hpqoriq
 import hpissiq
 import hpduel
+import hpshturnir
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2631,6 +2632,8 @@ async def main():
         hpduel.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log,
                               "admin_ids": ADMIN_IDS, "xat": hppochta.odamga_xat})
         asyncio.create_task(hpduel.kuzatuvchi())
+        hpshturnir.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat})
+        asyncio.create_task(hpshturnir.kuzatuvchi())
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
     except Exception as qoriq_error:
         logging.error("Qo'riqxona moduli ishga tushmadi: %s", qoriq_error)

@@ -528,6 +528,14 @@ def _move(gid, uid, uci, ply):
         conn.close()
 
 
+def _turnir_oyini(conn, gid):
+    """Bu o'yin shaxmat turniri uchrashuvimi (hpshturnir.sh_match)."""
+    try:
+        return conn.execute("SELECT 1 FROM sh_match WHERE game=?", (gid,)).fetchone() is not None
+    except sqlite3.OperationalError:
+        return False
+
+
 def _action(gid, uid, action):
     now = time.time()
     conn = hpcup._connect()
@@ -551,6 +559,9 @@ def _action(gid, uid, action):
         elif action == "abort" or (action == "resign" and ply < 2):
             if ply >= 2:
                 error = "too_late"
+            elif _turnir_oyini(conn, row["id"]):
+                # Turnir o'yinini bekor qilib bo'lmaydi: boshida chiqib ketgan - yutqazgan (hpshturnir)
+                row = _finish(conn, row, opp, "resign", now)
             else:
                 row = _finish(conn, row, None, "aborted", now, aborted=True)
         elif action == "resign":
