@@ -341,12 +341,17 @@ def _holat(uid, kun):
             "SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (uid,))}
         bah = {r["dars"]: r for r in conn.execute(
             "SELECT dars, COALESCE(SUM(baho),0) AS s, COUNT(*) AS n FROM dars_baho WHERE user_id=? GROUP BY dars", (uid,))}
+        try:                                     # eng yaxshi rekord (bosh sahifadagi «N / 9 fanda» uchun)
+            rek = {r["dars"]: r["b"] for r in conn.execute("SELECT dars, MAX(ball) AS b FROM dars_rekord WHERE user_id=? GROUP BY dars", (uid,))}
+        except sqlite3.OperationalError:
+            rek = {}
         for kod in DARSLAR:
             r = dar.get(kod)
             jami = dars_soni(kod)
             b = bah.get(kod)
             out[kod] = {"level": min(int(r["daraja"]) if r else 0, jami), "total": jami,
                         "gs": int(b["s"]) if b else 0, "gn": int(b["n"]) if b else 0,       # baholar yig'indisi va soni
+                        "rek": int(rek.get(kod) or 0),
                         "contest": _bellashuv(conn, uid, kun, kod)}
         return out
     finally:
