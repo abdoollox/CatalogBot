@@ -72,6 +72,7 @@ async def amain():
     hpsandiq.register(app, {"cors": lambda r: r,
                             "verify_init_data": lambda s: {"id": int(s)} if s.lstrip("-").isdigit() else None})
 
+    hpsandiq.YANGI_DAN = "2999-01-01"            # avval ESKI ro'yxat mexanikasi (quti, ketma-ketlik, kartochka) tekshiriladi
     check("imzosiz rad etiladi", (await hpsandiq.api_sandiq(Req({}, init=""))).status == 403)
     t = hpsandiq.kun_topshiriqlari("2026-10-05")
     check("kuniga 6 ta topshiriq, kunlik savol doim bor, takrorsiz",
@@ -155,6 +156,67 @@ async def amain():
         sql("INSERT INTO sandiq (user_id, kun, done, bosqich, ochildi) VALUES (3, ?, '[]', 2, 'x')",
             ((bugun - timedelta(days=i)).strftime("%Y-%m-%d"),))
     check("kecha o'tkazib yuborilgan - ketma-ketlik 0", (await ask(3))["streak"] == 0)
+
+    # ---------- YANGI RO'YXAT (2026-10-12 dan): 2 yengil + 3 o'rtacha + 1 qiyin ----------
+    hpsandiq.YANGI_DAN = "2000-01-01"
+    import hpdars, hpduel, hpissiq, hpqoriq
+    for m in (hpdars, hpduel, hpissiq, hpqoriq):
+        try:
+            m._init()
+        except Exception:
+            pass
+    tur = lambda k: [1 if x in hpsandiq.OSON else 3 if x in hpsandiq.QIYIN else 2 for x in hpsandiq.kun_topshiriqlari(k)]
+    check("yangi ro'yxat: har kuni 2 yengil, 3 o'rtacha, 1 qiyin; takrorsiz", all(tur("2026-10-%02d" % d_) == [1, 1, 2, 2, 2, 3]
+          and len(set(hpsandiq.kun_topshiriqlari("2026-10-%02d" % d_))) == 6 for d_ in range(12, 32)))
+    check("yangi ro'yxatda «sahifani och» vazifalari va majburiy tarix bellashuvi yo'q",
+          not any(x in ("daily", "owl", "cup", "house", "music") for d_ in range(12, 32) for x in hpsandiq.kun_topshiriqlari("2026-10-%02d" % d_)))
+    await hpcup.touch_user(7, "Luna")
+    await hpcup.set_house(7, "ravenclaw")
+    kun = hpcup.today_tk()
+    hpsandiq.kun_topshiriqlari = lambda k: ["parvarish", "chat", "dars", "bell3", "duel", "bell_top"]
+    d = await ask(7)
+    kod7 = [x["code"] for x in d["tasks"]]
+    check("o'simligi ham, maxluqi ham yo'q odamga «parvarish» o'rniga boshqa yengil vazifa", "parvarish" not in kod7 and "share" in kod7 and d["tasks"][0]["tier"] == 1 and d["tasks"][5]["tier"] == 3)
+    sql("INSERT INTO issiq (user_id, kod, olgan, sugorildi, oxirgi) VALUES (7,'mandragora',?,1,NULL)", (kun,))
+    d = await ask(7)
+    check("o'simligi bor odamda «parvarish» bor, hali bajarilmagan", d["tasks"][0]["code"] == "parvarish" and not d["tasks"][0]["done"])
+    d = await ask(7, task="parvarish")
+    d = await ask(7, task="bell3")
+    d = await ask(7, task="duel")
+    d = await ask(7, task="bell_top")
+    check("server ko'radigan vazifalarni ilova aytgani bilan sanalmaydi", d["n"] == 0)
+    sql("UPDATE issiq SET oxirgi=? WHERE user_id=7", (kun,))
+    d = await ask(7)
+    check("bugun sug'ordi - «parvarish» bajarildi", d["tasks"][0]["done"] and d["n"] == 1)
+    for i_, fan in enumerate(("tarix", "afsun")):
+        sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES (?,?,7,?,?)", (kun, fan, 9000 + i_, "2026-10-12T05:00:00Z"))
+    d = await ask(7)
+    t7 = {x["code"]: x["done"] for x in d["tasks"]}
+    check("ikki fanda bellashdi: «uch fanda» hali yo'q, lekin o'ntalikda - qiyin vazifa bajarildi", not t7["bell3"] and t7["bell_top"])
+    sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES (?,?,7,?,?)", (kun, "iksir", 9500, "2026-10-12T05:00:00Z"))
+    sql("INSERT INTO duel_oyin (user_id, daraja, jon, rjon, holat, hafta, vaqt) VALUES (7,1,0,3,'yutqazdi','2026-10-12',?)", (hpcup._utc_iso(hpcup.now_tk()),))
+    d = await ask(7, task="chat")
+    d = await ask(7, task="dars")
+    check("uch fanda bellashdi, duel o'ynadi (yutqazsa ham), chat va dars - 6 / 6", d["n"] == 6 and d["can_open"])
+    d = await ask(7, open=True)
+    check("yangi ro'yxat bilan ham quti ochiladi: +10 ball, kartochka", d["opened"] and d["reward"]["ball"] == 10 and ball(7) == 10)
+    # o'ntalikdan tashqarida
+    await hpcup.touch_user(8, "Cho")
+    await hpcup.set_house(8, "ravenclaw")
+    for u_ in range(20, 31):
+        await hpcup.touch_user(u_, "S%d" % u_)
+        await hpcup.set_house(u_, "ravenclaw")
+        sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES (?,?,?,?,?)", (kun, "himoya", u_, 1000 + u_, "2026-10-12T05:00:00Z"))
+    sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES (?,?,8,?,?)", (kun, "himoya", 99999, "2026-10-12T05:00:00Z"))
+    sql("INSERT INTO duel_oyin (user_id, daraja, jon, rjon, holat, hafta, vaqt) VALUES (8,1,0,3,'yutqazdi','2026-10-12',?)", (hpcup._utc_iso(hpcup.now_tk()),))
+    hpsandiq.kun_topshiriqlari = lambda k: ["chat", "share", "dars", "bell3", "duel", "duel_yut"]
+    d = await ask(8)
+    t8 = {x["code"]: x["done"] for x in d["tasks"]}
+    check("duelda yutqazgan: «duel o'ynash» bor, «duelda yutish» yo'q", t8["duel"] and not t8["duel_yut"])
+    hpsandiq.kun_topshiriqlari = lambda k: ["chat", "share", "dars", "bell3", "duel", "bell_top"]
+    sql("DELETE FROM sandiq WHERE user_id=8")
+    d = await ask(8)
+    check("o'n birinchi o'rinda - o'ntalik vazifasi bajarilmagan", not {x["code"]: x["done"] for x in d["tasks"]}["bell_top"])
 
 
 asyncio.run(amain())

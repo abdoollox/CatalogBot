@@ -85,10 +85,85 @@ def _init():
         conn.close()
 
 
+# --- YANGI RO'YXAT (egasi, 2026-10-11: «hozirgilari juda oddiy bo'lib qoldi») ---
+# Har kuni 2 ta YENGIL + 3 ta O'RTACHA + 1 ta QIYIN vazifa; «sahifani och» turidagilar olib tashlandi.
+# Sehrgarlik tarixi bellashuvi endi majburiy emas - boshqalar qatorida (bell3 ichida) navbat bilan.
+YANGI_DAN = "2026-10-12"            # shu kundan yangi ro'yxat (oldingi kunlar eski ro'yxatda qoladi)
+OSON = ("parvarish", "chat", "share")
+ORTA = ("dars", "bell3", "duel", "chess", "rek", "kitob")
+QIYIN = ("duel_yut", "bell_top", "alo", "rek_yangi")
+# Bularni SERVER o'zi ko'radi (ilova aytgani bilan sanalmaydi); qolganlarini ilova xabar qiladi
+SERVERDA = ("parvarish", "bell3", "bell_top", "duel", "duel_yut")
+BELL_SONI = 3                       # «bell3»: nechta fanda bellashuvda qatnashish kerak
+HAMMASI = tuple(dict.fromkeys(HAVZA + ("daily",) + OSON + ORTA + QIYIN))
+
+
 def kun_topshiriqlari(kun):
     """Shu kunning 6 ta topshirig'i (hammaga bir xil)."""
-    r = random.Random("sandiq:" + kun)
-    return ["daily"] + sorted(r.sample(HAVZA, 5), key=HAVZA.index)
+    if kun < YANGI_DAN:
+        r = random.Random("sandiq:" + kun)
+        return ["daily"] + sorted(r.sample(HAVZA, 5), key=HAVZA.index)
+    r = random.Random("qurbaqa2:" + kun)
+    return r.sample(OSON, 2) + r.sample(ORTA, 3) + r.sample(QIYIN, 1)
+
+
+def _bor(conn, sql, args):
+    try:
+        return conn.execute(sql, args).fetchone() is not None
+    except sqlite3.OperationalError:
+        return False
+
+
+def _topshiriqlar(conn, uid, kun):
+    """O'quvchining bugungi ro'yxati. «Parvarish» faqat o'simligi yoki maxluqi borlarga: ikkalasi ham yo'q odamga
+    uning o'rniga shu kuni tushmagan uchinchi yengil vazifa beriladi."""
+    tasks = kun_topshiriqlari(kun)
+    if "parvarish" in tasks and not (_bor(conn, "SELECT 1 FROM issiq WHERE user_id=? LIMIT 1", (uid,))
+                                     or _bor(conn, "SELECT 1 FROM qoriq WHERE user_id=? LIMIT 1", (uid,))):
+        zaxira = [t for t in OSON if t not in tasks]
+        if zaxira:
+            tasks[tasks.index("parvarish")] = zaxira[0]
+    return tasks
+
+
+def _serverda_bajarildi(conn, uid, kun, kod):
+    """SERVERDA ro'yxatidagi vazifa bajarilganmi (bazadagi izlardan)."""
+    if kod == "parvarish":
+        return (_bor(conn, "SELECT 1 FROM issiq WHERE user_id=? AND oxirgi=? LIMIT 1", (uid, kun))
+                or _bor(conn, "SELECT 1 FROM qoriq WHERE user_id=? AND oxirgi=? LIMIT 1", (uid, kun)))
+    if kod == "bell3":
+        try:
+            n = conn.execute("SELECT COUNT(DISTINCT dars) FROM dars_bellashuv WHERE user_id=? AND kun=? AND ms IS NOT NULL", (uid, kun)).fetchone()[0]
+        except sqlite3.OperationalError:
+            n = 0
+        return n >= BELL_SONI
+    if kod == "bell_top":
+        # hozir biror fanning bugungi jadvalida birinchi o'ntalikda (kun davomida o'rin o'zgarishi mumkin - bir marta kirgani yetarli)
+        try:
+            rows = conn.execute("SELECT dars, ms, vaqt FROM dars_bellashuv WHERE user_id=? AND kun=? AND ms IS NOT NULL", (uid, kun)).fetchall()
+            for r in rows:
+                oldinda = conn.execute(
+                    "SELECT COUNT(*) FROM dars_bellashuv b JOIN users u ON u.user_id = b.user_id WHERE b.kun=? AND b.dars=? AND b.ms IS NOT NULL "
+                    "AND u.house IS NOT NULL AND b.user_id > 0 AND b.user_id<>? AND (b.ms < ? OR (b.ms = ? AND b.vaqt < ?))",
+                    (kun, r["dars"], uid, r["ms"], r["ms"], r["vaqt"])).fetchone()[0]
+                if oldinda < 10:
+                    return True
+        except sqlite3.OperationalError:
+            pass
+        return False
+    if kod in ("duel", "duel_yut"):
+        bosh = _kun_boshi_utc(kun)
+        holat = "('yutdi')" if kod == "duel_yut" else "('yutdi','yutqazdi')"
+        if _bor(conn, "SELECT 1 FROM duel_oyin WHERE user_id=? AND holat IN %s AND vaqt >= ? LIMIT 1" % holat, (uid, bosh)):
+            return True
+        # jonli duel (turnir yoki do'stona): bugun boshlangan va haqiqatan o'ynalgan
+        y, m, d = (int(x) for x in kun.split("-"))
+        t0 = hpcup.now_tk().replace(year=y, month=m, day=d, hour=0, minute=0, second=0, microsecond=0).timestamp()
+        shart = "golib=?" if kod == "duel_yut" else "(a=? OR b=?)"
+        arg = (uid,) if kod == "duel_yut" else (uid, uid)
+        return _bor(conn, "SELECT 1 FROM duel_match WHERE %s AND holat='tugadi' AND sabab IN ('duel','vaqt') AND bosh >= ? AND bosh < ? "
+                          "AND hafta NOT LIKE 'sinov%%' LIMIT 1" % shart, arg + (t0, t0 + 86400))
+    return False
 
 
 def _kun_boshi_utc(kun):
@@ -141,13 +216,14 @@ def _streak(conn, uid, kun):
 def _holat(conn, uid, kun, mukofot=None):
     row = conn.execute("SELECT done, bosqich, ochildi FROM sandiq WHERE user_id=? AND kun=?", (uid, kun)).fetchone()
     done = json.loads(row["done"]) if row else []
-    tasks = kun_topshiriqlari(kun)
+    tasks = _topshiriqlar(conn, uid, kun)
     streak = _streak(conn, uid, kun)
     ochildi = bool(row and row["ochildi"])
     n = len([t for t in tasks if t in done])
     return {
         "ok": True, "kun": kun,
-        "tasks": [{"code": t, "done": t in done} for t in tasks],
+        "tasks": [{"code": t, "done": t in done, "tier": 1 if t in OSON else 3 if t in QIYIN else 2} for t in tasks],
+        "bell_need": BELL_SONI,
         "n": n, "total": len(tasks),
         "opened": ochildi, "can_open": n >= len(tasks) and not ochildi,
         "streak": streak,
@@ -176,13 +252,16 @@ def _ish(uid, task=None, ochish=False):
         conn.execute("INSERT OR IGNORE INTO sandiq (user_id, kun) VALUES (?,?)", (uid, kun))
         row = conn.execute("SELECT done, bosqich, ochildi FROM sandiq WHERE user_id=? AND kun=?", (uid, kun)).fetchone()
         done = json.loads(row["done"])
-        tasks = kun_topshiriqlari(kun)
+        tasks = _topshiriqlar(conn, uid, kun)
         bosqich = row["bosqich"]
 
         # Kunlik savolni server o'zi ko'radi - ilova aytmasa ham
-        if "daily" not in done and _daily_bajarildi(conn, uid, kun):
+        if "daily" in tasks and "daily" not in done and _daily_bajarildi(conn, uid, kun):
             done.append("daily")
-        if task and task in tasks and task not in done and task != "daily":
+        for t in tasks:                              # server o'zi ko'radigan vazifalar
+            if t in SERVERDA and t not in done and _serverda_bajarildi(conn, uid, kun, t):
+                done.append(t)
+        if task and task in tasks and task not in done and task != "daily" and task not in SERVERDA:
             done.append(task)
         n = len([t for t in tasks if t in done])
         while bosqich < len(BOSQICH) and n >= BOSQICH[bosqich][0]:
@@ -240,7 +319,7 @@ async def api_sandiq(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
     task = body.get("task")
-    task = task if isinstance(task, str) and task in HAVZA + ("daily",) else None
+    task = task if isinstance(task, str) and task in HAMMASI else None
     try:
         res = await asyncio.to_thread(_ish, int(user["id"]), task, bool(body.get("open")))
     except Exception as e:
@@ -259,4 +338,4 @@ def register(app, cfg):
     _cfg.update(cfg)
     _init()
     app.router.add_route("*", "/api/sandiq", api_sandiq)
-    logging.info("Kunlik sandiq: havzada %d topshiriq", len(HAVZA) + 1)
+    logging.info("Shokolad qurbaqa: %d yengil, %d o'rtacha, %d qiyin vazifa", len(OSON), len(ORTA), len(QIYIN))
