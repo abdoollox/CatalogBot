@@ -38,6 +38,8 @@ NISHONLAR = (
     ("issiq_1", "issiq"), ("issiq_yetilgan", "issiq"), ("issiq_hosil", "issiq"), ("issiq_12", "issiq"),
     # Kitoblar (hpkitob, 2026-10-10): ilovada birinchi kitobni ochgan, yettala kitobni ochgan (istalgan tilda)
     ("kitob_1", "kitob"), ("kitob_7", "kitob"),
+    # Duel va rekord (2026-10-10): duelda birinchi g'alaba; biror fanning rekord jadvalida kun yakunida birinchi uchlikda bo'lish
+    ("duel_golib", "maydon"), ("rekord_top", "maydon"),
 )
 KODLAR = tuple(k for k, _ in NISHONLAR)
 
@@ -154,7 +156,15 @@ def hisob(conn, uid):
     # Issiqxona: o'simliklar va ularning sug'orilgani. Hosil - yetilgan (10) o'simlik har 3-sug'orishda beradi,
     # zaxira sarflanib nolga tushishi mumkin, shuning uchun «bergan» ekani sug'orishlar sonidan bilinadi.
     os_ = [int(r[0]) for r in _all(conn, "SELECT sugorildi FROM issiq WHERE user_id=?", (uid,))]
+    # Duel: g'alaba - saralash jadvaliga faqat yutilgan duel yoziladi (duel_saral); pley-offdagi g'alaba ham (sinov dueli emas)
+    duel = bool(_one(conn, "SELECT 1 FROM duel_saral WHERE user_id=? LIMIT 1", (uid,))
+                or _one(conn, "SELECT 1 FROM duel_match WHERE golib=? AND holat='tugadi' AND hafta NOT LIKE 'sinov%' LIMIT 1", (uid,)))
+    # Rekord: kun yakunida birinchi uchlikka berilgan sovrin (hpdars.rekord_yakunla, ref "r:<fan>:<kun>")
+    rekord = bool(_one(conn, "SELECT 1 FROM points WHERE user_id=? AND source_ref LIKE 'r:%' LIMIT 1", (uid,))
+                  or _one(conn, "SELECT 1 FROM points_arxiv WHERE user_id=? AND source_ref LIKE 'r:%' LIMIT 1", (uid,)))
     return {
+        "duel_golib": (1 if duel else 0, 1),
+        "rekord_top": (1 if rekord else 0, 1),
         "issiq_1": (min(len(os_), 1), 1),
         "issiq_yetilgan": (1 if any(b >= 10 for b in os_) else 0, 1),
         "issiq_hosil": (1 if any(b >= 13 for b in os_) else 0, 1),

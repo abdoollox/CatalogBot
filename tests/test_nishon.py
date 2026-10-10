@@ -79,8 +79,8 @@ async def amain():
     await hpcup.touch_user(1, "Garri")
     await hpcup.touch_user(2, "Ron")
     d = await ask(1)
-    check("yangi odamda nishon yo'q, 19 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 28
-          and len(d["list"]) == 28 and d["new"] == [])
+    check("yangi odamda nishon yo'q, 19 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 30
+          and len(d["list"]) == 30 and d["new"] == [])
 
     # Filmlar: botdan, ilovadan (web_ va sifat bilan), 3 tilda
     for p in ("hp1_uz", "web_hp2_uz@hd", "hp3_ru", "hp4_en", "hp1_uz", "fb1_uz", "start", "share_hp1"):
@@ -141,7 +141,8 @@ async def amain():
     d = await ask(1, seen=True)
     check("o'quvchi, tayoqcha, ball, hafta, do'stlar, shaxmat, albom",
           set(got(d)) == set(hpnishon.KODLAR) - {"kubok_golib", "top_3", "sandiq_1", "sandiq_7", "maxluq_1", "maxluq_katta", "maxluq_12",
-                                                "issiq_1", "issiq_yetilgan", "issiq_hosil", "issiq_12", "kitob_1", "kitob_7"})
+                                                "issiq_1", "issiq_yetilgan", "issiq_hosil", "issiq_12", "kitob_1", "kitob_7",
+                                                "duel_golib", "rekord_top"})
 
     # Kunlik sandiq: 7 kun ketma-ket
     sql("CREATE TABLE IF NOT EXISTS sandiq (user_id INTEGER, kun TEXT, done TEXT, bosqich INTEGER, ochildi TEXT)")
@@ -173,6 +174,13 @@ async def amain():
     g = got(await ask(1))
     check("issiqxona: urug', yetilgan, hosil bor; 12 tasi yo'q", {"issiq_1", "issiq_yetilgan", "issiq_hosil"} <= set(g) and "issiq_12" not in g)
     check("kitob: birinchi va yettala kitob", "kitob_1" in g and "kitob_7" in g)
+    # Duel va rekord nishonlari
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    c.execute("CREATE TABLE IF NOT EXISTS duel_saral (user_id INTEGER NOT NULL, hafta TEXT NOT NULL, daraja INTEGER NOT NULL, ball INTEGER NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (user_id, hafta, daraja))")
+    c.execute("INSERT OR REPLACE INTO duel_saral VALUES (1, '2026-10-05', 1, 180, '2026-10-09')")
+    c.commit(); c.close()
+    g = got(await ask(1))
+    check("duel: g'alaba bor - nishon; rekord sovrini yo'q - nishon yo'q", "duel_golib" in g and "rekord_top" not in g)
     await hpcup.touch_user(5, "Luna")
     await hpevents.log(5, "Luna", None, "read_kt3_ru", "2026-10-09 11:00:00")
     g2 = got(await ask(5))
@@ -191,7 +199,7 @@ async def amain():
     d = json.loads(r.body)
     check("profil: boshqa odam", d["ok"] and d["name"] == "Garri" and d["house"] == "gryffindor" and d["me"] is False
           and d["wand"] == {"wood": "holly", "core": "phoenix", "flex": "rigid"} and d["patronus"] == "stag"
-          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] - 4 and d["creatures"] == [] and len(d["plants"]) == 2 and len(d["cards_list"]) == d["cards"] and isinstance(d["skills"], list) and d["points"]["all"] >= 20)
+          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] - 5 and d["creatures"] == [] and len(d["plants"]) == 2 and len(d["cards_list"]) == d["cards"] and isinstance(d["skills"], list) and d["points"]["all"] >= 20)
     d = json.loads((await hpprofil.api_profil(Req({}, init="3"))).body)
     check("profil: o'zi, fakultetsiz", d["me"] is True and d["house"] is None and d["wand"]["wood"] == "cherry" and d["chess"] is None)
     check("profil: yo'q odam 404, imzosiz 403", (await hpprofil.api_profil(Req({"uid": 999}, init="2"))).status == 404
@@ -203,7 +211,7 @@ async def amain():
 
     # Boshqa odam ko'radi: faqat olinganlari
     d = await ask(2, uid=1)
-    check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 24 and all(x["got"] for x in d["list"]) and "new" not in d)
+    check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 25 and all(x["got"] for x in d["list"]) and "new" not in d)
     d = await ask(1, uid=2)
     check("nishoni yo'q odam - bo'sh ro'yxat", d["list"] == [] and d["count"] == 0)
     check("yo'q odam - bo'sh ro'yxat", (await ask(1, uid=999))["list"] == [])
