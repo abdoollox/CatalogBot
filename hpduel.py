@@ -43,6 +43,7 @@ Jadvallar: duel_oyin, duel_saral (user_id, hafta, daraja, ball - haftadagi eng y
 
 import asyncio
 import json
+import uuid
 import logging
 import random
 import time
@@ -77,6 +78,9 @@ BOR = 15                       # oxirgi so'rovdan shuncha soniya o'tmagan bo'lsa
 BOSQICH_BALL = {16: 5, 8: 10, 4: 20, 2: 30}    # shu bosqichdagi G'ALABA uchun (egasi, 2026-10-10); oldingi bosqichlarga yo'q
 REYTING0, K_JONLI, K_BOT = 1000, 32, 16
 BOT_R = {1: 850, 2: 1050, 3: 1250}              # kompyuter raqiblarning qat'iy reytingi
+DOST_MUDDAT = 600             # do'stona duel taklifi shuncha soniya amal qiladi
+DOST_BOSH = 8                 # qabul qilingach duel shuncha soniyadan keyin boshlanadi
+_ozgargan = set()             # holati o'zgargan do'stona duellar - chatdagi kartasi yangilanadi (_dost_xabar)
 BOT_UID = -999                 # sinov raqibi (kompyuter)
 
 _cfg = {}
@@ -102,13 +106,7 @@ def _init():
                      " user_id INTEGER NOT NULL, hafta TEXT NOT NULL, daraja INTEGER NOT NULL, ball INTEGER NOT NULL,"
                      " vaqt TEXT NOT NULL, PRIMARY KEY (user_id, hafta, daraja))")
         conn.execute("CREATE TABLE IF NOT EXISTS duel_turnir (hafta TEXT PRIMARY KEY, hajm INTEGER NOT NULL, vaqt TEXT NOT NULL)")
-        conn.execute("CREATE TABLE IF NOT EXISTS duel_match ("
-                     " id INTEGER PRIMARY KEY AUTOINCREMENT, hafta TEXT NOT NULL, bosqich INTEGER NOT NULL, joy INTEGER NOT NULL,"
-                     " a INTEGER, b INTEGER, a_seed INTEGER, b_seed INTEGER, bosh REAL NOT NULL, holat TEXT NOT NULL DEFAULT 'kutmoqda',"
-                     " golib INTEGER, sabab TEXT, a_jon INTEGER NOT NULL DEFAULT 3, b_jon INTEGER NOT NULL DEFAULT 3,"
-                     " raund INTEGER NOT NULL DEFAULT 0, r_bosh REAL, a_yur TEXT, a_acc INTEGER, b_yur TEXT, b_acc INTEGER,"
-                     " a_sum INTEGER NOT NULL DEFAULT 0, b_sum INTEGER NOT NULL DEFAULT 0, a_keldi REAL, b_keldi REAL, oxirgi TEXT,"
-                     " UNIQUE (hafta, bosqich, joy))")
+        conn.execute(hpcup.DUEL_MATCH_DDL)
         conn.execute("CREATE TABLE IF NOT EXISTS duel_eslatma (hafta TEXT NOT NULL, bosqich INTEGER NOT NULL, tur TEXT NOT NULL,"
                      " PRIMARY KEY (hafta, bosqich, tur))")
         conn.execute("CREATE TABLE IF NOT EXISTS duel_qatnash (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, vaqt TEXT NOT NULL,"
@@ -263,6 +261,9 @@ def _tor_tuz(conn, hafta, berish):
 
 def _tugat(conn, m, golib, sabab, berish):
     conn.execute("UPDATE duel_match SET holat='tugadi', golib=?, sabab=? WHERE id=?", (golib, sabab, m["id"]))
+    if m["hafta"].startswith("dost"):            # do'stona duel: ball ham, reyting ham yo'q; chatdagi karta yangilanadi
+        _ozgargan.add(m["id"])
+        return
     if m["hafta"].startswith("sinov"):
         return
     if sabab != "bye":
@@ -285,6 +286,8 @@ def _match_yur(conn, m, now, berish, rnd=random):
     if m["holat"] == "kutmoqda":
         if bor("a") and bor("b"):
             conn.execute("UPDATE duel_match SET holat='ketmoqda', raund=1, r_bosh=?, a_jon=?, b_jon=? WHERE id=? AND holat='kutmoqda'", (now, JON, JON, m["id"]))
+            if m["hafta"].startswith("dost"):
+                _ozgargan.add(m["id"])
         elif now >= m["bosh"] + KUTISH:
             # kelgan deb: boshlanish vaqtida yoki undan keyin arenada ko'ringan (hozir chiqib ketgan bo'lsa ham)
             keldi = lambda yon: m[yon] == BOT_UID or (m[yon + "_keldi"] is not None and m[yon + "_keldi"] >= m["bosh"] - BOR)
@@ -398,6 +401,7 @@ async def tick():
                 await _cfg["xat"](uid, xat_matni(tur, bosqich))
             except Exception as e:
                 logging.error("Duel xati yuborilmadi (%s): %s", uid, e)
+    await _dost_xabar()
     return len(berish), len(xabarlar)
 
 
@@ -442,13 +446,13 @@ def _tarixim(uid, n=20):
         for g in conn.execute("SELECT * FROM duel_oyin WHERE user_id=? AND holat IN ('yutdi','yutqazdi') ORDER BY id DESC LIMIT ?", (uid, n)):
             out.append({"k": "o", "id": g["id"], "level": g["daraja"], "won": g["holat"] == "yutdi", "lives": [g["jon"], g["rjon"]],
                         "rounds": g["raund"], "saved": bool(_tarix_ol(g)), "time": g["vaqt"]})
-        ms = conn.execute("SELECT * FROM duel_match WHERE (a=? OR b=?) AND holat='tugadi' AND hafta NOT LIKE 'sinov%' ORDER BY id DESC LIMIT ?",
+        ms = conn.execute("SELECT * FROM duel_match WHERE (a=? OR b=?) AND holat='tugadi' AND b IS NOT NULL AND hafta NOT LIKE 'sinov%' ORDER BY id DESC LIMIT ?",
                           (uid, uid, n)).fetchall()
         od = _odamlar(conn, [x for m in ms for x in (m["a"], m["b"])])
         for m in ms:
             men_a = m["a"] == uid
             u = "b" if men_a else "a"
-            out.append({"k": "m", "id": m["id"], "stage": m["bosqich"], "won": m["golib"] == uid, "why": m["sabab"],
+            out.append({"k": "m", "id": m["id"], "stage": m["bosqich"], "friend": m["hafta"].startswith("dost"), "won": m["golib"] == uid, "why": m["sabab"],
                         "lives": [m["a_jon"], m["b_jon"]] if men_a else [m["b_jon"], m["a_jon"]],
                         "rounds": len(_tarix_ol(m)), "saved": bool(_tarix_ol(m)), "opp": _kim(od, m[u], m[u + "_seed"]),
                         "time": datetime.fromtimestamp(m["bosh"], tz=_now().tzinfo).astimezone().isoformat()})
@@ -471,12 +475,12 @@ def _qayta(uid, tur, oid):
             return {"k": "o", "id": g["id"], "level": g["daraja"], "won": g["holat"] == "yutdi", "lives": [g["jon"], g["rjon"]],
                     "start": JON, "rounds": _raundlar(_tarix_ol(g)), "me": True}
         m = conn.execute("SELECT * FROM duel_match WHERE id=? AND holat='tugadi'", (int(oid),)).fetchone()
-        if not m or (m["hafta"].startswith("sinov") and uid not in (m["a"], m["b"])):
+        if not m or m["b"] is None or (m["hafta"].startswith("sinov") and uid not in (m["a"], m["b"])):
             return None
         men_a = m["b"] != uid
         od = _odamlar(conn, [m["a"], m["b"]])
         a, b = ("a", "b") if men_a else ("b", "a")
-        return {"k": "m", "id": m["id"], "stage": m["bosqich"], "why": m["sabab"], "me": uid in (m["a"], m["b"]),
+        return {"k": "m", "id": m["id"], "stage": m["bosqich"], "friend": m["hafta"].startswith("dost"), "why": m["sabab"], "me": uid in (m["a"], m["b"]),
                 "won": m["golib"] == m[a], "p1": _kim(od, m[a], m[a + "_seed"]), "p2": _kim(od, m[b], m[b + "_seed"]),
                 "lives": [m[a + "_jon"], m[b + "_jon"]], "start": JON, "rounds": _raundlar(_tarix_ol(m), men_a)}
     finally:
@@ -534,6 +538,17 @@ def _arena(uid, mid, tur=None, acc=0, rnd=random):
         if not m or uid not in (m["a"], m["b"]):
             return None, berish
         yon = "a" if m["a"] == uid else "b"
+        if m["b"] is None:                       # do'stona duel taklifi: hali hech kim qabul qilmagan
+            if m["holat"] != "tugadi" and now >= m["bosh"]:
+                conn.execute("UPDATE duel_match SET holat='tugadi', sabab='bekor' WHERE id=? AND b IS NULL", (m["id"],))
+                conn.commit()
+                _ozgargan.add(m["id"])
+                m = conn.execute("SELECT * FROM duel_match WHERE id=?", (m["id"],)).fetchone()
+            ochiq = m["holat"] != "tugadi"
+            return {"id": m["id"], "stage": 2, "test": False, "friend": True, "phase": "open" if ochiq else "over",
+                    "expires_in": max(0, int(m["bosh"] - now)), "starts_in": 0, "wait_left": 0, "round": 0, "deadline_in": 0, "next_in": 0,
+                    "lives": JON, "rlives": JON, "moved": False, "opp": {"uid": 0, "name": "", "house": None, "seed": 0, "here": False},
+                    "last": None, "over": not ochiq, "won": False, "why": "bekor", "next": None, "match_left": 0}, berish
         if m["holat"] != "tugadi":
             conn.execute("UPDATE duel_match SET %s_keldi=? WHERE id=?" % yon, (now, m["id"]))
             if tur and m["holat"] == "ketmoqda" and now >= (m["r_bosh"] or 0) and m[yon + "_yur"] is None:
@@ -556,7 +571,7 @@ def _arena(uid, mid, tur=None, acc=0, rnd=random):
         else:
             phase = "reveal" if now < (m["r_bosh"] or 0) else "pick"
         return {
-            "id": m["id"], "stage": m["bosqich"], "test": m["hafta"].startswith("sinov"), "phase": phase,
+            "id": m["id"], "stage": m["bosqich"], "test": m["hafta"].startswith("sinov"), "friend": m["hafta"].startswith("dost"), "phase": phase,
             "starts_in": max(0, int(m["bosh"] - now)), "wait_left": max(0, int(m["bosh"] + KUTISH - now)),
             "round": m["raund"], "deadline_in": max(0, int((m["r_bosh"] or now) + RAUND_T - now)) if phase == "pick" else 0,
             "next_in": max(0, int((m["r_bosh"] or now) - now)) if phase == "reveal" else 0,
@@ -571,7 +586,7 @@ def _arena(uid, mid, tur=None, acc=0, rnd=random):
 
 def _keyingi(conn, uid, m, now):
     """Shu turnirdagi navbatdagi (tugamagan) dueli: {id, in} - g'olib keyingi bosqichga shu orqali o'tadi."""
-    if m["holat"] != "tugadi" or m["golib"] != uid or m["hafta"].startswith("sinov"):
+    if m["holat"] != "tugadi" or m["golib"] != uid or m["hafta"].startswith(("sinov", "dost")):
         return None
     k = conn.execute("SELECT id, bosh FROM duel_match WHERE hafta=? AND holat<>'tugadi' AND (a=? OR b=?) ORDER BY bosqich DESC LIMIT 1",
                      (m["hafta"], uid, uid)).fetchone()
@@ -593,6 +608,81 @@ def _yozil(uid, on):
         return True
     finally:
         conn.close()
+
+
+# ---------- do'stona duel (chatdagi taklif orqali; ball va reytingga ta'sir qilmaydi) ----------
+def _dost_yarat(uid):
+    """Yangi taklif: a = chaqiruvchi, b bo'sh; `bosh` - taklif muddati tugaydigan payt. Oldingi ochiq taklifi bekor bo'ladi."""
+    uid, now = int(uid), _ep()
+    conn = hpcup._connect()
+    try:
+        for r in conn.execute("SELECT id FROM duel_match WHERE a=? AND b IS NULL AND holat='kutmoqda' AND hafta LIKE 'dost%'", (uid,)).fetchall():
+            conn.execute("UPDATE duel_match SET holat='tugadi', sabab='bekor' WHERE id=?", (r["id"],))
+            _ozgargan.add(r["id"])
+        cur = conn.execute("INSERT INTO duel_match (hafta, bosqich, joy, a, a_seed, bosh, a_jon, b_jon, a_keldi) VALUES (?,2,0,?,1,?,?,?,?)",
+                           ("dost:%d:%s" % (uid, uuid.uuid4().hex[:12]), uid, now + DOST_MUDDAT, JON, JON, now))
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def _dost_qabul(uid, mid):
+    """Taklifni qabul qilish. Qaytaradi: (id | None, xato kodi)."""
+    uid, now = int(uid), _ep()
+    conn = hpcup._connect()
+    try:
+        m = conn.execute("SELECT * FROM duel_match WHERE id=? AND hafta LIKE 'dost%'", (int(mid),)).fetchone()
+        if not m:
+            return None, "no_duel"
+        if uid in (m["a"], m["b"]):
+            return m["id"], None                 # o'zining dueli - shunchaki arenaga kiradi
+        if m["b"] is not None:
+            return None, "taken"
+        if m["holat"] != "kutmoqda" or now >= m["bosh"]:
+            return None, "expired"
+        cur = conn.execute("UPDATE duel_match SET b=?, b_seed=2, bosh=?, b_keldi=? WHERE id=? AND b IS NULL AND holat='kutmoqda'",
+                           (uid, now + DOST_BOSH, now, m["id"]))
+        if cur.rowcount < 1:
+            return None, "taken"
+        for r in conn.execute("SELECT id FROM duel_match WHERE a=? AND b IS NULL AND holat='kutmoqda' AND hafta LIKE 'dost%'", (uid,)).fetchall():
+            conn.execute("UPDATE duel_match SET holat='tugadi', sabab='bekor' WHERE id=?", (r["id"],))
+            _ozgargan.add(r["id"])
+        conn.commit()
+        _ozgargan.add(m["id"])
+        return m["id"], None
+    finally:
+        conn.close()
+
+
+def _dost_bekor(uid, mid):
+    uid = int(uid)
+    conn = hpcup._connect()
+    try:
+        cur = conn.execute("UPDATE duel_match SET holat='tugadi', sabab='bekor' WHERE id=? AND a=? AND b IS NULL AND holat='kutmoqda' AND hafta LIKE 'dost%'",
+                           (int(mid), uid))
+        conn.commit()
+        if cur.rowcount:
+            _ozgargan.add(int(mid))
+        return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
+async def dost_yarat(uid):
+    return await asyncio.to_thread(_dost_yarat, uid)
+
+
+async def _dost_xabar():
+    """Holati o'zgargan do'stona duellarning chatdagi kartalarini yangilaydi (hpbot bergan chaqiruv orqali)."""
+    fn = _cfg.get("dost_ozgardi")
+    while _ozgargan:
+        mid = _ozgargan.pop()
+        if fn:
+            try:
+                await fn(mid)
+            except Exception as e:
+                logging.error("Duel kartasi yangilanmadi (%s): %s", mid, e)
 
 
 def _sinov(uid):
@@ -727,6 +817,20 @@ async def api_duel(request):
         if rp is None:
             return cors(web.json_response({"ok": False, "error": "no_duel"}))
         qosh["replay"] = rp
+    elif body.get("accept") is not None or body.get("cancel") is not None:
+        try:
+            mid = int(body.get("accept") if body.get("accept") is not None else body.get("cancel"))
+        except (TypeError, ValueError):
+            mid = 0
+        if body.get("accept") is not None:
+            fid, xato = await asyncio.to_thread(_dost_qabul, uid, mid)
+            if xato:
+                await _dost_xabar()
+                return cors(web.json_response({"ok": False, "error": xato}))
+            qosh["friend_id"] = fid
+        else:
+            qosh["cancel_ok"] = await asyncio.to_thread(_dost_bekor, uid, mid)
+        await _dost_xabar()
     elif body.get("sinov") and uid in set(_cfg.get("admin_ids") or ()):
         qosh["test_id"] = await asyncio.to_thread(_sinov, uid)
     elif body.get("arena") is not None:
@@ -736,6 +840,7 @@ async def api_duel(request):
         except (TypeError, ValueError):
             mid, acc = 0, 0
         ar, berish = await asyncio.to_thread(_arena, uid, mid, tur, acc)
+        await _dost_xabar()
         if ar is None:
             return cors(web.json_response({"ok": False, "error": "no_match"}))
         for u, ref, pts in berish:

@@ -316,6 +316,46 @@ async def amain():
     check("sinov: kompyuter raqib o'zi keladi va yuradi, ball yo'q", A["phase"] == "early" and A["test"] and A2["phase"] == "pick" and A2["opp"]["here"]
           and A3["moved"] and A4["phase"] == "reveal" and A4["last"]["his"] in hpduel.TURLAR and ball(42) == 0)
 
+    # ---------- do'stona duel (chatdagi taklif) ----------
+    rey = lambda u: (db("SELECT reyting FROM duel_reyting WHERE user_id=?", (u,)) or [(None,)])[0][0]
+    r11, r12, b11, b12 = rey(11), rey(12), ball(11), ball(12)
+    mid = await hpduel.dost_yarat(11)
+    A = await ar(11, mid)
+    check("do'stona: taklif ochiq, chaqiruvchi kutadi", A["phase"] == "open" and A["friend"] and A["expires_in"] > 0)
+    check("do'stona: begona odam arenaga kira olmaydi", (await ask(13, arena=mid))[1].get("error") == "no_match")
+    st, d = await ask(12, accept=mid)
+    check("do'stona: qabul qilindi", d.get("friend_id") == mid)
+    st, d = await ask(13, accept=mid)
+    check("do'stona: ikkinchi odam qabul qila olmaydi", d.get("error") == "taken")
+    ilgari(hpduel.DOST_BOSH + 1)
+    await ar(11, mid); B = await ar(12, mid); A = await ar(11, mid)
+    check("do'stona: ikkalasi kelgach duel boshlanadi", A["phase"] == "pick" and B["opp"]["uid"] == 11 and A["opp"]["uid"] == 12)
+    for i in range(hpduel.JON):
+        await ar(11, mid, move="hujum", acc=95)
+        await ar(12, mid, move="hiyla", acc=40)
+        ilgari(hpduel.PAUZA + 1)
+        A = await ar(11, mid)
+    check("do'stona: duel tugadi, 11 yutdi", A["over"] and A["won"] and A["why"] == "duel" and A["next"] is None)
+    check("do'stona: ball ham, reyting ham o'zgarmadi", ball(11) == b11 and ball(12) == b12 and rey(11) == r11 and rey(12) == r12)
+    st, d = await ask(12, history=1)
+    check("do'stona: tarixda «friend» belgisi bilan", any(h.get("friend") and h["id"] == mid and not h["won"] for h in d["history"]))
+    m2 = await hpduel.dost_yarat(11)
+    m3 = await hpduel.dost_yarat(11)
+    check("do'stona: yangi taklif eskisini bekor qiladi", (await ar(11, m2))["phase"] == "over" and (await ar(11, m3))["phase"] == "open")
+    st, d = await ask(11, cancel=m3)
+    check("do'stona: bekor qilish", d.get("cancel_ok") and (await ask(12, accept=m3))[1].get("error") == "expired")
+    m4 = await hpduel.dost_yarat(11)
+    ilgari(hpduel.DOST_MUDDAT + 1)
+    check("do'stona: muddati o'tgan taklif qabul qilinmaydi", (await ask(12, accept=m4))[1].get("error") == "expired" and (await ar(11, m4))["over"])
+    # chat kartasi
+    msg = await hpcup.post_chat_message("global", 11, "duel", None, duel=mid)
+    check("chat kartasi: tugagan duel, g'olib bilan", msg.get("duel") and msg["duel"]["status"] == "finished" and msg["duel"]["winner"] == 11 and msg["duel"]["b"]["uid"] == 12)
+    m5 = await hpduel.dost_yarat(13)
+    msg = await hpcup.post_chat_message("global", 13, "duel", None, duel=m5)
+    check("chat kartasi: ochiq taklif", msg["duel"]["status"] == "waiting" and msg["duel"]["b"] is None)
+    rooms = await hpcup.chat_bump_duel(m5)
+    check("chat kartasi: xona yangilanadi", rooms == ["global"])
+
     print("Duel: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     return fail
 

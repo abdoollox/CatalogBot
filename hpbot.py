@@ -22,6 +22,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 import hpcup
 import hpchess
+import hpduel
 import hppochta
 
 # main.py tomonidan to'ldiriladi
@@ -892,9 +893,9 @@ def register(dp, bot, app, cfg):
                     return cors(web.json_response({"error": "invalid id"}, status=400))
                 await hpcup.dm_block(uid, who, action == "block")
                 return cors(web.json_response({"ok": True, "settings": await hpcup.dm_settings(uid)}))
-            if target.startswith("dm:") and action in ("send", "edit", "react", "typing", "chess"):
+            if target.startswith("dm:") and action in ("send", "edit", "react", "typing", "chess", "duel"):
                 dm_peer = hpcup._dm_peer(target, uid)
-                if action in ("send", "chess") and not await hpcup.chat_user(dm_peer):
+                if action in ("send", "chess", "duel") and not await hpcup.chat_user(dm_peer):
                     return cors(web.json_response({"error": "no_user"}, status=404))
                 state = await hpcup.dm_state(uid, dm_peer, target)
                 if state != "ok":
@@ -942,7 +943,7 @@ def register(dp, bot, app, cfg):
                     return cors(web.json_response({"error": "not_found"}, status=404))
                 info["ok"] = True
                 return cors(web.json_response(info))
-            if banned is not False and action in ("send", "edit", "react", "chess"):
+            if banned is not False and action in ("send", "edit", "react", "chess", "duel"):
                 return cors(web.json_response({"error": "banned", "until": banned}, status=403))
             if action in ("edit", "delete", "react"):
                 msg_id = chat_int(body.get("id"))
@@ -996,6 +997,21 @@ def register(dp, bot, app, cfg):
                     hppochta.shaxsiy(dm_peer, uid, user.get("first_name"), text, target, message["id"], chess=True)
                 return cors(web.json_response({"ok": True, "message": message, "game": game["game"]}))
 
+            if action == "duel":
+                # Duelga chaqirish: ochiq taklif + chatda karta (holati jonli). Ball va reytingga ta'sir qilmaydi.
+                retry = chat_slow(chat_sent, uid, CHAT_LIMIT)
+                if retry:
+                    return cors(web.json_response({"error": "slow", "retry": retry}, status=429))
+                mid = await hpduel.dost_yarat(uid)
+                text = "⚔️ Duelga chaqiraman!"       # eski ilova kartani bilmaydi - unga oddiy matn ko'rinadi
+                message = await hpcup.post_chat_message(target, uid, text, None, duel=mid)
+                await hpcup.mark_chat_read(target, uid, message["id"])
+                chat_wake(target)
+                await hpduel._dost_xabar()
+                if target.startswith("dm:"):
+                    hppochta.shaxsiy(dm_peer, uid, user.get("first_name"), text, target, message["id"])
+                return cors(web.json_response({"ok": True, "message": message, "duel_id": mid}))
+
             text = (body.get("text") or "").strip()
             if not text or len(text) > 1000:
                 return cors(web.json_response({"error": "invalid message"}, status=400))
@@ -1043,6 +1059,11 @@ def register(dp, bot, app, cfg):
         for room_key in await hpcup.chat_bump_chess(game_id):
             chat_wake(room_key)
     _cfg["chess_changed"] = chess_changed
+
+    async def duel_changed(match_id):
+        for room_key in await hpcup.chat_bump_duel(match_id):
+            chat_wake(room_key)
+    hpduel._cfg["dost_ozgardi"] = duel_changed
     hpchess.register(app, _cfg)
 
     logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",
