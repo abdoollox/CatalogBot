@@ -290,6 +290,10 @@ async def test_shaxsiy():
     inf = await hpcup.chat_message_info(room, m3["id"], 301)
     check("xabar haqida: o'qigan va reaksiya", inf["readers_n"] == 1 and inf["readers"][0]["uid"] == 302
           and len(inf["reactions"]) == 1 and inf["reactions"][0]["uid"] == 302 and inf["reactions"][0]["e"] == hpcup.CHAT_REACTIONS[0])
+    begona = await hpcup.chat_message_info(room, m3["id"], 302)
+    check("xabar haqida: begonaga o'qiganlar berilmaydi, reaksiyalar beriladi; adminga beriladi",
+          begona["can_read"] is False and begona["readers"] == [] and len(begona["reactions"]) == 1
+          and (await hpcup.chat_message_info(room, m3["id"], 302, admin=True))["readers_n"] == 1)
     check("xabar haqida: muallif o'qiganlar ichida emas, yo'q xabar - None",
           all(r["uid"] != 301 for r in inf["readers"]) and await hpcup.chat_message_info(room, 999999, 301) is None)
 

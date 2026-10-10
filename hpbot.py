@@ -937,7 +937,7 @@ def register(dp, bot, app, cfg):
                 msg_id = chat_int(body.get("id"))
                 if msg_id is None:
                     return cors(web.json_response({"error": "invalid id"}, status=400))
-                info = await hpcup.chat_message_info(target, msg_id, uid)
+                info = await hpcup.chat_message_info(target, msg_id, uid, admin=bool(admin))
                 if info is None:
                     return cors(web.json_response({"error": "not_found"}, status=404))
                 info["ok"] = True
