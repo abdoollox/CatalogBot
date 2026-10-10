@@ -69,6 +69,10 @@ def profil(uid, men):
             if m:
                 filmlar.add(m.group(1))
         karta = _one(conn, "SELECT COUNT(*) FROM qurbaqa WHERE user_id=?", (uid,))
+        try:                                  # kolleksiyasi: yig'ilgan kartochkalar (oxirgisi birinchi)
+            kartalar = [r[0] for r in conn.execute("SELECT card FROM qurbaqa WHERE user_id=? ORDER BY vaqt DESC", (uid,))]
+        except sqlite3.OperationalError:
+            kartalar = []
         ch = _one(conn, "SELECT rating, games, wins FROM chess_ratings WHERE user_id=?", (uid,))
         out = {
             "ok": True, "uid": uid, "me": uid == int(men),
@@ -77,7 +81,7 @@ def profil(uid, men):
             "online": hpcup.presence_online(uid), "seen": hpcup.presence_seen(uid, ls[0] if ls else None),
             "wand": wand_of(conn, uid), "patronus": pt[0] if pt else None,
             "points": {"week": int(hafta[0]) if hafta else 0, "all": int(jami[0]) if jami else 0},
-            "films": len(filmlar), "cards": int(karta[0]) if karta else 0,
+            "films": len(filmlar), "cards": int(karta[0]) if karta else 0, "cards_list": kartalar,
             "chess": {"rating": int(ch[0]), "games": int(ch[1]), "wins": int(ch[2])} if ch and ch[1] else None,
         }
     finally:
@@ -95,6 +99,12 @@ def profil(uid, men):
     except Exception as e:
         logging.error("Profil: qo'riqxona olinmadi (%s): %s", uid, e)
         out["creatures"] = []
+    try:
+        import hpissiq
+        out["plants"] = hpissiq.korinish(uid)             # issiqxonasi: [{kod, stage}]
+    except Exception as e:
+        logging.error("Profil: issiqxona olinmadi (%s): %s", uid, e)
+        out["plants"] = []
     try:
         import hpdars
         out["skills"] = hpdars.qobiliyat(uid)             # qobiliyatlar: [{id, score}]
