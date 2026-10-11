@@ -2863,7 +2863,8 @@ async def test_reset(user_id, bosqich=None):
 
     bosqich="kurs1" (egasi, 2026-10-11): o'chirilgach o'quvchi SARALANGAN va 1-KURSNI ENDIGINA TUGATGAN holda qayta
     yaratiladi - fakulteti (avvalgisi yoki tasodifiy), har fandan hpdars.KURS_2 tadan dars (bahosi 4). Qaytaradi: fakultet.
-    Bo'lmasa - saralanish boshi (fakulteti yo'q), qaytaradi: None.
+    bosqich="nol" - CHINAKAM NOLDAN: Gringotts, tayoqcha, bilet ham yo'q (birinchi marta kirgan odamdek).
+    Bo'lmasa - saralanish boshi (fakulteti yo'q; Gringotts, tayoqcha, bilet olingan), qaytaradi: None.
 
     Admin ilovadagi "Noldan boshlash" tugmasini bosganda chaqiriladi: shundan
     keyin u ilovaga xuddi birinchi marta kirgan odamdek tushadi. Manfiy bo'lmagan
@@ -2924,8 +2925,9 @@ async def test_reset(user_id, bosqich=None):
             # Boshlanish nuqtasi - SARALANISH (egasi, 2026-10-11): Gringotts, tayoqcha va bilet olingan holda
             _touch_user(conn, uid)
             hozir = _utc_iso(now_tk())
-            conn.execute("UPDATE users SET galleons=?, vault_at=?, wand_at=?, ticket_at=? WHERE user_id=?",
-                         (START_GALLEONS - WAND_PRICE, hozir, hozir, hozir, uid))
+            if bosqich != "nol":
+                conn.execute("UPDATE users SET galleons=?, vault_at=?, wand_at=?, ticket_at=? WHERE user_id=?",
+                             (START_GALLEONS - WAND_PRICE, hozir, hozir, hozir, uid))
             uy = None
             if bosqich == "kurs1":
                 import hpdars                                     # hpdars hpcup ni import qiladi - shu yerda

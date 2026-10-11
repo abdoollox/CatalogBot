@@ -400,6 +400,11 @@ async def amain():
     q("UPDATE users SET house=NULL WHERE user_id=-5")
     uy_ = await hpcup.test_reset(-5, "kurs1")
     check("sinov «1-kurs tugagan»: fakulteti yo'q bo'lsa - tasodifiy", uy_ in hpcup.HOUSES)
+    uy_ = await hpcup.test_reset(-5, "nol")
+    w_ = await hpcup.wallet(-5)
+    check("sinov «0 dan»: fakultet, darslar, Gringotts, tayoqcha, bilet - hech biri yo'q",
+          uy_ is None and q("SELECT house FROM users WHERE user_id=-5")[0][0] is None and not q("SELECT 1 FROM dars_daraja WHERE user_id=-5")
+          and not w_.get("vault") and not w_.get("wand") and not w_.get("ticket"))
 
     r1, r2, r3 = hpdars._bell_aralash(5, "2026-10-12", 1, 10), hpdars._bell_aralash(6, "2026-10-12", 1, 10), hpdars._bell_aralash(5, "2026-10-12", 2, 10)
     check("aralashtirish: bir urinishda doim o'sha, boshqa odam va boshqa urinishda boshqa",

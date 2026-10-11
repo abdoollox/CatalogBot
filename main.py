@@ -1336,7 +1336,7 @@ async def api_test_reset(request):
     if not isinstance(body, dict):
         body = {}
     init = request.headers.get("X-Telegram-Init-Data", "") or str(body.get("initData", ""))
-    bosqich = "kurs1" if body.get("bosqich") == "kurs1" else None      # «1-kurs tugagan» holat (egasi, 2026-10-11)
+    bosqich = body.get("bosqich") if body.get("bosqich") in ("kurs1", "nol") else None      # «1-kurs tugagan» / «0 dan» (egasi, 2026-10-11)
 
     # Bu yerda _test_mode yoqiq bo'lsa user allaqachon manfiy raqamli bo'ladi.
     user = verify_init_data(init)
