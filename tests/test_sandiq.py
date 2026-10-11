@@ -83,6 +83,7 @@ async def amain():
     await hpcup.touch_user(1, "Garri")
     check("saralanmaganga sandiq yo'q", (await ask(1)).get("error") == "no_house")
     await hpcup.set_house(1, "gryffindor")
+    sql("UPDATE users SET sorted_at='2026-10-01T00:00:00Z' WHERE user_id=?", (1,))
     d = await ask(1)
     kun = d["kun"]
     kodlar = [x["code"] for x in d["tasks"]]
@@ -132,6 +133,7 @@ async def amain():
     # Ketma-ketlik: oldingi 6 kun ochilgan, bugun 7-kun -> katta sandiq
     await hpcup.touch_user(2, "Ron")
     await hpcup.set_house(2, "gryffindor")
+    sql("UPDATE users SET sorted_at='2026-10-01T00:00:00Z' WHERE user_id=?", (2,))
     bugun = datetime.strptime(kun, "%Y-%m-%d")
     for i in range(1, 7):
         sql("INSERT INTO sandiq (user_id, kun, done, bosqich, ochildi) VALUES (2, ?, '[]', 2, 'x')",
@@ -152,6 +154,7 @@ async def amain():
     # Kun o'tkazib yuborilsa - noldan
     await hpcup.touch_user(3, "Nevill")
     await hpcup.set_house(3, "gryffindor")
+    sql("UPDATE users SET sorted_at='2026-10-01T00:00:00Z' WHERE user_id=?", (3,))
     for i in (2, 3, 4):
         sql("INSERT INTO sandiq (user_id, kun, done, bosqich, ochildi) VALUES (3, ?, '[]', 2, 'x')",
             ((bugun - timedelta(days=i)).strftime("%Y-%m-%d"),))
@@ -172,6 +175,7 @@ async def amain():
           not any(x in ("daily", "owl", "cup", "house", "music") for d_ in range(12, 32) for x in hpsandiq.kun_topshiriqlari("2026-10-%02d" % d_)))
     await hpcup.touch_user(7, "Luna")
     await hpcup.set_house(7, "ravenclaw")
+    sql("UPDATE users SET sorted_at='2026-10-01T00:00:00Z' WHERE user_id=?", (7,))
     kun = hpcup.today_tk()
     hpsandiq.kun_topshiriqlari = lambda k: ["parvarish", "chat", "dars", "bell3", "duel", "bell_top"]
     d = await ask(7)
@@ -203,9 +207,11 @@ async def amain():
     # o'ntalikdan tashqarida
     await hpcup.touch_user(8, "Cho")
     await hpcup.set_house(8, "ravenclaw")
+    sql("UPDATE users SET sorted_at='2026-10-01T00:00:00Z' WHERE user_id=?", (8,))
     for u_ in range(20, 31):
         await hpcup.touch_user(u_, "S%d" % u_)
         await hpcup.set_house(u_, "ravenclaw")
+        sql("UPDATE users SET sorted_at='2026-10-01T00:00:00Z' WHERE user_id=?", (u_,))
         sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES (?,?,?,?,?)", (kun, "himoya", u_, 1000 + u_, "2026-10-12T05:00:00Z"))
     sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES (?,?,8,?,?)", (kun, "himoya", 99999, "2026-10-12T05:00:00Z"))
     sql("INSERT INTO duel_oyin (user_id, daraja, jon, rjon, holat, hafta, vaqt) VALUES (8,1,0,3,'yutqazdi','2026-10-12',?)", (hpcup._utc_iso(hpcup.now_tk()),))
@@ -217,6 +223,27 @@ async def amain():
     sql("DELETE FROM sandiq WHERE user_id=8")
     d = await ask(8)
     check("o'n birinchi o'rinda - o'ntalik vazifasi bajarilmagan", not {x["code"]: x["done"] for x in d["tasks"]}["bell_top"])
+
+    # ---------- BIRINCHI KUN: yangi o'quvchiga birinchi qutisigacha eng sodda vazifalar ----------
+    await hpcup.touch_user(40, "Luna")
+    await hpcup.set_house(40, "ravenclaw")                      # sorted_at - hozir (yangi o'quvchi)
+    d = await ask(40)
+    check("yangi o'quvchi: birinchi kunlik sodda ro'yxat, hammasi yengil", d["first"] and [x["code"] for x in d["tasks"]] == list(hpsandiq.BIRINCHI)
+          and all(x["tier"] == 1 for x in d["tasks"]))
+    for k_ in ("chat", "dars", "kitob", "music", "house"):
+        d = await ask(40, task=k_)
+    sql("INSERT OR REPLACE INTO dars_bellashuv (kun, dars, user_id, ms, vaqt) VALUES (?,?,40,?,?)", (d["kun"], "tarix", 9000, "2026-10-12T05:00:00Z"))
+    d = await ask(40)
+    check("birinchi kun: tarix bellashuvi server o'zi ko'radi, 6 / 6", d["n"] == 6 and d["can_open"])
+    d = await ask(40, open=True)
+    check("birinchi kun: quti ochiladi, ochilgan kun oxirigacha ro'yxat o'zgarmaydi", d["opened"] and d["first"] and d["n"] == 6)
+    sql("UPDATE sandiq SET kun='2000-01-01' WHERE user_id=40")
+    d = await ask(40)
+    check("ertasiga - odatdagi ro'yxat", not d["first"])
+    await hpcup.touch_user(41, "Din")
+    await hpcup.set_house(41, "gryffindor")
+    sql("UPDATE users SET sorted_at='2026-10-01T00:00:00Z' WHERE user_id=41")
+    check("eski o'quvchi (kurslardan oldin saralangan) - odatdagi ro'yxat", not (await ask(41))["first"])
 
 
 asyncio.run(amain())

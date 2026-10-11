@@ -96,6 +96,10 @@ QIYIN = ("duel_yut", "bell_top", "alo", "rek_yangi")
 SERVERDA = ("parvarish", "bell3", "bell_top", "duel", "duel_yut")
 BELL_SONI = 3                       # «bell3»: nechta fanda bellashuvda qatnashish kerak
 HAMMASI = tuple(dict.fromkeys(HAVZA + ("daily",) + OSON + ORTA + QIYIN))
+# BIRINCHI KUN (egasi, 2026-10-11): yangi o'quvchiga birinchi qutisini ochguncha ENG SODDA vazifalar - 2-kursda hammasi ochiq
+# joylar (Do'stlar 4-kursdan, Issiqxona/Qo'riqxona 3-kursdan - shuning uchun «share» va «parvarish» yo'q). Ilova har birini
+# yo'riqnoma bilan bajartiradi (js/09-yoriqnoma.js). Quti ochilgan kunning oxirigacha shu ro'yxat, ertasiga - odatdagi.
+BIRINCHI = ("daily", "chat", "dars", "kitob", "music", "house")
 
 
 def kun_topshiriqlari(kun):
@@ -117,6 +121,8 @@ def _bor(conn, sql, args):
 def _topshiriqlar(conn, uid, kun):
     """O'quvchining bugungi ro'yxati. «Parvarish» faqat o'simligi yoki maxluqi borlarga: ikkalasi ham yo'q odamga
     uning o'rniga shu kuni tushmagan uchinchi yengil vazifa beriladi."""
+    if _birinchi_kun(conn, uid, kun):
+        return list(BIRINCHI)
     tasks = kun_topshiriqlari(kun)
     if "parvarish" in tasks and not (_bor(conn, "SELECT 1 FROM issiq WHERE user_id=? LIMIT 1", (uid,))
                                      or _bor(conn, "SELECT 1 FROM qoriq WHERE user_id=? LIMIT 1", (uid,))):
@@ -124,6 +130,16 @@ def _topshiriqlar(conn, uid, kun):
         if zaxira:
             tasks[tasks.index("parvarish")] = zaxira[0]
     return tasks
+
+
+def _birinchi_kun(conn, uid, kun):
+    """Kurslar joriy qilingandan keyin saralangan (yoki sinov) o'quvchi hali birorta kun qutisini ochmagan bo'lsa."""
+    import hpdars                                    # hpdars hpcup ga tayanadi - shu yerda
+    if int(uid) > 0:
+        u = conn.execute("SELECT sorted_at FROM users WHERE user_id=?", (int(uid),)).fetchone()
+        if not u or (u["sorted_at"] or "") < hpdars.KURS_ESKI:
+            return False
+    return not _bor(conn, "SELECT 1 FROM sandiq WHERE user_id=? AND ochildi IS NOT NULL AND kun<?", (int(uid), kun))
 
 
 def _serverda_bajarildi(conn, uid, kun, kod):
@@ -217,12 +233,13 @@ def _holat(conn, uid, kun, mukofot=None):
     row = conn.execute("SELECT done, bosqich, ochildi FROM sandiq WHERE user_id=? AND kun=?", (uid, kun)).fetchone()
     done = json.loads(row["done"]) if row else []
     tasks = _topshiriqlar(conn, uid, kun)
+    bir = tasks == list(BIRINCHI)
     streak = _streak(conn, uid, kun)
     ochildi = bool(row and row["ochildi"])
     n = len([t for t in tasks if t in done])
     return {
-        "ok": True, "kun": kun,
-        "tasks": [{"code": t, "done": t in done, "tier": 1 if t in OSON else 3 if t in QIYIN else 2} for t in tasks],
+        "ok": True, "kun": kun, "first": bir,
+        "tasks": [{"code": t, "done": t in done, "tier": 1 if bir or t in OSON else 3 if t in QIYIN else 2} for t in tasks],
         "bell_need": BELL_SONI,
         "n": n, "total": len(tasks),
         "opened": ochildi, "can_open": n >= len(tasks) and not ochildi,
