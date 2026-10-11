@@ -2858,8 +2858,12 @@ async def react_chat_message(house, user_id, msg_id, emoji):
 
 # ---------------------------------------------------------------- sinov hisobi
 
-async def test_reset(user_id):
+async def test_reset(user_id, bosqich=None):
     """Sinov o'quvchisining (manfiy raqamli hisob) hamma izini o'chiradi.
+
+    bosqich="kurs1" (egasi, 2026-10-11): o'chirilgach o'quvchi SARALANGAN va 1-KURSNI ENDIGINA TUGATGAN holda qayta
+    yaratiladi - fakulteti (avvalgisi yoki tasodifiy), har fandan hpdars.KURS_2 tadan dars (bahosi 4). Qaytaradi: fakultet.
+    Bo'lmasa - saralanish boshi (fakulteti yo'q), qaytaradi: None.
 
     Admin ilovadagi "Noldan boshlash" tugmasini bosganda chaqiriladi: shundan
     keyin u ilovaga xuddi birinchi marta kirgan odamdek tushadi. Manfiy bo'lmagan
@@ -2872,6 +2876,8 @@ async def test_reset(user_id):
     def _do():
         conn = _connect()
         try:
+            eski = conn.execute("SELECT house FROM users WHERE user_id=?", (uid,)).fetchone()
+            eski_uy = eski["house"] if eski and eski["house"] in HOUSES else None
             conn.execute(
                 "DELETE FROM chat_reactions WHERE user_id=? OR message_id IN "
                 "(SELECT id FROM chat_messages WHERE user_id=?)", (uid, uid))
@@ -2920,11 +2926,25 @@ async def test_reset(user_id):
             hozir = _utc_iso(now_tk())
             conn.execute("UPDATE users SET galleons=?, vault_at=?, wand_at=?, ticket_at=? WHERE user_id=?",
                          (START_GALLEONS - WAND_PRICE, hozir, hozir, hozir, uid))
+            uy = None
+            if bosqich == "kurs1":
+                import hpdars                                     # hpdars hpcup ni import qiladi - shu yerda
+                uy = eski_uy or random.choice(list(HOUSES))
+                conn.execute("UPDATE users SET house=?, sorted_at=? WHERE user_id=?", (uy, hozir, uid))
+                kun = now_tk().strftime("%Y-%m-%d")
+                for f in hpdars.DARSLAR:
+                    conn.execute("INSERT OR REPLACE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (?,?,?,?)", (uid, f, hpdars.KURS_2, kun))
+                    for d in range(1, hpdars.KURS_2 + 1):
+                        try:
+                            conn.execute("INSERT OR REPLACE INTO dars_baho (user_id, dars, daraja, baho) VALUES (?,?,?,4)", (uid, f, d))
+                        except sqlite3.OperationalError:
+                            pass
             conn.commit()
+            return uy
         finally:
             conn.close()
 
-    await asyncio.to_thread(_do)
+    return await asyncio.to_thread(_do)
 
 
 # ---------------------------------------------------------------- Gringotts hamyoni

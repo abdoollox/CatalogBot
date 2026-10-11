@@ -1329,13 +1329,14 @@ async def api_test_reset(request):
     if request.method == "OPTIONS":
         return _cors(web.Response(status=204))
 
-    init = request.headers.get("X-Telegram-Init-Data", "")
-    if not init:
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        init = str(body.get("initData", ""))
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    init = request.headers.get("X-Telegram-Init-Data", "") or str(body.get("initData", ""))
+    bosqich = "kurs1" if body.get("bosqich") == "kurs1" else None      # «1-kurs tugagan» holat (egasi, 2026-10-11)
 
     # Bu yerda _test_mode yoqiq bo'lsa user allaqachon manfiy raqamli bo'ladi.
     user = verify_init_data(init)
@@ -1347,13 +1348,13 @@ async def api_test_reset(request):
         return _cors(web.json_response({"ok": False, "error": "not_allowed"}, status=403))
 
     try:
-        await hpcup.test_reset(uid)
+        uy = await hpcup.test_reset(uid, bosqich)
     except Exception as e:
         logging.error("Sinov hisobini tozalashda xato: %s", e)
         return _cors(web.json_response({"ok": False, "error": "baza"}, status=503))
 
-    logging.info("Sinov o'quvchisi tozalandi: %s", uid)
-    return _cors(web.json_response({"ok": True}))
+    logging.info("Sinov o'quvchisi tozalandi: %s (%s)", uid, bosqich or "saralanish")
+    return _cors(web.json_response({"ok": True, "house": uy}))
 
 
 async def api_loglar(request):

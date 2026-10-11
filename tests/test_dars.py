@@ -390,6 +390,16 @@ async def amain():
     r_ = q("SELECT house FROM users WHERE user_id=-5")
     check("sinov: darslari o'chdi, fakulteti yo'q", not q("SELECT 1 FROM dars_daraja WHERE user_id=-5") and r_ and r_[0][0] is None)
     check("sinov: Gringotts, tayoqcha, bilet tayyor", bool(w_.get("vault")) and bool(w_.get("wand")) and bool(w_.get("ticket")))
+    await hpcup.set_house(-5, "ravenclaw")
+    q("INSERT OR REPLACE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (-5,'afsun',20,'2026-10-13')")
+    uy_ = await hpcup.test_reset(-5, "kurs1")
+    k_ = hpdars.kurs(-5)
+    check("sinov «1-kurs tugagan»: fakulteti saqlandi, har fandan 3 tadan dars - 2-kurs",
+          uy_ == "ravenclaw" and q("SELECT house FROM users WHERE user_id=-5")[0][0] == "ravenclaw" and k_["n"] == 2 and k_["fan2"] == 9 and k_["fan3"] == 0)
+    check("sinov «1-kurs tugagan»: qurbaqa va bellashuv yo'q", k_["qurb"] == 0 and k_["bellf"] == 0)
+    q("UPDATE users SET house=NULL WHERE user_id=-5")
+    uy_ = await hpcup.test_reset(-5, "kurs1")
+    check("sinov «1-kurs tugagan»: fakulteti yo'q bo'lsa - tasodifiy", uy_ in hpcup.HOUSES)
 
     r1, r2, r3 = hpdars._bell_aralash(5, "2026-10-12", 1, 10), hpdars._bell_aralash(6, "2026-10-12", 1, 10), hpdars._bell_aralash(5, "2026-10-12", 2, 10)
     check("aralashtirish: bir urinishda doim o'sha, boshqa odam va boshqa urinishda boshqa",
