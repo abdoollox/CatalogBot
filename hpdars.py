@@ -367,7 +367,7 @@ def _holat(uid, kun):
 #   4-kurs (KURS_4 ta dars o'tgach): Maydon (Duel, Shaxmat, Viktorina) va Jadval
 # Faqat ISH bilan ochiladi (kunlar bilan emas). KURS_ESKI dan oldin saralanganlar hech narsa yo'qotmaydi - ular 4-kursda.
 # Bu faqat bosh sahifadagi ko'rinish (ilova qulflaydi); server hech narsani taqiqlamaydi.
-KURS_2, KURS_4 = 3, 6          # HAR FANDAN shuncha dars (egasi, 2026-10-11): 2-kursga 3 tadan, 4-kursga 6 tadan
+KURS_2, KURS_4 = 3, 9          # HAR FANDAN shuncha dars (egasi, 2026-10-11): 2-kursga 3 tadan, 4-kursga 9 tadan
 KURS_ESKI = "2026-10-10T22:25:00Z"
 
 
