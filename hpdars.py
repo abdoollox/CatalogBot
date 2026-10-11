@@ -396,22 +396,31 @@ def _holat(uid, kun):
 # --- KURSLAR (egasi, 2026-10-11): fakultet aniqlangach bosh sahifa bir yo'la og'ir edi - bo'limlar bosqichma-bosqich ochiladi.
 #   1-kurs (saralangan zahoti): Darslar va Umumiy xona
 #   2-kurs (KURS_2 ta dars o'tgach): Bellashuv, Shokolad qurbaqa, kubok
-#   3-kurs (birinchi bellashuvdan keyin): Rekordlar, Qo'riqxona, Issiqxona
+#   3-kurs: Rekordlar, Qo'riqxona, Issiqxona - shart (egasi, 2026-10-11): har fandan KURS_3 tadan dars + kamida bitta
+#           Shokolad qurbaqa kartasi (KURS_3_QURB) + to'qqiz fanning HAR BIRINING bellashuvida kamida bir marta qatnashgan
 #   4-kurs (KURS_4 ta dars o'tgach): Maydon (Duel, Shaxmat, Viktorina) va Jadval
 # Faqat ISH bilan ochiladi (kunlar bilan emas). KURS_ESKI dan oldin saralanganlar hech narsa yo'qotmaydi - ular 4-kursda.
 # Bu faqat bosh sahifadagi ko'rinish (ilova qulflaydi); server hech narsani taqiqlamaydi.
 KURS_2, KURS_3, KURS_4 = 3, 9, 15     # HAR FANDAN shuncha dars (egasi, 2026-10-11): 2-kursga 3, 3-kursga 9, 4-kursga 15 tadan
+KURS_3_QURB = 1                       # 3-kurs uchun kamida shuncha Shokolad qurbaqa kartasi (egasi, 2026-10-11: «faqat 9 ta dars kamlik qiladi»)
 KURS_ESKI = "2026-10-10T22:25:00Z"
 
 
 def kurs(uid):
-    """{n: 1..4, lessons: jami darslar, fans: fanlar soni, fan2/fan3/fan4: shartni bajargan fanlar, bell, need2/need3/need4}.
-    Shart faqat DARSLAR, HAR FANDAN: 2-kurs - KURS_2 tadan, 3-kurs - KURS_3 tadan, 4-kurs - KURS_4 tadan (bellashuv sharti yo'q)."""
+    """{n: 1..4, lessons: jami darslar, fans: fanlar soni, fan2/fan3/fan4: shartni bajargan fanlar, bell, need2/need3/need4,
+    qurb: ochilgan qurbaqa kartalari, needq: KURS_3_QURB, bellf: bellashuvida qatnashgan fanlar soni, bellar: o'sha fanlar ro'yxati}.
+    2-kurs - har fandan KURS_2 tadan dars; 3-kurs - har fandan KURS_3 tadan dars + qurbaqa kartasi + to'qqiz fan bellashuvi;
+    4-kurs - 3-kurs shartlari + har fandan KURS_4 tadan dars."""
     conn = hpcup._connect()
     try:
         u = conn.execute("SELECT sorted_at FROM users WHERE user_id=?", (int(uid),)).fetchone()
         dar = {r["dars"]: int(r["daraja"] or 0) for r in conn.execute("SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (int(uid),))}
         bell = conn.execute("SELECT 1 FROM dars_bellashuv WHERE user_id=? AND ms IS NOT NULL LIMIT 1", (int(uid),)).fetchone() is not None
+        bellar = sorted({r["dars"] for r in conn.execute("SELECT DISTINCT dars FROM dars_bellashuv WHERE user_id=? AND ms IS NOT NULL", (int(uid),))} & set(DARSLAR))
+        try:
+            qurb = int(conn.execute("SELECT COUNT(*) FROM qurbaqa WHERE user_id=?", (int(uid),)).fetchone()[0] or 0)
+        except Exception:
+            qurb = 0                              # qurbaqa jadvali hali yaratilmagan
     finally:
         conn.close()
     fanlar = list(DARSLAR)
@@ -420,9 +429,11 @@ def kurs(uid):
     if int(uid) > 0 and u and (u["sorted_at"] or "") < KURS_ESKI:
         n = 4                                    # joriy qilinishidan oldin saralanganlar (sinov o'quvchisi - yangi odamdek)
     else:
-        n = 4 if eng_kam >= KURS_4 else 3 if eng_kam >= KURS_3 else 2 if eng_kam >= KURS_2 else 1
+        uch = eng_kam >= KURS_3 and qurb >= KURS_3_QURB and len(bellar) >= len(fanlar)
+        n = 4 if uch and eng_kam >= KURS_4 else 3 if uch else 2 if eng_kam >= KURS_2 else 1
     return {"n": n, "lessons": sum(dar.values()), "fans": len(fanlar), "fan2": soni(KURS_2), "fan3": soni(KURS_3), "fan4": soni(KURS_4),
-            "bell": bell, "need2": KURS_2, "need3": KURS_3, "need4": KURS_4}
+            "bell": bell, "need2": KURS_2, "need3": KURS_3, "need4": KURS_4,
+            "qurb": qurb, "needq": KURS_3_QURB, "bellf": len(bellar), "bellar": bellar}
 
 
 # ---------- Yangi saralanganlarga eslatma (egasi, 2026-10-11; boyo'g'li pochtasi + bot) ----------
