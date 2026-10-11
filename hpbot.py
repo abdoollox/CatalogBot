@@ -48,8 +48,9 @@ BADGE_NAME = {
 
 LETTERS = ["A", "B", "C", "D"]
 
-# Mavsum yopilishini e'lon qilish. HP_ANNOUNCE=0 bo'lsa kanalga yozilmaydi.
-ANNOUNCE = os.getenv("HP_ANNOUNCE", "1") != "0"
+# Mavsum yopilishini kanalga e'lon qilish O'CHIRILGAN (egasi, 2026-10-11: «kubok g'olibi haqidagi xabar kanalga kelmasin»).
+# Sozlamadagi HP_ANNOUNCE ham buni yoqmaydi - qayta yoqish uchun shu qatorni o'zgartiring. O'quvchilarga boyo'g'li xati boradi (hppochta).
+ANNOUNCE = False
 
 FEED_FULL_LIMIT = 3000      # to'liq tasma sahifasi: eng ko'pi shuncha yozuv
 
