@@ -82,7 +82,7 @@ async def amain():
     check("tarix darslari: 46 ta; 1-darsda 6 savol, keyin 6 yangi + 2 takror", hpdars.dars_soni("tarix") == 46
           and hpdars.dars_soni("afsun") == 48 and hpdars.dars_soni("iksir") == 36 and len(d1) == 6 and len(d2) == 8 and len(d46) == 8
           and {q["q"] for q in d1} == birinchi6 and len({q["q"] for q in d2} & birinchi6) == 2
-          and len({q["q"] for q in d2}) == 8 and hpdars.tarix_dars(2, "uz") == d2 and "c" in hpdars.tarix_dars(1, "ru")[0]
+          and len({q["q"] for q in d2}) == 8 and [q["q"] for q in hpdars.tarix_dars(2, "uz")] == [q["q"] for q in d2] and "c" in hpdars.tarix_dars(1, "ru")[0]
           and hpdars.tarix_bell("2026-10-08") == hpdars.tarix_bell("2026-10-08") and len(set(hpdars.tarix_bell("2026-10-08"))) == 10
           and len(hpdars.tarix_bell("2026-10-07")) == 5)
 
@@ -231,13 +231,28 @@ async def amain():
     st, d = await ask(2, start="tarix", lang="ru")
     idx = hpdars.tarix_bell(kun)
     N = hpdars.tarix_soni(kun)
+    B_ = hpdars.bell_savollar()
+    asl = {B_[i]["ru"]["q"]: B_[i] for i in idx}
     check("tarix: savollar soni, to'g'ri javob yuborilmaydi", d["started"] and len(d["questions"]) == N
-          and all("c" not in q for q in d["questions"]) and d["questions"][0]["q"] == hpdars.bell_savollar()[idx[0]]["ru"]["q"])
-    togri = [hpdars.bell_savollar()[i]["correct"] for i in idx]
-    xato2 = togri[:-2] + [(togri[-2] + 1) % 4, (togri[-1] + 1) % 4]
-    st, d = await ask(2, finish="tarix", answers=xato2)
+          and all("c" not in q for q in d["questions"]) and {q["q"] for q in d["questions"]} == set(asl))
+    check("tarix: variantlar aralashgan, lekin o'sha to'rttasi", all(sorted(q["a"]) == sorted(asl[q["q"]]["ru"]["a"]) for q in d["questions"])
+          and any(q["a"] != asl[q["q"]]["ru"]["a"] for q in d["questions"]))
+
+    def javoblar(qs, til, xato=0):
+        """Ilova ko'rgan tartibda to'g'ri javoblar; oxirgi `xato` tasi ataylab noto'g'ri."""
+        m_ = {B_[i][til]["q"]: B_[i] for i in idx}
+        out = [q["a"].index(m_[q["q"]][til]["a"][m_[q["q"]]["correct"]]) for q in qs]
+        for z in range(xato):
+            out[-1 - z] = (out[-1 - z] + 1) % 4
+        return out
+    birinchi = [q["q"] for q in d["questions"]]
+    st, d = await ask(2, finish="tarix", answers=javoblar(d["questions"], "ru", 2))
     check("tarix: 2 xato = +6 soniya", d["ok"] and d["wrong"] == 2 and d["ms"] == hpdars.ENG_KAM_MS + 6000)
-    st, d = await ask(2, start="tarix"); st, d = await ask(2, finish="tarix", answers=togri)
+    st, d = await ask(2, start="tarix")
+    ikkinchi = [B_[i]["ru"]["q"] for q in d["questions"] for i in idx if B_[i]["uz"]["q"] == q["q"]]
+    check("tarix: qayta urinishda savollar tartibi boshqa", sorted(ikkinchi) == sorted(birinchi) and ikkinchi != birinchi)
+    qs2 = d["questions"]
+    st, d = await ask(2, finish="tarix", answers=javoblar(qs2, "uz"))
     check("tarix: hammasi to'g'ri", d["wrong"] == 0 and d["best"] == hpdars.ENG_KAM_MS
           and d["lessons"]["tarix"]["contest"]["place"] == 1)
     st, d = await ask(2, start="tarix"); st, d = await ask(2, finish="tarix")
@@ -359,6 +374,13 @@ async def amain():
     r_ = q("SELECT house FROM users WHERE user_id=-5")
     check("sinov: darslari o'chdi, fakulteti yo'q", not q("SELECT 1 FROM dars_daraja WHERE user_id=-5") and r_ and r_[0][0] is None)
     check("sinov: Gringotts, tayoqcha, bilet tayyor", bool(w_.get("vault")) and bool(w_.get("wand")) and bool(w_.get("ticket")))
+
+    r1, r2, r3 = hpdars._bell_aralash(5, "2026-10-12", 1, 10), hpdars._bell_aralash(6, "2026-10-12", 1, 10), hpdars._bell_aralash(5, "2026-10-12", 2, 10)
+    check("aralashtirish: bir urinishda doim o'sha, boshqa odam va boshqa urinishda boshqa",
+          r1 == hpdars._bell_aralash(5, "2026-10-12", 1, 10) and r1 != r2 and r1 != r3 and sorted(r1[0]) == list(range(10)))
+    v_ = [hpdars._savol(B_[0], "uz", True) for _ in range(30)]
+    check("dars savoli: variantlar aralashadi, to'g'ri javob o'rni mos", len({tuple(q["a"]) for q in v_}) > 1
+          and all(q["a"][q["c"]] == B_[0]["uz"]["a"][B_[0]["correct"]] for q in v_))
 
     print("Darslar: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)

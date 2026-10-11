@@ -30,6 +30,7 @@ API: POST /api/dars
 """
 
 import asyncio
+import hashlib
 import datetime as _dt
 import json
 import logging
@@ -186,12 +187,44 @@ def bell_savollar():
     return _bell_savollar
 
 
-def _savol(q, lang, javob):
+def _savol(q, lang, javob, tartib=None):
+    """Savol ilova uchun. JAVOB VARIANTLARI HAR SAFAR ARALASHTIRILADI (egasi, 2026-10-11: o'quvchilar javobni
+    «ikkinchisi», «B» deb bir-biriga aytib berardi). tartib - variantlarning berilgan tartibi (bellashuvda, server o'zi eslab qoladi);
+    berilmasa tasodifiy. javob=True bo'lsa to'g'ri javobning YANGI o'rni ham qaytadi."""
     t = q.get(lang) or q["uz"]
-    out = {"q": t["q"], "a": t["a"]}
+    n = len(t["a"])
+    if tartib is None:
+        tartib = list(range(n))
+        random.shuffle(tartib)
+    out = {"q": t["q"], "a": [t["a"][i] for i in tartib]}
     if javob:
-        out["c"] = q["correct"]
+        out["c"] = tartib.index(q["correct"])
     return out
+
+
+def _bell_aralash(uid, kun, urinish, soni, variant=4):
+    """Tarix bellashuvi: shu odamning shu urinishi uchun savollar tartibi va har savol variantlarining tartibi.
+    Hech narsa saqlanmaydi - odam, kun va urinish raqamidan qayta hisoblanadi (boshlashda ham, tugatishda ham bir xil chiqadi).
+    Har o'quvchida va har qayta urinishda BOSHQA tartib. Qaytaradi: (savollar tartibi, [har o'rin uchun variantlar tartibi])."""
+    sir = hashlib.sha256(("bell|%s|%s|%s|%s" % (os.getenv("BOT_TOKEN", ""), uid, kun, urinish)).encode()).hexdigest()
+    rnd = random.Random(sir)
+    tartib = list(range(soni))
+    rnd.shuffle(tartib)
+    variantlar = []
+    for _ in range(soni):
+        v = list(range(variant))
+        rnd.shuffle(v)
+        variantlar.append(v)
+    return tartib, variantlar
+
+
+def _urinish(uid, dars, kun):
+    conn = hpcup._connect()
+    try:
+        r = conn.execute("SELECT urinish FROM dars_bellashuv WHERE kun=? AND dars=? AND user_id=?", (kun, dars, uid)).fetchone()
+        return int(r["urinish"] or 0) if r else 0
+    finally:
+        conn.close()
 
 
 def dars_soni(dars):
@@ -741,13 +774,22 @@ def _ish(uid, body):
             return javob
         javob["started"] = True
         if dars == "tarix":
-            s = bell_savollar()
-            javob["questions"] = [_savol(s[i], lang, False) for i in tarix_bell(kun)]
+            s, idx = bell_savollar(), tarix_bell(kun)
+            tartib, var_ = _bell_aralash(uid, kun, _urinish(uid, dars, kun), len(idx))
+            javob["questions"] = [_savol(s[idx[p]], lang, False, var_[p]) for p in tartib]
     elif body.get("finish"):
         if dars == "tarix":
             s, idx, jv = bell_savollar(), tarix_bell(kun), body.get("answers")
             jv = jv if isinstance(jv, list) else []
-            xato = sum(1 for k, i in enumerate(idx) if k >= len(jv) or jv[k] != s[i]["correct"])
+            tartib, var_ = _bell_aralash(uid, kun, _urinish(uid, dars, kun), len(idx))
+            xato = 0
+            for k, p in enumerate(tartib):          # k - ilovada ko'rsatilgan o'rin, p - savolning asl o'rni
+                try:
+                    tanlov = var_[p][int(jv[k])]
+                except (IndexError, TypeError, ValueError):
+                    tanlov = -1
+                if tanlov != s[idx[p]]["correct"]:
+                    xato += 1
             javob["wrong"] = xato
         else:
             try:
