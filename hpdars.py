@@ -367,30 +367,34 @@ def _holat(uid, kun):
 #   4-kurs (KURS_4 ta dars o'tgach): Maydon (Duel, Shaxmat, Viktorina) va Jadval
 # Faqat ISH bilan ochiladi (kunlar bilan emas). KURS_ESKI dan oldin saralanganlar hech narsa yo'qotmaydi - ular 4-kursda.
 # Bu faqat bosh sahifadagi ko'rinish (ilova qulflaydi); server hech narsani taqiqlamaydi.
-KURS_2, KURS_4 = 3, 10
+KURS_2, KURS_4 = 3, 6          # HAR FANDAN shuncha dars (egasi, 2026-10-11): 2-kursga 3 tadan, 4-kursga 6 tadan
 KURS_ESKI = "2026-10-10T22:25:00Z"
 
 
 def kurs(uid):
-    """{n: 1..4, lessons: jami o'tilgan darslar, bell: bellashuvda qatnashganmi, need2, need4}."""
+    """{n: 1..4, lessons: jami darslar, fans: fanlar soni, fan2/fan4: shartni bajargan fanlar, bell, need2, need4}.
+    Shart HAR FANDAN: 2-kurs - har fandan KURS_2 ta dars; 3-kurs - birinchi bellashuv; 4-kurs - har fandan KURS_4 ta dars."""
     conn = hpcup._connect()
     try:
         u = conn.execute("SELECT sorted_at FROM users WHERE user_id=?", (int(uid),)).fetchone()
-        darslar = conn.execute("SELECT COALESCE(SUM(daraja),0) FROM dars_daraja WHERE user_id=?", (int(uid),)).fetchone()[0]
+        dar = {r["dars"]: int(r["daraja"] or 0) for r in conn.execute("SELECT dars, daraja FROM dars_daraja WHERE user_id=?", (int(uid),))}
         bell = conn.execute("SELECT 1 FROM dars_bellashuv WHERE user_id=? AND ms IS NOT NULL LIMIT 1", (int(uid),)).fetchone() is not None
     finally:
         conn.close()
+    fanlar = list(DARSLAR)
+    fan2 = sum(1 for f in fanlar if dar.get(f, 0) >= KURS_2)
+    fan4 = sum(1 for f in fanlar if dar.get(f, 0) >= KURS_4)
     if int(uid) > 0 and u and (u["sorted_at"] or "") < KURS_ESKI:
         n = 4                                    # joriy qilinishidan oldin saralanganlar (sinov o'quvchisi - yangi odamdek)
     else:
         n = 1
-        if darslar >= KURS_2:
+        if fan2 >= len(fanlar):
             n = 2
         if n == 2 and bell:
             n = 3
-        if n == 3 and darslar >= KURS_4:
+        if n == 3 and fan4 >= len(fanlar):
             n = 4
-    return {"n": n, "lessons": int(darslar), "bell": bell, "need2": KURS_2, "need4": KURS_4}
+    return {"n": n, "lessons": sum(dar.values()), "fans": len(fanlar), "fan2": fan2, "fan4": fan4, "bell": bell, "need2": KURS_2, "need4": KURS_4}
 
 
 # ---------- Yangi saralanganlarga eslatma (egasi, 2026-10-11; boyo'g'li pochtasi + bot) ----------
@@ -438,8 +442,8 @@ def _eslatma_nomzodlar(hozir=None):
             if d["n"] == 0:
                 if yosh < ESL_ESKI:
                     tur = "ilk"
-            elif d["n"] >= KURS_2 and (d["kun"] or bugun) < bugun and (d["kun"] or "") >= (hozir - timedelta(days=7)).strftime("%Y-%m-%d"):
-                if not conn.execute("SELECT 1 FROM dars_bellashuv WHERE user_id=? LIMIT 1", (uid,)).fetchone():
+            elif (d["kun"] or bugun) < bugun and (d["kun"] or "") >= (hozir - timedelta(days=7)).strftime("%Y-%m-%d"):
+                if kurs(uid)["n"] == 2:              # har fandan 3 tadan dars o'tgan, lekin hali bellashmagan
                     tur = "bell"
             if tur and (uid, tur) not in bor:
                 conn.execute("INSERT OR IGNORE INTO dars_eslatma (user_id, tur, vaqt) VALUES (?,?,?)", (uid, tur, hpcup._utc_iso(hozir)))
