@@ -367,13 +367,13 @@ def _holat(uid, kun):
 #   4-kurs (KURS_4 ta dars o'tgach): Maydon (Duel, Shaxmat, Viktorina) va Jadval
 # Faqat ISH bilan ochiladi (kunlar bilan emas). KURS_ESKI dan oldin saralanganlar hech narsa yo'qotmaydi - ular 4-kursda.
 # Bu faqat bosh sahifadagi ko'rinish (ilova qulflaydi); server hech narsani taqiqlamaydi.
-KURS_2, KURS_4 = 3, 9          # HAR FANDAN shuncha dars (egasi, 2026-10-11): 2-kursga 3 tadan, 4-kursga 9 tadan
+KURS_2, KURS_3, KURS_4 = 3, 9, 15     # HAR FANDAN shuncha dars (egasi, 2026-10-11): 2-kursga 3, 3-kursga 9, 4-kursga 15 tadan
 KURS_ESKI = "2026-10-10T22:25:00Z"
 
 
 def kurs(uid):
-    """{n: 1..4, lessons: jami darslar, fans: fanlar soni, fan2/fan4: shartni bajargan fanlar, bell, need2, need4}.
-    Shart HAR FANDAN: 2-kurs - har fandan KURS_2 ta dars; 3-kurs - birinchi bellashuv; 4-kurs - har fandan KURS_4 ta dars."""
+    """{n: 1..4, lessons: jami darslar, fans: fanlar soni, fan2/fan3/fan4: shartni bajargan fanlar, bell, need2/need3/need4}.
+    Shart faqat DARSLAR, HAR FANDAN: 2-kurs - KURS_2 tadan, 3-kurs - KURS_3 tadan, 4-kurs - KURS_4 tadan (bellashuv sharti yo'q)."""
     conn = hpcup._connect()
     try:
         u = conn.execute("SELECT sorted_at FROM users WHERE user_id=?", (int(uid),)).fetchone()
@@ -382,19 +382,14 @@ def kurs(uid):
     finally:
         conn.close()
     fanlar = list(DARSLAR)
-    fan2 = sum(1 for f in fanlar if dar.get(f, 0) >= KURS_2)
-    fan4 = sum(1 for f in fanlar if dar.get(f, 0) >= KURS_4)
+    eng_kam = min(dar.get(f, 0) for f in fanlar)
+    soni = lambda k: sum(1 for f in fanlar if dar.get(f, 0) >= k)
     if int(uid) > 0 and u and (u["sorted_at"] or "") < KURS_ESKI:
         n = 4                                    # joriy qilinishidan oldin saralanganlar (sinov o'quvchisi - yangi odamdek)
     else:
-        n = 1
-        if fan2 >= len(fanlar):
-            n = 2
-        if n == 2 and bell:
-            n = 3
-        if n == 3 and fan4 >= len(fanlar):
-            n = 4
-    return {"n": n, "lessons": sum(dar.values()), "fans": len(fanlar), "fan2": fan2, "fan4": fan4, "bell": bell, "need2": KURS_2, "need4": KURS_4}
+        n = 4 if eng_kam >= KURS_4 else 3 if eng_kam >= KURS_3 else 2 if eng_kam >= KURS_2 else 1
+    return {"n": n, "lessons": sum(dar.values()), "fans": len(fanlar), "fan2": soni(KURS_2), "fan3": soni(KURS_3), "fan4": soni(KURS_4),
+            "bell": bell, "need2": KURS_2, "need3": KURS_3, "need4": KURS_4}
 
 
 # ---------- Yangi saralanganlarga eslatma (egasi, 2026-10-11; boyo'g'li pochtasi + bot) ----------
@@ -411,9 +406,9 @@ ESL_MATN = {
         "en": ("Professor Flitwick is waiting", "You have a house, but your first lesson is still ahead. Charms takes a minute: Hogwarts → Lessons → Charms."),
     },
     "bell": {
-        "uz": ("Bugungi bellashuvda hali joy bor", "Siz 2-kursdasiz — endi bellashuvlarda qatnashib, fakultetingizga ball keltira olasiz. Bir marta qatnashsangiz 3-kurs ochiladi: Xogvarts → Bellashuv."),
-        "ru": ("В сегодняшнем состязании ещё есть место", "Вы на 2 курсе — теперь можно участвовать в состязаниях и приносить баллы факультету. Одно участие открывает 3 курс: Хогвартс → Состязание."),
-        "en": ("Today's contest still has room", "You are in year 2 — you can now enter contests and earn points for your house. One entry opens year 3: Hogwarts → Contest."),
+        "uz": ("Bugungi bellashuvda hali joy bor", "Siz 2-kursdasiz — endi bellashuvlarda qatnashib, fakultetingizga ball keltira olasiz: Xogvarts → Bellashuv."),
+        "ru": ("В сегодняшнем состязании ещё есть место", "Вы на 2 курсе — теперь можно участвовать в состязаниях и приносить баллы факультету: Хогвартс → Состязание."),
+        "en": ("Today's contest still has room", "You are in year 2 — you can now enter contests and earn points for your house: Hogwarts → Contest."),
     },
 }
 
@@ -443,7 +438,8 @@ def _eslatma_nomzodlar(hozir=None):
                 if yosh < ESL_ESKI:
                     tur = "ilk"
             elif (d["kun"] or bugun) < bugun and (d["kun"] or "") >= (hozir - timedelta(days=7)).strftime("%Y-%m-%d"):
-                if kurs(uid)["n"] == 2:              # har fandan 3 tadan dars o'tgan, lekin hali bellashmagan
+                k_ = kurs(uid)
+                if k_["n"] >= 2 and not k_["bell"]:              # bellashuv ochilgan (2-kurs), lekin hali qatnashmagan
                     tur = "bell"
             if tur and (uid, tur) not in bor:
                 conn.execute("INSERT OR IGNORE INTO dars_eslatma (user_id, tur, vaqt) VALUES (?,?,?)", (uid, tur, hpcup._utc_iso(hozir)))
