@@ -16,7 +16,7 @@ from aiohttp import web
 
 import hpcup
 
-YOQIQ = False                  # False - faqat adminlar ko'radi (egasi tasdiqlagach True qilinadi)
+YOQIQ = True                   # egasi 2026-10-12 da tasdiqladi: variantlar 20/21/22, 18-oktabrgacha, faqat bosh sahifada (xabar yuborilmaydi)
 SOROV = {
     "id": "turnir-vaqti-1",
     "tugaydi": "2026-10-18T23:59:00+05:00",
