@@ -36,7 +36,7 @@ from aiohttp import web
 import hpcup
 import hpdars
 
-BOSH_HAFTA = "2026-10-19"     # birinchi poyga shu haftada (dushanba 19-oktabr)
+BOSH_HAFTA = "2026-10-12"     # birinchi poyga shu haftada (dushanba 12-oktabr; egasi 19-oktabrdan shu kunga ko'chirdi)
 TURNIR_KUN = 0                # dushanba
 SOAT = 21
 ZAL = 120                     # boshlanishidan shuncha soniya oldin «zal» ochiladi (kelganlar sanaladi)
@@ -349,7 +349,10 @@ def _taxta(hafta, uid, now):
 
 def _eslatmalar(conn, hafta, xabarlar):
     hozir = _now()
-    if hozir.weekday() != TURNIR_KUN or hozir.timestamp() >= _turnir_vaqti(hafta):
+    T0 = _turnir_vaqti(hafta)
+    # FAQAT poyga kunining o'zida (2026-10-12 xatosi: faqat hafta kuni tekshirilardi - birinchi poyga keyingi haftada bo'lsa ham
+    # «bugun poyga» e'loni bir hafta oldin, shu dushanbada hammaga ketib qolgan)
+    if hozir.timestamp() >= T0 or datetime.fromtimestamp(T0, hozir.tzinfo).date() != hozir.date():
         return
     daq = hozir.hour * 60 + hozir.minute
     tur = "on" if SOAT * 60 - 10 <= daq < SOAT * 60 else "ertalab" if 600 <= daq < SOAT * 60 - 10 else None

@@ -90,6 +90,11 @@ async def amain():
         db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (?,?,?,?)", (u, "U%d" % u, "gryffindor", "2026-10-01T00:00:00Z"))
     db("INSERT OR IGNORE INTO users (user_id, first_name, created_at) VALUES (30,'Uysiz','2026-10-01T00:00:00Z')")
 
+    P.BOSH_HAFTA = "2026-10-19"                  # sinovlar shu sanaga yozilgan (jonlida birinchi poyga 12-oktabrga ko'chirilgan)
+    soat[0] = datetime(2026, 10, 12, 15, 0, tzinfo=TZ)        # dushanba, lekin poyga KEYINGI dushanbada
+    await P.tick(); await asyncio.sleep(0.05)
+    check("poyga kuni bo'lmagan dushanbada e'lon ketmaydi", elonlar == [] and xatlar == [])
+    soat[0] = datetime(2026, 10, 14, 12, 0, tzinfo=TZ)
     check("saralanmagan qatnasha olmaydi", (await ask(30)).get("error") == "no_house")
     d = await ask(1, join=1)
     check("chorshanbada: navbatdagi poyga - dushanba 19-oktabr, yozilish ochiq", d["join_ok"] and d["tour"]["joined"] and d["phase"] == "kutish"
