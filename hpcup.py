@@ -1344,11 +1344,32 @@ async def last_winner():
 
 # ---------------------------------------------------------------- ball
 
-def _award(user_id, source_type, source_ref, pts):
+# Hafta yopilishidan OLDIN chaqiriladigan ilgaklar: fn(bugun) - bugun = yopilayotgan haftadan keyingi kun (Toshkent).
+# Kunlik bellashuv/rekord sovrinlari kun tugagach hisoblanadi; yakshanbaniki shu yerda - hafta yopilmasdan oldin - beriladi
+# (2026-10-12 xatosi: yakshanba sovrinlari dushanba hisoblanib, yangi hafta kubogiga tushgan). hpdars ro'yxatdan o'tkazadi.
+YOPISH_ILGAKLARI = []
+_yopilmoqda = {"bor": False}
+
+
+def _kun_mavsumi(conn, kun):
+    """Toshkent kuni 'YYYY-MM-DD' tushadigan mavsum (yopilgan bo'lsa ham) yoki None."""
+    y, m, d = (int(x) for x in kun.split("-"))
+    payt = _utc_iso(datetime(y, m, d, 12, 0, tzinfo=TASHKENT))
+    row = conn.execute("SELECT * FROM seasons WHERE starts_at <= ? AND ends_at >= ? ORDER BY id DESC LIMIT 1",
+                       (payt, payt)).fetchone()
+    return dict(row) if row else None
+
+
+def _award(user_id, source_type, source_ref, pts, kun=None):
+    """Ball yozadi. kun berilsa (kunlik bellashuv/rekord sovrini) - o'sha kun tushgan haftaga, aks holda joriy haftaga."""
     conn = _connect()
     try:
         _touch_user(conn, user_id)
-        season = _ensure_season(conn)
+        season = _kun_mavsumi(conn, kun) if kun else None
+        if season and season["status"] != "active":
+            logging.warning("Ball yopilgan haftaga yozildi: %s %s %s", user_id, source_ref, season["id"])
+        if not season:
+            season = _ensure_season(conn)
         cur = conn.execute(
             "INSERT OR IGNORE INTO points "
             "(user_id, season_id, source_type, source_ref, points, created_at) "
@@ -2077,6 +2098,21 @@ def _galleon_mukofot(conn, season_id, winner, stamp):
 
 def _finalize(conn, season_id):
     """Mavsumni yopadi: g'olib + nishonlar. Natijani qaytaradi."""
+    # Avval shu haftaning oxirgi kuni (yakshanba) sovrinlari - ular ham shu hafta kubogiga kirsin
+    if not _yopilmoqda["bor"]:
+        _yopilmoqda["bor"] = True
+        try:
+            row = conn.execute("SELECT ends_at FROM seasons WHERE id=?", (season_id,)).fetchone()
+            end = _parse_iso(row["ends_at"]) if row else None
+            if end:
+                bugun = (end + timedelta(minutes=1)).astimezone(TASHKENT).strftime("%Y-%m-%d")
+                for fn in YOPISH_ILGAKLARI:
+                    try:
+                        fn(bugun)
+                    except Exception as e:
+                        logging.error("Hafta yopilish ilgagida xato: %s", e)
+        finally:
+            _yopilmoqda["bor"] = False
     # Ball to'plamagan fakultet g'olib bo'lmaydi: hech kim hisobga kirmagan
     # haftada ro'yxat nollar bilan to'ladi va birinchisi "g'olib" chiqib qolardi.
     winner = None

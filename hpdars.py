@@ -327,14 +327,14 @@ def yakunla(bugun):
             if cur.rowcount < 1:
                 continue
             for i, r in enumerate(_jadval(conn, k["kun"], k["dars"], TOP_N)):
-                berish.append((r["user_id"], "m:%s:%s" % (k["dars"], k["kun"]), sovrin(i + 1)))
+                berish.append((r["user_id"], "m:%s:%s" % (k["dars"], k["kun"]), sovrin(i + 1), k["kun"]))
     except sqlite3.OperationalError as e:
         logging.error("Bellashuv yakunlanmadi: %s", e)
     finally:
         conn.close()
-    for uid, ref, pts in berish:
+    for uid, ref, pts, kun in berish:
         if pts > 0:
-            hpcup._award(uid, "dars", ref, pts)
+            hpcup._award(uid, "dars", ref, pts, kun=kun)      # bellashuv kuni tushgan haftaga (yakshanba - o'sha hafta kubogiga)
     return len(berish)
 
 
@@ -596,8 +596,17 @@ def rekord_yakunla(bugun):
     finally:
         conn.close()
     for uid, ref, pts in berish:
-        hpcup._award(uid, "dars", ref, pts)
+        hpcup._award(uid, "dars", ref, pts, kun=kecha)
     return len(berish)
+
+
+def _hafta_yopilishi(bugun):
+    """Hafta yopilishidan oldin (hpcup._finalize): oxirgi kun bellashuvi va rekord sovrinlari shu haftaga beriladi."""
+    yakunla(bugun)
+    rekord_yakunla(bugun)
+
+
+hpcup.YOPISH_ILGAKLARI.append(_hafta_yopilishi)
 
 
 def _hafta():
