@@ -235,6 +235,13 @@ CREATE TABLE IF NOT EXISTS chess_games (
 
 RESORT_KEY = "resort_until"
 
+# TESTNI QAYTA TOPSHIRISH (egasi, 2026-10-12): saralash savollari 2026-09-19 da muvozanatlandi (oldin ko'pchilik
+# Xaffelpaffga tushardi). Shu kungacha saralanganlarga yangi testni BIR MARTA qayta topshirish imkoni - QAYTA_GACHA gacha.
+# Natija avvalgi fakultet ham bo'lishi mumkin; fakultet o'zgarsa joriy haftaning ballari ham yangi fakultetga o'tadi.
+# sorted_at O'ZGARMAYDI (kurs va boshqa «eski o'quvchi» qoidalari unga qaraydi); har urinish qayta_test jadvaliga yoziladi.
+QAYTA_CUT = "2026-09-19T14:16:29"          # yangi savollar ilovaga chiqqan payt (UTC)
+QAYTA_GACHA = "2026-10-19T18:59:59Z"       # 19-oktabr 23:59 Toshkent
+
 
 # ---------------------------------------------------------------- vaqt
 
@@ -398,6 +405,10 @@ def _migrate(conn, users_json):
     # Imtihon ballari kubokdan chiqarildi (egasi, 2026-10-04: "shu haftadan ta'sir qilsin").
     # FAOL mavsumdagi film_quiz ballari arxiv jadvaliga ko'chiriladi (qaytarish mumkin) va
     # points dan o'chiriladi. Yopilgan mavsumlarga tegilmaydi. Bir marta ishlaydi.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS qayta_test (user_id INTEGER PRIMARY KEY, eski TEXT, yangi TEXT, vaqt TEXT NOT NULL)")
+    # Yopilgan mavsumlar tarixi muhrlanadi: fakultet almashgan odamning eski ballari tarixda o'z joyida qolsin
+    conn.execute("CREATE TABLE IF NOT EXISTS mavsum_muhr (season_id INTEGER PRIMARY KEY, entry TEXT NOT NULL)")
     conn.execute(
         "CREATE TABLE IF NOT EXISTS points_arxiv ("
         " user_id INTEGER, season_id INTEGER, source_type TEXT, source_ref TEXT,"
@@ -1076,6 +1087,40 @@ def _resort_until(conn):
     return row["value"] if row and row["value"] else None
 
 
+def _qayta_mumkin(conn, user_id, hozir=None):
+    """Testni qayta topshirish mumkinmi: 19-sentabrgacha saralangan, hali qayta topshirmagan, muddat tugamagan."""
+    if int(user_id) <= 0:
+        return False
+    hozir = hozir or datetime.now(timezone.utc)
+    if hozir >= _parse_iso(QAYTA_GACHA):
+        return False
+    row = conn.execute("SELECT house, sorted_at FROM users WHERE user_id=?", (int(user_id),)).fetchone()
+    if not row or not row["house"] or not row["sorted_at"]:
+        return False
+    if str(row["sorted_at"]).replace(" ", "T") >= QAYTA_CUT:
+        return False
+    return not conn.execute("SELECT 1 FROM qayta_test WHERE user_id=?", (int(user_id),)).fetchone()
+
+
+def qayta_mumkin(user_id):
+    conn = _connect()
+    try:
+        return _qayta_mumkin(conn, user_id)
+    finally:
+        conn.close()
+
+
+def _muhrla(conn):
+    """Yopilgan mavsumlarning tarixini (fakultet ballari, uchlik) bazaga muhrlaydi - keyin fakultet almashsa ham o'zgarmaydi."""
+    rows = conn.execute("SELECT * FROM seasons ORDER BY starts_at, id").fetchall()
+    bor = {r[0] for r in conn.execute("SELECT season_id FROM mavsum_muhr")}
+    for number, row in enumerate(rows, 1):
+        if row["status"] == "closed" and row["id"] not in bor:
+            entry = _season_entry(conn, row, number)
+            conn.execute("INSERT OR IGNORE INTO mavsum_muhr (season_id, entry) VALUES (?,?)",
+                         (row["id"], json.dumps(entry, ensure_ascii=False)))
+
+
 def _can_resort(user_id):
     conn = _connect()
     try:
@@ -1083,6 +1128,8 @@ def _can_resort(user_id):
                            (int(user_id),)).fetchone()
         if not row or not row["house"]:
             return True, None            # hali saralanmagan - har doim mumkin
+        if _qayta_mumkin(conn, user_id):
+            return True, QAYTA_GACHA
         until = _resort_until(conn)
         if not until:
             return False, None
@@ -1108,6 +1155,14 @@ def _set_house(user_id, house, first_name=None):
         row = conn.execute("SELECT house FROM users WHERE user_id=?",
                            (int(user_id),)).fetchone()
         old = row["house"] if row else None
+        if old and _qayta_mumkin(conn, user_id):
+            # Testni qayta topshirish (bir marta): sorted_at o'zgarmaydi - kurs va «eski o'quvchi» qoidalari saqlanadi
+            _muhrla(conn)
+            conn.execute("INSERT INTO qayta_test (user_id, eski, yangi, vaqt) VALUES (?,?,?,?)",
+                         (int(user_id), old, house, _utc_iso(now_tk())))
+            conn.execute("UPDATE users SET house=? WHERE user_id=?", (house, int(user_id)))
+            conn.commit()
+            return {"changed": old != house, "qayta": True}
         if old:
             # Fakultet allaqachon bor. Faqat muhlat ichida almashtiriladi.
             until = _resort_until(conn)
@@ -1250,7 +1305,13 @@ def _cup_history():
             if row["status"] == "closed":
                 entry = _history_cache.get(row["id"])
                 if entry is None:
-                    entry = _history_cache[row["id"]] = _season_entry(conn, row, number)
+                    m = conn.execute("SELECT entry FROM mavsum_muhr WHERE season_id=?", (row["id"],)).fetchone()
+                    if m:
+                        entry = json.loads(m["entry"])
+                        entry["number"] = number
+                    else:
+                        entry = _season_entry(conn, row, number)
+                    _history_cache[row["id"]] = entry
                 if row["winner_house"] in wins:
                     wins[row["winner_house"]] += 1
             else:

@@ -776,6 +776,11 @@ def _kimlar(kimga):
         sql += " AND house IS NULL"
     elif tur == "saralangan":
         sql += " AND house IS NOT NULL"
+    elif tur == "qayta_test":
+        # testni qayta topshira oladiganlar (hpcup.QAYTA_CUT gacha saralangan, hali topshirmagan)
+        sql += (" AND house IS NOT NULL AND sorted_at IS NOT NULL AND replace(sorted_at, ' ', 'T') < ?"
+                " AND user_id NOT IN (SELECT user_id FROM qayta_test)")
+        arg.append(hpcup.QAYTA_CUT)
     elif tur != "hamma":
         raise ValueError("tur")
     if til:

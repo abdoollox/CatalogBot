@@ -345,6 +345,7 @@ async def api_leaderboard(request):
         # ikkinchi so'rov yubormasin.
         "can_resort": allowed,
         "resort_until": until,
+        "qayta": bool(allowed and until == hpcup.QAYTA_GACHA),     # testni qayta topshirish (19-sentabrgacha saralanganlar)
         "exam_pending": exam_pending,
     }
     if gap:
@@ -482,6 +483,7 @@ async def profile_extra(user_id):
         "badges": stats["badges"],
         "can_resort": allowed,
         "resort_until": until,
+        "qayta": bool(allowed and until == hpcup.QAYTA_GACHA),     # testni qayta topshirish (19-sentabrgacha saralanganlar)
         "exam_pending": exam_pending,
     }
 
