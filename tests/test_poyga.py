@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Supurgi poygasi (dushanba 21:00): zal, bosqichlar, saralab qolish, vaqtni tekshirish, o'rinlar va ballar.
+"""Supurgi poygasi (dushanba 21:00): zal, uzluksiz poyga, har 10 halqada oxirgi chiqadi, jonli jadval, o'rinlar va ballar, sinov poygasi.
 
 Ishga tushirish (CatalogBot papkasida):  python tests/run_all.py
 """
@@ -90,10 +90,6 @@ async def amain():
         db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (?,?,?,?)", (u, "U%d" % u, "gryffindor", "2026-10-01T00:00:00Z"))
     db("INSERT OR IGNORE INTO users (user_id, first_name, created_at) VALUES (30,'Uysiz','2026-10-01T00:00:00Z')")
 
-    check("bosqichlar soni: 4 gacha bitta, 8 gacha ikkita, ko'pi uchta", [P.bosqichlar_soni(n) for n in (2, 4, 5, 8, 9, 30)] == [1, 1, 2, 2, 3, 3])
-    check("saralab qolish: yarmi, lekin kamida uch kishi", [P.otadiganlar(n) for n in (2, 3, 5, 9, 10, 21)] == [2, 3, 3, 5, 5, 11])
-    check("yo'l urug'i: bosqich va hafta sayin boshqa, takror so'ralsa o'sha", P._urug("2026-10-19", 0) == P._urug("2026-10-19", 0)
-          and len({P._urug("2026-10-19", 0), P._urug("2026-10-19", 1), P._urug("2026-10-26", 0)}) == 3)
     check("saralanmagan qatnasha olmaydi", (await ask(30)).get("error") == "no_house")
     d = await ask(1, join=1)
     check("chorshanbada: navbatdagi poyga - dushanba 19-oktabr, yozilish ochiq", d["join_ok"] and d["tour"]["joined"] and d["phase"] == "kutish"
@@ -104,109 +100,76 @@ async def amain():
     await P.tick()
     check("birinchi poyga: ertalab hammaga e'lon, 20:50 da yozilganlarga eslatma", len(elonlar) == 1 and xatlar == [(1, "Poygaga 10 daqiqa qoldi!")])
 
-    # ---------- 9 kishi: uch bosqich (9 -> 5 -> 3) ----------
+    # ---------- 5 kishi: uzluksiz poyga, har 10 halqada oxirgi chiqadi ----------
     vaqt(19, 20, 58, 30)
-    for u in range(1, 10):
+    for u in range(1, 6):
         d = await ask(u)
-    check("zal: 2 daqiqa oldin ochiladi, kelganlar sanaladi", d["phase"] == "zal" and d["total"] == 9 and d["me"]["in"] and d["starts_in"] == 90)
-    vaqt(19, 21, 0, 1)
+    check("start chizig'i: kelganlar sanaladi", d["phase"] == "zal" and d["total"] == 5 and d["me"]["in"])
+    vaqt(19, 21, 0, 0)
     d = await ask(1)
-    check("21:00 - birinchi bosqich: sanoq, urug' keladi, uch bosqich", d["phase"] == "poyga" and d["heats"] == 3 and d["heat"]["n"] == 0
-          and d["heat"]["seed"] == P._urug("2026-10-19", 0) and 4.5 < d["heat"]["start_in"] <= 5 and d["heat"]["keep"] == 5 and not d["heat"]["final"])
-    d = await ask(10)
-    check("kechikkan - tomoshabin", d["phase"] == "poyga" and not d["me"]["in"] and d["total"] == 9)
-    check("sanoq paytida natija qabul qilinmaydi", (await ask(1, heat=0, ms=20000, xato=0))["heat_ok"] is False)
-
-    vaqt(19, 21, 0, 6)                                         # uchish boshlandi (bosh + SANOQ)
-    ilgari(20)
-    d = await ask(1, heat=0, ms=5000, xato=0)
-    check("ilova juda kam vaqt aytsa - server o'lchaganidan ko'pi bilan 2,5 s kam olinadi", d["heat_ok"] and d["heat"]["mine"]["ms"] == 17500)
-    check("ikkinchi marta yuborib bo'lmaydi", (await ask(1, heat=0, ms=12000, xato=0))["heat_ok"] is False)
-    ilgari(2)                                                  # 22 s
-    d = await ask(2, heat=0, ms=21800, xato=1)
-    check("jarima: har xato +3 s", d["heat_ok"] and d["heat"]["mine"] == {"ms": 24800, "xato": 1})
-    check("uchib bo'lganga jadval ko'rinadi", [r["uid"] for r in d["results"]] == [1, 2] and d["results"][1]["me"])
-    for i, u in enumerate((3, 4, 5, 6, 7)):                    # 23..27 s
-        ilgari(1)
-        await ask(u, heat=0, ms=(23 + i) * 1000, xato=0)
-    check("boshqa bosqich raqami bilan yuborilgan natija rad etiladi", (await ask(8, heat=1, ms=25000, xato=0))["heat_ok"] is False)
-    ilgari(1)                                                  # 28 s
-    d = await ask(8, heat=0, ms=27900, xato=4)                 # 27,9 + 12 = 39,9 s
-    check("hali bitta uchuvchi qolgan - bosqich yopilmaydi", d["phase"] == "poyga" and d["heat"]["done"] == 8)
-    # 9-o'quvchi ulgurmaydi: bosqich 100 soniyada o'zi yopiladi
-    vaqt(19, 21, 1, 41)
-    d = await ask(1)
-    check("vaqt tugadi - bosqich yopildi: natija, tezroq beshtasi o'tdi", d["phase"] == "natija" and d["alive"] == 5 and d["me"]["alive"]
-          and [r["uid"] for r in d["results"]] == [1, 3, 4, 2, 5, 6, 7, 8, 9] and [r["through"] for r in d["results"]] == [True] * 5 + [False] * 4
-          and d["results"][8]["ms"] is None and d["next_in"] >= 13 and not d["next_final"])
-    d = await ask(6)
-    check("chiqqan o'quvchi: tirik emas, qaysi bosqichda chiqqani ma'lum", not d["me"]["alive"] and d["me"]["out"] == 0)
-
-    ilgari(15)                                                 # ikkinchi bosqich sanog'i
-    d = await ask(1)
-    check("ikkinchi bosqich: boshqa urug', besh kishidan uchtasi qoladi", d["phase"] == "poyga" and d["heat"]["n"] == 1 and d["heat"]["keep"] == 3
-          and d["heat"]["seed"] == P._urug("2026-10-19", 1) and d["heat"]["seed"] != P._urug("2026-10-19", 0))
-    check("chiqqan o'quvchi natija yubora olmaydi", (await ask(6, heat=1, ms=20000, xato=0))["heat_ok"] is False)
-    ilgari(P.SANOQ + 19)
-    for i, u in enumerate((5, 4, 3, 2, 1)):                    # endi teskari tartib: 5 eng tez
-        ilgari(1)
-        d = await ask(u, heat=1, ms=(20 + i) * 1000, xato=0)
-    check("hamma uchib bo'ldi - bosqich darhol yopilmaydi (2 s kutadi)", d["phase"] == "poyga")
+    check("poyga boshlandi: yo'l (5 - 1) * 10 = 40 halqa, sanoq", d["phase"] == "poyga" and d["race"]["rings"] == 40 and d["race"]["every"] == 10
+          and 5 < d["race"]["start_in"] <= 6 and d["alive"] == 5 and len(d["board"]) == 5)
+    d9 = await ask(9)
+    check("kechikkan - tomoshabin", d9["phase"] == "poyga" and not d9["me"]["in"] and len(d9["board"]) == 5)
+    ilgari(P.SANOQ + 2)
+    d = await ask(1, pos=2, cps={"0": 1500})
+    check("juda erta «nazorat» qabul qilinmaydi", d["light"] and d["ack"] == [] and d["cp"] == 0)
     ilgari(3)
-    d = await ask(1)
-    check("hamma uchib bo'lgach bosqich vaqtidan oldin yopiladi", d["phase"] == "natija" and d["alive"] == 3 and not d["me"]["alive"]
-          and [r["uid"] for r in d["results"]] == [5, 4, 3, 2, 1] and d["next_final"])
-
-    ilgari(P.NATIJA_T + P.SANOQ + 25)
-    d = await ask(5)
-    check("final: uch kishi", d["phase"] == "poyga" and d["heat"]["final"] and d["heat"]["n"] == 2 and d["alive"] == 3 and d["heat"]["keep"] is None)
-    await ask(4, heat=2, ms=24000, xato=0)
-    ilgari(1)
-    await ask(3, heat=2, ms=25000, xato=0)
-    ilgari(1)
-    await ask(5, heat=2, ms=26000, xato=2)                     # 26 + 6 = 32 s - uchinchi
-    ilgari(3)
-    d = await ask(4, log_end=1)
-    await asyncio.sleep(0.05)
-    check("poyga tugadi: o'rinlar - finalchilar, keyin kechroq chiqqanlar", d["phase"] == "tugadi" and d["played"]
-          and [r["uid"] for r in d["top"]] == [4, 3, 5, 2, 1, 6, 7, 8, 9] and d["me"]["place"] == 1 and d["me"]["points"] == 30 and d["top"][0]["ms"])
-    check("ballar: 30 / 20 / 10, finalga chiqmaganlarga yo'q", [ball(u) for u in (4, 3, 5, 2, 1, 9, 10)] == [30, 20, 10, 0, 0, 0, 0])
-    await P.tick(); await P.tick()
-    check("ball ikki marta berilmaydi", ball(4) == 30)
-    d = await ask(2)
-    check("chiqqan o'quvchi yakunda o'z o'rnini ko'radi", d["me"]["place"] == 4 and d["me"]["points"] == 0)
-
-    # ---------- keyingi hafta: 6 kishi - ikki bosqich; final 3 kishi, to'rtinchi finalchi yo'q ----------
-    vaqt(20, 0, 30)
-    d = await ask(1)
-    check("poygadan 3 soat o'tgach keyingi dushanbaga yozilish ochiladi, o'tgan g'olib ko'rinadi", d["phase"] == "kutish" and d["last"]["uid"] == 4 and d["last"]["n"] == 9
-          and datetime.fromtimestamp(d["tour"]["ts"], TZ).strftime("%Y-%m-%d") == "2026-10-26")
-    await ask(2, join=1)
-    vaqt(26, 10, 1)
-    await P.tick()
-    check("keyingi haftalarda e'lon yo'q - faqat yozilganlarga eslatma", len(elonlar) == 1 and xatlar[-1] == (2, "Bugun 21:00 da supurgi poygasi"))
-    vaqt(26, 20, 59)
-    for u in range(1, 7):
-        await ask(u)
-    vaqt(26, 21, 0, P.SANOQ + 30)
-    d = await ask(1)
-    check("6 kishi - ikki bosqich", d["heats"] == 2 and d["heat"]["keep"] == 3)
     for u in (1, 2, 3, 4):
-        await ask(u, heat=0, ms=28000 + u * 100, xato=0)
-        ilgari(0.2)
-    vaqt(26, 21, 1, 41)                                        # 5 va 6 ulgurmadi
+        await ask(u, pos=5)
+    ilgari(7)                                    # startdan 12 soniya
+    await ask(1, pos=10, cps={"0": 11000})
+    await ask(2, pos=10, cps={"0": 11400})
+    d = await ask(3, pos=10, cps={"0": 2000})
+    check("ilova aytgan vaqt server soatidan ko'p kichik bo'la olmaydi", d["ack"] == [0]
+          and db("SELECT ms FROM pg_natija WHERE user_id=3 AND bosqich=0 AND hafta='2026-10-19'")[0][0] == 12000 - P.MUHLAT_MS)
+    d = await ask(4, pos=7)
+    check("jonli jadval: oldindagilar tepada, hamma hali poygada", [r["uid"] for r in d["board"]][:1] in ([1], [2], [3]) and d["board"][3]["uid"] == 4
+          and d["board"][4]["uid"] == 5 and d["alive"] == 5 and d["board"][3]["me"])
+    ilgari(P.NAZORAT_T + 1)                      # ikki kishi yetib kelmadi - ikkalasi ham chiqadi
+    await P.tick()                               # jonli serverda buni fon aylanasi har soniyada qiladi
+    d = await ask(4, pos=8)
+    check("muddatida nazoratga yetmaganlar chiqadi (uchgani yuqoriroq o'rinda)", d["phase"] == "poyga" and not d["me"]["alive"] and d["me"]["place"] == 4
+          and d["alive"] == 3 and d["cp"] == 1 and [r["uid"] for r in d["board"] if r.get("out")] == [4, 5])
+    await ask(1, pos=20, cps={"1": 30000})
+    await ask(2, pos=20, cps={"1": 31000})
+    d = await ask(3, pos=20, cps={"1": 31500})
+    check("hamma o'tdi: muhlat tugamaguncha hech kim chiqmaydi", d["alive"] == 3 and d["me"]["alive"])
+    ilgari(2)
+    await P.tick()                               # jonli serverda buni fon aylanasi har soniyada qiladi
+    d = await ask(3, pos=21)
+    check("nazoratdan eng oxirida o'tgan chiqadi", not d["me"]["alive"] and d["me"]["place"] == 3 and d["alive"] == 2 and d["cp"] == 2)
+    ilgari(8)
+    d = await ask(2, pos=30, cps={"2": 40000})
+    check("oxirgi ikki kishi: birinchisi o'tdi, muhlat ketmoqda", d["phase"] == "poyga" and d["me"]["alive"])
+    ilgari(2)
+    await P.tick()                               # jonli serverda buni fon aylanasi har soniyada qiladi
+    d = await ask(1, pos=29)
+    check("ikkinchisi ulgurmadi - poyga tugadi", d["phase"] == "tugadi" and d["me"]["place"] == 2 and not d["me"]["alive"])
+    d = await ask(2)
+    check("g'olib va yakuniy jadval", d["phase"] == "tugadi" and d["played"] and d["me"]["place"] == 1 and d["me"]["points"] == 30
+          and [(r["uid"], r["place"]) for r in d["board"]] == [(2, 1), (1, 2), (3, 3), (4, 4), (5, 5)])
+    await asyncio.sleep(0.05)
+    check("ballar: 30 / 20 / 10, uchgan 4-o'ringa +5, umuman uchmaganga yo'q", [ball(u) for u in (2, 1, 3, 4, 5)] == [30, 20, 10, 5, 0])
     d = await ask(5)
-    check("ulgurmagan o'tmaydi", d["phase"] == "natija" and not d["me"]["alive"] and d["alive"] == 3)
-    ilgari(P.NATIJA_T + P.SANOQ + 20)
-    await ask(1, heat=1, ms=19000, xato=0)
-    vaqt(26, 21, 4, 0)                                         # 2 va 3 finalda uchmadi
-    d = await ask(1)
-    check("finalda bitta odam uchib bo'ldi - u g'olib, uchmaganlarga ball yo'q", d["phase"] == "tugadi" and d["me"]["place"] == 1 and d["me"]["points"] == 30
-          and [ball(u) for u in (1, 2, 3)] == [30, 0, 20])          # 3-o'quvchining 20 bali - birinchi poygadan
+    check("uchmagan ishtirokchi: o'rni bor, bali yo'q", d["me"]["place"] == 5 and d["me"]["points"] == 0)
+    await P.tick()
+    check("ball qayta berilmaydi", ball(2) == 30)
 
-    # ---------- bir kishi bilan poyga bo'lmaydi ----------
-    vaqt(27, 3, 0)
-    vaqt(11, 0, 0)
+    # ---------- hech kim uchmasa poyga o'zi yopiladi ----------
+    soat[0] = datetime(2026, 10, 26, 20, 59, tzinfo=TZ)
+    await ask(6); await ask(7)
+    d = await ask(6)
+    check("keyingi hafta: o'tgan g'olib ko'rinadi", d["phase"] == "zal" and d["last"] and d["last"]["uid"] == 2 and d["last"]["n"] == 5)
+    soat[0] = datetime(2026, 10, 26, 21, 0, 30, tzinfo=TZ)
+    d = await ask(6)
+    check("hech kim uchmayapti: poyga hali ochiq", d["phase"] == "poyga" and d["race"]["rings"] == 10)
+    ilgari(P.QISM_T)
+    d = await ask(6)
+    check("hech kim nazoratga yetmadi - poyga yopildi, g'olib va ball yo'q", d["phase"] == "tugadi" and ball(6) == 0 and ball(7) == 0
+          and db("SELECT golib FROM pg_turnir WHERE hafta='2026-10-26'")[0][0] is None)
+
+    # ---------- bir kishi ----------
     soat[0] = datetime(2026, 11, 2, 20, 59, tzinfo=TZ)
     await ask(7)
     soat[0] = datetime(2026, 11, 2, 21, 0, 10, tzinfo=TZ)
@@ -225,27 +188,30 @@ async def amain():
     check("sinov boshqalarga ko'rinmaydi", (await ask(1))["phase"] == "kutish")
     ilgari(P.SINOV_KUT + 1)
     d = await ask(42)
-    check("sinov: uch bosqich, birinchisi boshlandi", d["phase"] == "poyga" and d["heats"] == 3 and d["heat"]["n"] == 0 and d["me"]["alive"])
-    bosqichlar = 0
-    for _ in range(3):
-        k = d["heat"]["n"]
-        ilgari(P.SANOQ + 25)
-        d = await ask(42, heat=k, ms=25000, xato=0)
-        check("sinov: %d-bosqich natijasi qabul qilindi" % (k + 1), d.get("heat_ok") and 25000 <= d["heat"]["mine"]["ms"] <= 29000)
-        for _q in range(40):                     # qolganlar uchib bo'lguncha
-            ilgari(2)
-            d = await ask(42)
-            if d["phase"] != "poyga":
-                break
-        bosqichlar += 1
-        if d["phase"] == "tugadi":
+    check("sinov: poyga boshlandi, yo'l 90 halqa", d["phase"] == "poyga" and d["race"]["rings"] == 90 and d["me"]["alive"]
+          and any(r["name"] == "Viktor" for r in d["board"]))
+    ilgari(P.SANOQ)
+    otdi, yuborilgan, chiqqanlar = 0.0, set(), []
+    for _ in range(400):                         # admin har halqaga 0,9 soniya sarflaydi - faqat ikki kompyuter uchuvchi undan tez
+        ilgari(1); otdi += 1
+        pos = int(max(0, otdi - 1.5) / 0.9)
+        cps = {str(k): int((1.5 + (k + 1) * 10 * 0.9) * 1000) for k in range(pos // 10) if k not in yuborilgan}
+        d = await ask(42, pos=pos, cps=cps) if cps else await ask(42, pos=pos)
+        await P.tick()
+        for k in d.get("ack") or []:
+            yuborilgan.add(k)
+        for r in d["board"]:
+            if r.get("out") and r["name"] not in chiqqanlar:
+                chiqqanlar.append(r["name"])
+        if d["phase"] == "tugadi" or not d["me"]["alive"]:
             break
-        men = [r for r in d["results"] if r["me"]][0]
-        check("sinov: %d-bosqichdan o'tdi, raqiblar ismli" % (k + 1), d["phase"] == "natija" and men["through"] and any(r["name"] == "Viktor" for r in d["results"]))
-        ilgari(d["next_in"])
-        d = await ask(42)
-    check("sinov: uch bosqichdan keyin tugadi, o'rin bor, ball YO'Q", bosqichlar == 3 and d["phase"] == "tugadi" and d["played"] and d["me"]["place"] in (1, 2, 3)
-          and ball(42) == 0 and len(d["top"]) == 10)
+    check("sinov: birinchi bo'lib eng sekin uchuvchi chiqdi, admin uchinchi bo'ldi", chiqqanlar[:1] == ["Nevill"] and d["me"]["place"] == 3)
+    for _ in range(60):
+        ilgari(1)
+        await P.tick()
+    d = await ask(42)
+    check("sinov tugadi: g'olib - eng tez uchuvchi, ball YO'Q", d["phase"] == "tugadi" and d["board"][0]["name"] == "Viktor" and d["board"][0]["place"] == 1
+          and len(d["board"]) == 10 and d["me"]["points"] == 0 and ball(42) == 0)
     d = await ask(42, sinov=0)
     check("sinov to'xtatildi: yana haqiqiy poyga holati, izlar tozalandi", d.get("sinov_ok") and not d["test"] and d["phase"] == "kutish"
           and db("SELECT COUNT(*) FROM pg_oyinchi WHERE hafta LIKE 'sinov:%'")[0][0] == 0)

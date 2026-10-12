@@ -1,21 +1,24 @@
 """Supurgi poygasi (egasi, 2026-10-12) - to'rtinchi haftalik turnir: DUSHANBA 21:00 (Toshkent).
 
-Hamma bir vaqtda BIR XIL yo'lda uchadi (Uchish darsi o'yini, «aniqlik = tezlik» qoidasi). Bir necha BOSQICH:
-  - har bosqichda sanoqdan (SANOQ soniya) keyin hamma birga uchadi; natija - uchish vaqti + jarimalar
-    (o'tkazib yuborilgan halqa va bladjer zarbasi - har biri XATO_MS);
-  - bosqichdan keyin tezroq yarmi keyingisiga o'tadi (kamida QOLADI kishi), qolganlar tomosha qiladi;
-  - oxirgi bosqich - final: eng tez uchgan g'olib.
-Bosqichlar soni ishtirokchilarga qarab: 4 kishigacha - bitta (faqat final), 8 gacha - ikkita, undan ko'p - uchta.
-Bosqich hamma uchib bo'lgach (yoki BOSQICH_T soniyada) yopiladi; ulgurmagan - eng oxirida. Bosqichlar orasida NATIJA_T soniya.
+BITTA UZLUKSIZ POYGA (egasi 2026-10-12 da bosqichli variantni rad etdi): hamma bir vaqtda BIR XIL yo'lda uchadi
+(Uchish darsi o'yini, «aniqlik = tezlik» qoidasi). Har HALQA (10) ta halqada NAZORAT chizig'i: unga ENG OXIRIDA yetgan
+uchuvchi poygani tark etadi. Shu tartibda davom etadi - oxirida bitta uchuvchi qoladi, u g'olib.
+Halqalar soniga chegara yo'q: yo'l uzunligi = (ishtirokchilar - 1) * HALQA.
+  - nazorat k (0 dan) = (k + 1) * HALQA - halqa. Tiriklarning bittasidan boshqa hammasi undan o'tgach MUHLAT_T soniya kutiladi
+    (tarmoq kechikishi), so'ng eng sekini (yoki o'tmagani) chiqadi;
+  - birinchi uchuvchi nazoratdan o'tgach NAZORAT_T soniya ichida yetib kelmaganlarning HAMMASI chiqadi (aloqasi uzilganlar);
+  - hech kim QISM_T soniyada nazoratga yetmasa poyga yopiladi.
 Ishtirokchi - poyga boshlanishidan ZAL soniya oldindan boshlanishigacha sahifada bo'lgan har bir saralangan o'quvchi
 (oldindan yozilish shart emas; «Qatnashaman» - eslatma olish uchun). Kechikkan - tomoshabin.
-BALL (kubokka): 1-o'rin +30, 2-o'rin +20, 3-o'rin +10; finalda uchib bo'lgan qolganlarga +5.
+BALL (kubokka): 1-o'rin +30, 2-o'rin +20, 3-o'rin +10; 4-6-o'ringa +5. Faqat haqiqatan uchganlarga (kamida UCHDI halqa).
 
-Yo'l - har bosqichga alohida URUG' (hafta va maxfiy qiymatdan): ilovaga faqat bosqich boshlanganda yuboriladi.
-Vaqt: ilova uchish vaqtini o'zi o'lchaydi, server uni o'z soati bilan solishtiradi (ilova aytgani server o'lchaganidan
-ko'pi bilan MUHLAT_MS ga kam bo'lishi mumkin - sanoqdagi kechikish uchun), shuning uchun internet tezligi natijaga ta'sir qilmaydi.
+Yo'l urug'i hafta va maxfiy qiymatdan: ilovaga faqat poyga boshlanganda yuboriladi.
+Vaqt: ilova nazoratdan o'tgan vaqtini o'zi o'lchaydi, server uni o'z soati bilan solishtiradi (ilova aytgani server o'lchaganidan
+ko'pi bilan MUHLAT_MS ga kam bo'lishi mumkin), shuning uchun internet tezligi natijaga deyarli ta'sir qilmaydi.
+JONLI O'RINLAR: ilova har soniyada nechta halqadan o'tganini aytadi ({pos}) - bu faqat ko'rsatish uchun, XOTIRADA turadi (_jonli);
+chiqib ketish faqat nazorat yozuvlaridan (pg_natija) hal qilinadi.
 
-So'rovlar - POST /api/poyga: {} holat, {join: 1|0} yozilish, {heat: n, ms, xato} bosqich natijasi.
+So'rovlar - POST /api/poyga: {} holat (to'liq), {join: 1|0} yozilish, {pos: n, cps: {k: ms}} uchish paytida (yengil javob).
 
 SINOV POYGASI (faqat admin; {sinov: 1} boshlaydi, {sinov: 0} to'xtatadi): haqiqiy poyganing o'zi, lekin raqiblar - SINOV_BOT ta kompyuter
 uchuvchi (manfiy id), start SINOV_KUT soniyadan keyin, ball berilmaydi, haqiqiy poygaga ta'sir qilmaydi. Hafta kaliti "sinov:<uid>:<vaqt>".
@@ -37,30 +40,33 @@ BOSH_HAFTA = "2026-10-19"     # birinchi poyga shu haftada (dushanba 19-oktabr)
 TURNIR_KUN = 0                # dushanba
 SOAT = 21
 ZAL = 120                     # boshlanishidan shuncha soniya oldin «zal» ochiladi (kelganlar sanaladi)
-SANOQ = 6                     # bosqich ochilgach uchishgacha sanoq
-BOSQICH_T = 100               # bosqich eng ko'pi shuncha davom etadi (sanoq bilan birga)
-NATIJA_T = 14                 # bosqichlar orasida natija ko'rsatiladigan vaqt
-KUTISH = 2                    # hamma uchib bo'lgach bosqich shuncha soniyadan keyin yopiladi
-XATO_MS = 3000                # har xato (halqa / bladjer) uchun jarima
-ENG_KAM_MS = 9000             # bundan tez uchib bo'lmaydi (soxta natijadan himoya)
+SANOQ = 6                     # poyga ochilgach uchishgacha sanoq
+HALQA = 10                    # har shuncha halqada bitta uchuvchi chiqadi
+MUHLAT_T = 1.5                # oxiridan oldingi uchuvchi nazoratdan o'tgach shuncha kutiladi
+NAZORAT_T = 20                # birinchi uchuvchi nazoratdan o'tgach qolganlarga shuncha soniya
+QISM_T = 75                   # hech kim shuncha vaqtda nazoratga yetmasa poyga yopiladi
+HALQA_MS = 350                # bir halqaga bundan kam vaqt ketmaydi (soxta natijadan himoya)
 MUHLAT_MS = 2500              # ilova o'lchagan vaqt server o'lchaganidan shunchagacha kam bo'lishi mumkin
-QOLADI = 3                    # bosqichdan keyin kamida shuncha kishi qoladi
+UCHDI = 3                     # shuncha halqadan o'tgan - «haqiqatan uchgan» (ball olish sharti)
 BALL_ORIN = {1: 30, 2: 20, 3: 10}
-BALL_FINAL = 5
+BALL_KEYIN = 5                # 4-o'rindan BALL_KEYIN_ORIN-o'ringacha
+BALL_KEYIN_ORIN = 6
 TUGASH = 3 * 3600             # boshlanganidan shuncha o'tgach keyingi haftaga yozilish ochiladi
 
 SINOV_KUT = 20                # sinov poygasi shuncha soniyadan keyin boshlanadi
 SINOV_UMR = 900               # sinov shuncha vaqtdan keyin o'zi unutiladi
-SINOV_BOT = 9                 # kompyuter uchuvchilar soni (admin bilan 10 kishi - uch bosqich)
-# (ism, fakultet, o'rtacha uchish vaqti soniyada) - tezdan sekinga
-SINOV_BOTLAR = (("Viktor", "slytherin", 23.6), ("Jinni", "gryffindor", 24.8), ("Sedrik", "hufflepuff", 26.0), ("Chjou", "ravenclaw", 27.4),
-                ("Oliver", "gryffindor", 29.0), ("Draco", "slytherin", 30.8), ("Luna", "ravenclaw", 33.0), ("Ron", "gryffindor", 36.0),
-                ("Nevill", "gryffindor", 41.0))
+SINOV_BOT = 9                 # kompyuter uchuvchilar soni
+# (ism, fakultet, bir halqaga ketadigan o'rtacha vaqt soniyada) - tezdan sekinga
+SINOV_BOTLAR = (("Viktor", "slytherin", 0.80), ("Jinni", "gryffindor", 0.86), ("Sedrik", "hufflepuff", 0.92), ("Chjou", "ravenclaw", 0.98),
+                ("Oliver", "gryffindor", 1.05), ("Draco", "slytherin", 1.13), ("Luna", "ravenclaw", 1.22), ("Ron", "gryffindor", 1.33),
+                ("Nevill", "gryffindor", 1.50))
 BOT_UID0 = -9100              # kompyuter uchuvchilar: BOT_UID0 - i
 
 _cfg = {}
 _qulf = None
 _sinov = {}                   # uid -> {"hafta": kalit, "t0": start vaqti}
+_jonli = {}                   # hafta -> {uid: o'tilgan halqalar} (faqat ko'rsatish uchun)
+_kesh = {}                    # hafta -> poyga holatining xotiradagi nusxasi (yengil javoblar uchun)
 
 
 def _now():
@@ -79,6 +85,7 @@ def _init():
         conn.execute("CREATE TABLE IF NOT EXISTS pg_qatnash (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (hafta, user_id))")
         conn.execute("CREATE TABLE IF NOT EXISTS pg_oyinchi (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, keldi REAL, tirik INTEGER NOT NULL DEFAULT 1,"
                      " chiqdi INTEGER, orin INTEGER, PRIMARY KEY (hafta, user_id))")
+        # bosqich = nazorat raqami (0 dan); -1 = «uchdi» belgisi. ms - startdan shu nazoratgacha vaqt.
         conn.execute("CREATE TABLE IF NOT EXISTS pg_natija (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, bosqich INTEGER NOT NULL, ms INTEGER NOT NULL,"
                      " xato INTEGER NOT NULL DEFAULT 0, vaqt REAL NOT NULL, PRIMARY KEY (hafta, user_id, bosqich))")
         conn.execute("CREATE TABLE IF NOT EXISTS pg_eslatma (hafta TEXT NOT NULL, tur TEXT NOT NULL, PRIMARY KEY (hafta, tur))")
@@ -120,20 +127,33 @@ def _hafta_uchun(uid):
     return _hafta()
 
 
+def _urug(hafta):
+    """Poyga yo'lining urug'i - oldindan bilib bo'lmaydi."""
+    sir = hashlib.sha256(("poyga|%s|%s" % (os.getenv("BOT_TOKEN", ""), hafta)).encode()).hexdigest()
+    return int(sir[:8], 16) % 900000 + 1000
+
+
+# ---------- sinov poygasi ----------
+
 def _sinov_bosh(uid):
     """Admin uchun sinov poygasi: o'zi + kompyuter uchuvchilar, SINOV_KUT soniyadan keyin."""
     uid, now = int(uid), _ep()
+    eski = _sinov.get(uid)
     hafta = "sinov:%d:%d" % (uid, int(now))
     conn = hpcup._connect()
     try:
         for j in ("pg_turnir", "pg_oyinchi", "pg_natija"):
             conn.execute("DELETE FROM %s WHERE hafta LIKE ?" % j, ("sinov:%d:%%" % uid,))
         conn.execute("INSERT INTO pg_oyinchi (hafta, user_id, keldi) VALUES (?,?,?)", (hafta, uid, now))
-        for i in range(SINOV_BOT):
+        for i in range(min(SINOV_BOT, len(SINOV_BOTLAR))):
             conn.execute("INSERT INTO pg_oyinchi (hafta, user_id, keldi) VALUES (?,?,?)", (hafta, BOT_UID0 - i, now))
+            conn.execute("INSERT INTO pg_natija (hafta, user_id, bosqich, ms, vaqt) VALUES (?,?,-1,0,?)", (hafta, BOT_UID0 - i, now))
         conn.commit()
     finally:
         conn.close()
+    if eski:
+        _jonli.pop(eski["hafta"], None)
+        _kesh.pop(eski["hafta"], None)
     _sinov[uid] = {"hafta": hafta, "t0": now + SINOV_KUT}
     return True
 
@@ -142,6 +162,8 @@ def _sinov_toxtat(uid):
     v = _sinov.pop(int(uid), None)
     if not v:
         return False
+    _jonli.pop(v["hafta"], None)
+    _kesh.pop(v["hafta"], None)
     conn = hpcup._connect()
     try:
         for j in ("pg_turnir", "pg_oyinchi", "pg_natija"):
@@ -152,102 +174,177 @@ def _sinov_toxtat(uid):
     return True
 
 
+def _bot_qism(hafta, u, j):
+    """Kompyuter uchuvchining j-qismga (HALQA ta halqa) ketadigan vaqti, soniyada: o'rtachasi atrofida, doimiy tasodif bilan."""
+    i = BOT_UID0 - u
+    tasodif = int(hashlib.sha256(("%s|%s|%s" % (hafta, j, u)).encode()).hexdigest()[:6], 16) / float(0xFFFFFF)
+    return SINOV_BOTLAR[i][2] * HALQA * (1 + (tasodif - 0.5) * 0.2) + (1.6 * SINOV_BOTLAR[i][2] if j == 0 else 0)
+
+
+def _bot_ms(hafta, u, k):
+    """Kompyuter uchuvchi k-nazoratga startdan necha ms da yetadi."""
+    return int(sum(_bot_qism(hafta, u, j) for j in range(k + 1)) * 1000)
+
+
+def _bot_pos(hafta, u, otdi):
+    """Kompyuter uchuvchi startdan `otdi` soniyada nechta halqadan o'tgan."""
+    j, pos = 0, 0.0
+    while j < 400:
+        q = _bot_qism(hafta, u, j)
+        if otdi < q:
+            return int(pos + HALQA * max(0.0, otdi) / q)
+        otdi -= q
+        pos += HALQA
+        j += 1
+    return int(pos)
+
+
 def _sinov_botlar(conn, hafta, now):
-    """Kompyuter uchuvchilar: har biri o'z vaqtida «marraga yetadi» (o'rtacha vaqti atrofida, bosqich va haftadan doimiy)."""
+    """Kompyuter uchuvchilar o'z vaqtida nazoratdan «o'tadi»."""
     t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
     if not t or t["holat"] != "ketmoqda":
         return
-    k, start = t["bosqich"], t["bosh"] + SANOQ
-    bor = {r["user_id"] for r in conn.execute("SELECT user_id FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, k))}
+    start = t["bosh"] + SANOQ
     for r in conn.execute("SELECT user_id FROM pg_oyinchi WHERE hafta=? AND tirik=1 AND user_id < 0", (hafta,)).fetchall():
         u = r["user_id"]
-        i = BOT_UID0 - u
-        if u in bor or not 0 <= i < len(SINOV_BOTLAR):
+        if not 0 <= BOT_UID0 - u < len(SINOV_BOTLAR):
             continue
-        tasodif = int(hashlib.sha256(("%s|%s|%s" % (hafta, k, u)).encode()).hexdigest()[:6], 16) / float(0xFFFFFF)
-        ms = int((SINOV_BOTLAR[i][2] + k * 1.5 + (tasodif - 0.5) * 3.0) * 1000)
-        if now >= start + ms / 1000.0:
-            conn.execute("INSERT OR IGNORE INTO pg_natija (hafta, user_id, bosqich, ms, xato, vaqt) VALUES (?,?,?,?,?,?)",
-                         (hafta, u, k, ms, 0, start + ms / 1000.0))
+        for k in range(t["bosqich"], t["bosqich"] + 3):
+            ms = _bot_ms(hafta, u, k)
+            if now >= start + ms / 1000.0:
+                conn.execute("INSERT OR IGNORE INTO pg_natija (hafta, user_id, bosqich, ms, xato, vaqt) VALUES (?,?,?,?,0,?)",
+                             (hafta, u, k, ms, start + ms / 1000.0))
 
 
-def _urug(hafta, bosqich):
-    """Shu bosqich yo'lining urug'i - oldindan bilib bo'lmaydi."""
-    sir = hashlib.sha256(("poyga|%s|%s|%s" % (os.getenv("BOT_TOKEN", ""), hafta, bosqich)).encode()).hexdigest()
-    return int(sir[:8], 16) % 900000 + 1000
+# ---------- poyga ----------
+
+def _tiriklar(conn, hafta):
+    return [r["user_id"] for r in conn.execute("SELECT user_id FROM pg_oyinchi WHERE hafta=? AND tirik=1", (hafta,))]
 
 
-def bosqichlar_soni(n):
-    return 1 if n <= 4 else 2 if n <= 8 else 3
+def _otganlar(conn, hafta, k):
+    return {r["user_id"]: (r["ms"], r["vaqt"]) for r in conn.execute("SELECT user_id, ms, vaqt FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, k))}
 
 
-def otadiganlar(n):
-    """Bosqichdan keyin nechta kishi qoladi (tirik n kishidan)."""
-    return min(n, max(QOLADI, (n + 1) // 2))
-
-
-def _natijalar(conn, hafta, bosqich):
-    """Shu bosqichning tirik ishtirokchilari tartibi: [(uid, ms yoki None)] - uchib bo'lganlar tezligi bo'yicha, ulgurmaganlar oxirida."""
-    tirik = [r["user_id"] for r in conn.execute("SELECT user_id FROM pg_oyinchi WHERE hafta=? AND tirik=1", (hafta,))]
-    ms = {r["user_id"]: r["ms"] for r in conn.execute("SELECT user_id, ms FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, bosqich))}
-    return sorted(((u, ms.get(u)) for u in tirik), key=lambda p: (p[1] is None, p[1] or 0, p[0]))
-
-
-def _yakunla(conn, hafta, t, berish, now):
-    """O'rinlar: finalchilar final vaqti bo'yicha, keyin kechroq chiqqanlar (o'sha bosqichdagi vaqti bo'yicha)."""
-    final = t["jami"] - 1
-    tartib = [u for u, _ in _natijalar(conn, hafta, final)]
-    final_ms = {r["user_id"]: r["ms"] for r in conn.execute("SELECT user_id, ms FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, final))}
-    chiqqan = conn.execute("SELECT o.user_id, o.chiqdi, n.ms FROM pg_oyinchi o LEFT JOIN pg_natija n ON n.hafta=o.hafta AND n.user_id=o.user_id AND n.bosqich=o.chiqdi "
-                           "WHERE o.hafta=? AND o.tirik=0", (hafta,)).fetchall()
-    tartib += [r["user_id"] for r in sorted(chiqqan, key=lambda r: (-(r["chiqdi"] or 0), r["ms"] is None, r["ms"] or 0, r["user_id"]))]
-    for i, u in enumerate(tartib):
-        orin = i + 1
-        conn.execute("UPDATE pg_oyinchi SET orin=? WHERE hafta=? AND user_id=?", (orin, hafta, u))
-        if u in final_ms and not _sinov_hafta(hafta):   # ball faqat finalda uchib bo'lganlarga (sinovda berilmaydi)
-            berish.append((u, "poyga:%s" % hafta, BALL_ORIN.get(orin, BALL_FINAL)))
-    golib = tartib[0] if tartib and tartib[0] in final_ms else None
+def _tugat(conn, hafta, berish, now):
+    """Poyga yakuni: qolganlarga o'rin (odatda bitta - g'olib), ballar."""
+    tirik = _tiriklar(conn, hafta)
+    oxirgi = {}
+    for r in conn.execute("SELECT user_id, MAX(bosqich) AS k FROM pg_natija WHERE hafta=? AND bosqich >= 0 GROUP BY user_id", (hafta,)).fetchall():
+        ms = conn.execute("SELECT ms FROM pg_natija WHERE hafta=? AND user_id=? AND bosqich=?", (hafta, r["user_id"], r["k"])).fetchone()[0]
+        oxirgi[r["user_id"]] = (r["k"], ms)
+    tirik.sort(key=lambda u: (-oxirgi.get(u, (-1, 0))[0], oxirgi.get(u, (-1, 0))[1], u))
+    for i, u in enumerate(tirik):
+        conn.execute("UPDATE pg_oyinchi SET orin=? WHERE hafta=? AND user_id=?", (i + 1, hafta, u))
+    uchgan = {r["user_id"] for r in conn.execute("SELECT DISTINCT user_id FROM pg_natija WHERE hafta=?", (hafta,))}
+    golib = tirik[0] if tirik and tirik[0] in uchgan else None
+    if not _sinov_hafta(hafta):
+        for r in conn.execute("SELECT user_id, orin FROM pg_oyinchi WHERE hafta=? AND orin IS NOT NULL", (hafta,)).fetchall():
+            if r["user_id"] in uchgan and _ball(r["orin"]):          # ball faqat haqiqatan uchganlarga
+                berish.append((r["user_id"], "poyga:%s" % hafta, _ball(r["orin"])))
     conn.execute("UPDATE pg_turnir SET holat='tugadi', golib=?, tugadi=? WHERE hafta=?", (golib, now, hafta))
 
 
 def _yur(conn, hafta, berish, now):
-    """Poygani hozirgi vaqtga keltiradi: tugagan bosqichlarni yopadi."""
+    """Poygani hozirgi vaqtga keltiradi: yopilgan nazoratlarda oxirgilarni chiqaradi."""
     T0 = _turnir_vaqti(hafta)
-    if now < T0:
+    if not T0 or now < T0:
         return
     t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
     if not t:
         soni = conn.execute("SELECT COUNT(*) FROM pg_oyinchi WHERE hafta=?", (hafta,)).fetchone()[0]
-        conn.execute("INSERT OR IGNORE INTO pg_turnir (hafta, bosh, jami, soni) VALUES (?,?,?,?)", (hafta, T0, bosqichlar_soni(soni), soni))
+        conn.execute("INSERT OR IGNORE INTO pg_turnir (hafta, bosh, jami, soni) VALUES (?,?,?,?)", (hafta, T0, max(1, soni - 1), soni))
         if soni < 2:                             # bir kishi bilan poyga bo'lmaydi
             conn.execute("UPDATE pg_turnir SET holat='tugadi', tugadi=? WHERE hafta=?", (now, hafta))
             conn.execute("UPDATE pg_oyinchi SET tirik=0 WHERE hafta=?", (hafta,))
         t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
     while t["holat"] == "ketmoqda":
-        k, bosh = t["bosqich"], t["bosh"]
-        if now < bosh + SANOQ:
-            break                                # natija ko'rsatilmoqda yoki sanoq ketmoqda
-        nat = _natijalar(conn, hafta, k)
-        hammasi = all(ms is not None for _, ms in nat)
-        oxirgi = conn.execute("SELECT MAX(vaqt) FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, k)).fetchone()[0] or 0
-        if not (now >= bosh + BOSQICH_T or (hammasi and now >= oxirgi + KUTISH)):
-            break                                # hali uchishyapti
-        yopildi = min(now, bosh + BOSQICH_T) if not hammasi else max(oxirgi + KUTISH, bosh + SANOQ)
-        if k + 1 >= t["jami"]:
-            _yakunla(conn, hafta, t, berish, yopildi)
-        else:
-            qoladi = otadiganlar(len(nat))
-            for i, (u, ms) in enumerate(nat):
-                if i >= qoladi or ms is None:    # ulgurmagan hech qachon o'tmaydi
-                    conn.execute("UPDATE pg_oyinchi SET tirik=0, chiqdi=? WHERE hafta=? AND user_id=?", (k, hafta, u))
-            qoldi = conn.execute("SELECT COUNT(*) FROM pg_oyinchi WHERE hafta=? AND tirik=1", (hafta,)).fetchone()[0]
-            if qoldi < 1:                        # hech kim uchib bo'lmadi - poyga shu bosqichda tugaydi
-                conn.execute("UPDATE pg_turnir SET jami=? WHERE hafta=?", (k + 1, hafta))
-                conn.execute("UPDATE pg_oyinchi SET tirik=1, chiqdi=NULL WHERE hafta=? AND chiqdi=?", (hafta, k))
-                _yakunla(conn, hafta, dict(t, jami=k + 1), berish, yopildi)
+        k, start = t["bosqich"], t["bosh"] + SANOQ
+        if now < start:
+            break
+        tirik = _tiriklar(conn, hafta)
+        if len(tirik) <= 1:
+            _tugat(conn, hafta, berish, now)
+            break
+        otgan = {u: v for u, v in _otganlar(conn, hafta, k).items() if u in tirik}
+        qism_boshi = max(start, t["tugadi"] or 0)            # `tugadi` poyga paytida - oldingi nazorat yopilgan payt
+        chiqadi = None
+        if otgan and len(otgan) >= len(tirik) - 1 and now >= max(v[1] for v in otgan.values()) + MUHLAT_T:
+            if len(otgan) == len(tirik):
+                chiqadi = [max(otgan, key=lambda u: (otgan[u][0], u))]
             else:
-                conn.execute("UPDATE pg_turnir SET bosqich=?, bosh=? WHERE hafta=?", (k + 1, yopildi + NATIJA_T, hafta))
+                chiqadi = [u for u in tirik if u not in otgan]
+        elif otgan and now >= min(v[1] for v in otgan.values()) + NAZORAT_T:
+            chiqadi = [u for u in tirik if u not in otgan]
+        elif not otgan and now >= qism_boshi + QISM_T:      # hech kim uchmayapti - poyga yopiladi
+            _tugat(conn, hafta, berish, now)
+            break
+        if not chiqadi:
+            break
+        oldingi = _otganlar(conn, hafta, k - 1) if k > 0 else {}
+        chiqadi.sort(key=lambda u: (u not in oldingi, oldingi.get(u, (0, 0))[0], u))     # yaxshirog'i yuqoriroq o'rin oladi
+        for i, u in enumerate(chiqadi):
+            conn.execute("UPDATE pg_oyinchi SET tirik=0, chiqdi=?, orin=? WHERE hafta=? AND user_id=?",
+                         (k, len(tirik) - len(chiqadi) + 1 + i, hafta, u))
+        if len(tirik) - len(chiqadi) <= 1:
+            _tugat(conn, hafta, berish, now)
+            break
+        conn.execute("UPDATE pg_turnir SET bosqich=?, tugadi=? WHERE hafta=?", (k + 1, now, hafta))
         t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
+
+
+def _ism(conn, uid):
+    if uid < 0 and 0 <= BOT_UID0 - uid < len(SINOV_BOTLAR):      # sinov poygasining kompyuter uchuvchisi
+        b = SINOV_BOTLAR[BOT_UID0 - uid]
+        return {"uid": None, "name": b[0], "house": b[1]}
+    r = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name, house FROM users WHERE user_id=?", (uid,)).fetchone()
+    return {"uid": uid, "name": hpdars._ism(r["name"]) if r else "Sehrgar", "house": r["house"] if r else None}
+
+
+def _kesh_yangila(conn, hafta):
+    """Poyga holatini xotiraga oladi - uchayotganlarga yengil javob berish uchun."""
+    t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
+    if not t:
+        _kesh.pop(hafta, None)
+        return None
+    ismlar = (_kesh.get(hafta) or {}).get("ism") or {}
+    k = {"holat": t["holat"], "k": t["bosqich"], "soni": t["soni"], "bosh": t["bosh"], "golib": t["golib"], "tirik": [], "orin": {}, "nazorat": {}, "ism": ismlar}
+    for r in conn.execute("SELECT user_id, tirik, chiqdi, orin FROM pg_oyinchi WHERE hafta=?", (hafta,)).fetchall():
+        u = r["user_id"]
+        if u not in ismlar:
+            ismlar[u] = _ism(conn, u)
+        if r["tirik"]:
+            k["tirik"].append(u)
+        if r["orin"]:
+            k["orin"][u] = (r["orin"], r["chiqdi"])
+    for r in conn.execute("SELECT user_id, MAX(bosqich) AS m FROM pg_natija WHERE hafta=? GROUP BY user_id", (hafta,)):
+        k["nazorat"][r["user_id"]] = r["m"] + 1
+    _kesh[hafta] = k
+    return k
+
+
+def _taxta(hafta, uid, now):
+    """Jonli jadval: tiriklar oldinda ketayotganidan boshlab, keyin chiqqanlar (kech chiqqani yuqorida)."""
+    k = _kesh.get(hafta)
+    if not k:
+        return []
+    jon, otdi = _jonli.get(hafta) or {}, now - (k["bosh"] + SANOQ)
+    tirik, chiq = [], []
+    for u in k["ism"]:
+        d = dict(k["ism"][u])
+        orin = k["orin"].get(u)
+        if u in k["tirik"]:
+            pos = max(jon.get(u, 0), k["nazorat"].get(u, 0) * HALQA)
+            if u < 0 and k["holat"] == "ketmoqda":
+                pos = max(pos, _bot_pos(hafta, u, otdi))
+            d.update(pos=pos, me=u == uid, place=orin[0] if orin else None)
+            tirik.append(d)
+        elif orin:
+            d.update(pos=((orin[1] if orin[1] is not None else -1) + 1) * HALQA, me=u == uid, place=orin[0], out=True)
+            chiq.append(d)
+    tirik.sort(key=lambda d: (d["place"] or 0, -d["pos"]))
+    chiq.sort(key=lambda d: d["place"])
+    return tirik[:60] + chiq[:40]
 
 
 def _eslatmalar(conn, hafta, xabarlar):
@@ -274,23 +371,31 @@ def _tick():
     try:
         _yur(conn, hafta, berish, now)
         _eslatmalar(conn, hafta, xabarlar)
-        for uid, v in list(_sinov.items()):      # sinov poygalari: kompyuter uchuvchilar va bosqichlar
+        if now >= _turnir_vaqti(hafta):
+            _kesh_yangila(conn, hafta)
+        for uid, v in list(_sinov.items()):      # sinov poygalari: kompyuter uchuvchilar va nazoratlar
             if now >= v["t0"] + SINOV_UMR:
                 _sinov.pop(uid, None)
+                _jonli.pop(v["hafta"], None)
+                _kesh.pop(v["hafta"], None)
                 continue
             _sinov_botlar(conn, v["hafta"], now)
             _yur(conn, v["hafta"], [], now)
+            _kesh_yangila(conn, v["hafta"])
         conn.commit()
     finally:
         conn.close()
+    for h in [h for h in list(_kesh) if h != hafta and not any(v["hafta"] == h for v in _sinov.values())]:
+        _jonli.pop(h, None)
+        _kesh.pop(h, None)
     return berish, xabarlar
 
 
 def xat_matni(tur):
     if tur == "elon":
-        return {"uz": ("Bugun 21:00 da birinchi supurgi poygasi!", "Hamma bir vaqtda bir xil yo'lda uchadi: halqalarning o'rtasidan o'tgan tezlashadi, sekinroq yarmi har bosqichda chiqib ketadi. Soat 21:00 da ilovada Xogvarts → Poyga sahifasida bo'ling. G'olibga +30 ball. Hozirdan mashq qilsangiz bo'ladi."),
-                "ru": ("Сегодня в 21:00 первая гонка на мётлах!", "Все летят одновременно по одной трассе: кто точнее проходит кольца — тот быстрее; медленная половина выбывает после каждого этапа. В 21:00 будьте в приложении: Хогвартс → Гонка. Победителю +30 очков. Потренироваться можно уже сейчас."),
-                "en": ("The first broom race is today at 21:00!", "Everyone flies the same course at once: pass the hoops dead centre to go faster; the slower half drops out after each heat. Be in the app at 21:00: Hogwarts → Race. +30 points for the winner. You can practise right now.")}
+        return {"uz": ("Bugun 21:00 da birinchi supurgi poygasi!", "Hamma bir vaqtda bir xil yo'lda uchadi: halqalarning o'rtasidan o'tgan tezlashadi. Har 10 halqada eng oxirgi uchuvchi poygani tark etadi — oxirida qolgan g'olib. Soat 21:00 da ilovada Xogvarts → Poyga sahifasida bo'ling. G'olibga +30 ball. Hozirdan mashq qilsangiz bo'ladi."),
+                "ru": ("Сегодня в 21:00 первая гонка на мётлах!", "Все летят одновременно по одной трассе: кто точнее проходит кольца — тот быстрее. Каждые 10 колец последний пилот выбывает — побеждает тот, кто останется. В 21:00 будьте в приложении: Хогвартс → Гонка. Победителю +30 очков. Потренироваться можно уже сейчас."),
+                "en": ("The first broom race is today at 21:00!", "Everyone flies the same course at once: pass the hoops dead centre to go faster. Every 10 hoops the last flyer drops out — the last one left wins. Be in the app at 21:00: Hogwarts → Race. +30 points for the winner. You can practise right now.")}
     if tur == "ertalab":
         return {"uz": ("Bugun 21:00 da supurgi poygasi", "Poyga bugun soat 21:00 da. Ilovaga kiring: Xogvarts → Poyga. Kechikkanlar faqat tomosha qiladi. Hozircha mashq qilib oling."),
                 "ru": ("Сегодня в 21:00 гонка на мётлах", "Гонка сегодня в 21:00. Зайдите: Хогвартс → Гонка. Опоздавшие только смотрят. А пока — потренируйтесь."),
@@ -327,18 +432,27 @@ async def tick():
     return len(berish), len(xabarlar)
 
 
+def _ketmoqda():
+    """Hozir biror poyga (haqiqiy yoki sinov) ketyaptimi - fon aylanasi tezligini belgilaydi."""
+    if _sinov:
+        return True
+    try:
+        h = _hafta()
+        T0, now = _turnir_vaqti(h), _ep()
+        if T0 - 5 <= now <= T0 + 30:
+            return True
+        return now > T0 and (_kesh.get(h) or {}).get("holat") == "ketmoqda"
+    except Exception:
+        return False
+
+
 async def kuzatuvchi(interval=15):
     while True:
         try:
             await tick()
         except Exception as e:
             logging.error("Poyga kuzatuvchisi: %s", e)
-        try:
-            T0 = _turnir_vaqti(_hafta())
-            tez = T0 - 600 <= _ep() <= T0 + 3 * (BOSQICH_T + NATIJA_T) + 60 or bool(_sinov)
-        except Exception:
-            tez = False
-        await asyncio.sleep(2 if tez else interval)
+        await asyncio.sleep(1 if _ketmoqda() else interval)
 
 
 def _yozil(uid, on):
@@ -357,65 +471,47 @@ def _yozil(uid, on):
         conn.close()
 
 
-def _natija_yoz(uid, bosqich, ms, xato):
-    """Bosqich natijasi: faqat tirik ishtirokchi, faqat hozirgi bosqichga, bir marta. Vaqt server soati bilan tekshiriladi."""
-    uid, hafta, now = int(uid), _hafta_uchun(uid), _ep()
+def _nazorat_yoz(uid, hafta, cps, uchdi):
+    """Nazoratdan o'tish yozuvlari: faqat tirik uchuvchi, vaqt server soati bilan tekshiriladi. Qaytaradi: qabul qilingan (yoki eskirgan) raqamlar."""
+    uid, now, tasdiq = int(uid), _ep(), []
     conn = hpcup._connect()
     try:
         t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
-        if not t or t["holat"] != "ketmoqda" or t["bosqich"] != bosqich:
-            return False
-        uchdi = (now - (t["bosh"] + SANOQ)) * 1000          # server o'lchagan uchish vaqti
-        if uchdi < ENG_KAM_MS or now > t["bosh"] + BOSQICH_T + 3:
-            return False
+        if not t:
+            return tasdiq
         o = conn.execute("SELECT tirik FROM pg_oyinchi WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone()
-        if not o or not o["tirik"]:
-            return False
-        try:
-            aytgan = float(ms)
-        except (TypeError, ValueError):
-            aytgan = uchdi
-        sof = max(ENG_KAM_MS, min(uchdi, max(aytgan, uchdi - MUHLAT_MS)))
-        xato = max(0, min(int(xato or 0), 80))
-        cur = conn.execute("INSERT OR IGNORE INTO pg_natija (hafta, user_id, bosqich, ms, xato, vaqt) VALUES (?,?,?,?,?,?)",
-                           (hafta, uid, bosqich, int(sof) + xato * XATO_MS, xato, now))
+        if not o:
+            return tasdiq
+        otdi = (now - (t["bosh"] + SANOQ)) * 1000          # server o'lchagan uchish vaqti
+        if uchdi and o["tirik"] and t["holat"] == "ketmoqda":
+            conn.execute("INSERT OR IGNORE INTO pg_natija (hafta, user_id, bosqich, ms, vaqt) VALUES (?,?,-1,0,?)", (hafta, uid, now))
+        for kalit, ms in list((cps or {}).items())[:8]:
+            try:
+                k, aytgan = int(kalit), float(ms)
+            except (TypeError, ValueError):
+                continue
+            if t["holat"] != "ketmoqda" or not o["tirik"] or k < t["bosqich"]:
+                tasdiq.append(k)                 # eskirgan - ilova qayta yubormasin
+                continue
+            if k > t["bosqich"] + 5 or otdi < (k + 1) * HALQA * HALQA_MS:
+                continue
+            sof = min(otdi, max(aytgan, otdi - MUHLAT_MS))
+            conn.execute("INSERT OR IGNORE INTO pg_natija (hafta, user_id, bosqich, ms, xato, vaqt) VALUES (?,?,?,?,0,?)", (hafta, uid, k, int(sof), now))
+            tasdiq.append(k)
         conn.commit()
-        return cur.rowcount > 0
+        return tasdiq
     finally:
         conn.close()
 
 
-def _ism(conn, uid):
-    if uid < 0 and 0 <= BOT_UID0 - uid < len(SINOV_BOTLAR):      # sinov poygasining kompyuter uchuvchisi
-        b = SINOV_BOTLAR[BOT_UID0 - uid]
-        return {"uid": None, "name": b[0], "house": b[1]}
-    r = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name, house FROM users WHERE user_id=?", (uid,)).fetchone()
-    return {"uid": uid, "name": hpdars._ism(r["name"]) if r else "Sehrgar", "house": r["house"] if r else None}
-
-
 def _oxirgi(conn, hafta_dan_oldin):
-    r = conn.execute("SELECT hafta, golib, soni FROM pg_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta < ? AND hafta NOT LIKE 'sinov:%' ORDER BY hafta DESC LIMIT 1",
-                     (hafta_dan_oldin,)).fetchone()
+    r = conn.execute("SELECT hafta, golib, soni FROM pg_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta < ? AND hafta NOT LIKE 'sinov:%' "
+                     "ORDER BY hafta DESC LIMIT 1", (hafta_dan_oldin,)).fetchone()
     return dict(_ism(conn, r["golib"]), n=r["soni"]) if r else None
 
 
-def _jadval(conn, hafta, bosqich, uid, qoladi=None):
-    """Bosqich natijalari jadvali (hammasi): o'rin, ism, vaqt, o'tdimi."""
-    out = []
-    for i, (u, ms) in enumerate(_natijalar_hamma(conn, hafta, bosqich)):
-        d = _ism(conn, u)
-        d.update(place=i + 1, ms=ms, me=u == uid)
-        if qoladi is not None:
-            d["through"] = i < qoladi and ms is not None
-        out.append(d)
-    return out
-
-
-def _natijalar_hamma(conn, hafta, bosqich):
-    """Shu bosqichda uchgan (yoki uchishi kerak bo'lgan) hamma: bosqich yopilgach `tirik` o'zgargan bo'ladi, shuning uchun chiqdi >= bosqich ham olinadi."""
-    kim = [r["user_id"] for r in conn.execute("SELECT user_id FROM pg_oyinchi WHERE hafta=? AND (tirik=1 OR chiqdi >= ?)", (hafta, bosqich))]
-    ms = {r["user_id"]: r["ms"] for r in conn.execute("SELECT user_id, ms FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, bosqich))}
-    return sorted(((u, ms.get(u)) for u in kim), key=lambda p: (p[1] is None, p[1] or 0, p[0]))
+def _ball(orin):
+    return BALL_ORIN.get(orin, BALL_KEYIN if orin and orin <= BALL_KEYIN_ORIN else 0)
 
 
 def _holat(uid):
@@ -425,8 +521,7 @@ def _holat(uid):
     try:
         if T0 - ZAL <= now < T0:                 # zalda bo'lganlar ishtirokchi bo'ladi
             conn.execute("INSERT OR IGNORE INTO pg_oyinchi (hafta, user_id, keldi) VALUES (?,?,?)", (hafta, uid, now))
-        conn.execute("UPDATE pg_oyinchi SET keldi=? WHERE hafta=? AND user_id=?", (now, hafta, uid))
-        conn.commit()
+            conn.commit()
         t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
         men = conn.execute("SELECT * FROM pg_oyinchi WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone()
         yozilgan = conn.execute("SELECT COUNT(*) FROM pg_qatnash WHERE hafta=?", (hafta,)).fetchone()[0]
@@ -434,8 +529,8 @@ def _holat(uid):
             "ok": True, "now": now,
             "tour": {"ts": T0, "now": now, "open": now < T0, "n": yozilgan,
                      "joined": conn.execute("SELECT 1 FROM pg_qatnash WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone() is not None},
-            "rules": {"count": SANOQ, "heat": BOSQICH_T, "show": NATIJA_T, "hall": ZAL, "penalty": XATO_MS // 1000, "keep": QOLADI,
-                      "final_pts": BALL_FINAL, "points": {str(k): v for k, v in BALL_ORIN.items()}},
+            "rules": {"count": SANOQ, "every": HALQA, "hall": ZAL, "wait": NAZORAT_T, "next_pts": BALL_KEYIN, "next_to": BALL_KEYIN_ORIN,
+                      "points": {str(k): v for k, v in BALL_ORIN.items()}},
             "last": _oxirgi(conn, hafta if not _sinov_hafta(hafta) else "9"),
             "test": _sinov_hafta(hafta), "can_test": uid in (_cfg.get("admin_ids") or ()),
             "me": {"in": bool(men), "alive": bool(men and men["tirik"]), "out": men["chiqdi"] if men else None, "place": men["orin"] if men else None},
@@ -449,39 +544,33 @@ def _holat(uid):
             javob["phase"] = "zal"
             javob["starts_in"] = max(0, int(T0 - now))
             return javob
-        javob["alive"] = conn.execute("SELECT COUNT(*) FROM pg_oyinchi WHERE hafta=? AND tirik=1", (hafta,)).fetchone()[0]
-        javob["heats"] = t["jami"]
+        k = _kesh_yangila(conn, hafta)
+        javob["alive"] = len(k["tirik"])
+        javob["board"] = _taxta(hafta, uid, now)
         if t["holat"] == "tugadi":
             javob["phase"] = "tugadi"
             javob["played"] = t["soni"] >= 2
-            top = conn.execute("SELECT o.user_id, o.orin, o.chiqdi FROM pg_oyinchi o WHERE o.hafta=? AND o.orin IS NOT NULL ORDER BY o.orin LIMIT 10", (hafta,)).fetchall()
-            final = t["jami"] - 1
-            fms = {r["user_id"]: r["ms"] for r in conn.execute("SELECT user_id, ms FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, final))}
-            javob["top"] = [dict(_ism(conn, r["user_id"]), place=r["orin"], ms=fms.get(r["user_id"]), me=r["user_id"] == uid) for r in top]
+            uchgan = conn.execute("SELECT 1 FROM pg_natija WHERE hafta=? AND user_id=? LIMIT 1", (hafta, uid)).fetchone()
             if men and men["orin"]:
-                javob["me"]["points"] = BALL_ORIN.get(men["orin"], BALL_FINAL) if uid in fms else 0
-                javob["me"]["ms"] = fms.get(uid)
-            return javob
-        k, bosh = t["bosqich"], t["bosh"]
-        if now < bosh:                           # oldingi bosqich natijasi ko'rsatilmoqda
-            javob["phase"] = "natija"
-            javob["heat"] = {"n": k - 1}
-            oldingi = _natijalar_hamma(conn, hafta, k - 1)
-            javob["results"] = _jadval(conn, hafta, k - 1, uid, otadiganlar(len(oldingi)))
-            javob["next_in"] = int(bosh - now) + 1
-            javob["next_final"] = k + 1 >= t["jami"]
+                javob["me"]["points"] = _ball(men["orin"]) if uchgan and not _sinov_hafta(hafta) else 0
             return javob
         javob["phase"] = "poyga"
-        mening = conn.execute("SELECT ms, xato FROM pg_natija WHERE hafta=? AND user_id=? AND bosqich=?", (hafta, uid, k)).fetchone()
-        uchgan = conn.execute("SELECT COUNT(*) FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, k)).fetchone()[0]
-        javob["heat"] = {"n": k, "seed": _urug(hafta, k), "start_in": round(bosh + SANOQ - now, 2), "left": max(0, round(bosh + BOSQICH_T - now, 1)),
-                         "final": k + 1 >= t["jami"], "done": uchgan, "keep": otadiganlar(javob["alive"]) if k + 1 < t["jami"] else None,
-                         "mine": {"ms": mening["ms"], "xato": mening["xato"]} if mening else None}
-        if mening:                               # uchib bo'lganga - hozirgacha kelganlar jadvali
-            javob["results"] = [r for r in _jadval(conn, hafta, k, uid) if r["ms"] is not None]
+        javob["race"] = {"seed": _urug(hafta), "start_in": round(t["bosh"] + SANOQ - now, 2), "rings": max(1, t["soni"] - 1) * HALQA, "every": HALQA,
+                         "cp": t["bosqich"], "pos": (_jonli.get(hafta) or {}).get(uid, 0)}
         return javob
     finally:
         conn.close()
+
+
+def _yengil(uid, hafta, now, tasdiq):
+    """Uchayotgan odamga qisqa javob - bazaga murojaatsiz (xotiradagi nusxadan)."""
+    k = _kesh.get(hafta)
+    if not k:
+        return None
+    men = k["orin"].get(uid)
+    return {"ok": True, "light": True, "phase": "poyga" if k["holat"] == "ketmoqda" else "tugadi", "cp": k["k"], "every": HALQA,
+            "alive": len(k["tirik"]), "me": {"in": True, "alive": uid in k["tirik"], "place": men[0] if men else None},
+            "board": _taxta(hafta, uid, now), "ack": tasdiq or []}
 
 
 async def api_poyga(request):
@@ -496,6 +585,30 @@ async def api_poyga(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
     uid = int(user["id"])
+    if body.get("pos") is not None:              # uchish paytidagi tez-tez so'rov: iloji boricha yengil
+        hafta, now = _hafta_uchun(uid), _ep()
+        k = _kesh.get(hafta)
+        if k and uid in k["ism"]:
+            try:
+                pos = max(0, min(int(body.get("pos")), 100000))
+            except (TypeError, ValueError):
+                pos = 0
+            jon = _jonli.setdefault(hafta, {})
+            birinchi = pos >= UCHDI and jon.get(uid, 0) < UCHDI
+            if uid in k["tirik"]:
+                jon[uid] = max(pos, jon.get(uid, 0))
+            cps = body.get("cps") if isinstance(body.get("cps"), dict) and body.get("cps") else None
+            tasdiq = None
+            if cps or birinchi:
+                tasdiq = await asyncio.to_thread(_nazorat_yoz, uid, hafta, cps, birinchi)
+                if cps:
+                    try:
+                        await tick()
+                    except Exception as e:
+                        logging.error("Poyga tick: %s", e)
+            javob = _yengil(uid, hafta, now, tasdiq)
+            if javob:
+                return cors(web.json_response(javob))
     if not hpcup._get_house(uid):
         return cors(web.json_response({"ok": False, "error": "no_house"}))
     qosh = {}
@@ -510,15 +623,6 @@ async def api_poyga(request):
             qosh["sinov_ok"] = await asyncio.to_thread(_sinov_toxtat, uid)
     elif body.get("join") is not None:
         qosh["join_ok"] = await asyncio.to_thread(_yozil, uid, bool(body.get("join")))
-    elif body.get("heat") is not None:
-        try:
-            qosh["heat_ok"] = await asyncio.to_thread(_natija_yoz, uid, int(body.get("heat")), body.get("ms"), body.get("xato"))
-        except (TypeError, ValueError):
-            qosh["heat_ok"] = False
-        try:
-            await tick()                         # oxirgi uchuvchi bo'lsa bosqich tezroq yopilsin
-        except Exception as e:
-            logging.error("Poyga tick: %s", e)
     javob = await asyncio.to_thread(_holat, uid)
     javob.update(qosh)
     if javob.get("phase") == "tugadi" and javob["me"].get("place") and _cfg.get("log") and body.get("log_end") and not javob.get("test"):
