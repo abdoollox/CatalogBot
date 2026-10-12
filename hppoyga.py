@@ -192,11 +192,11 @@ def _bot_pos(hafta, u, otdi):
     while j < 400:
         q = _bot_qism(hafta, u, j)
         if otdi < q:
-            return int(pos + HALQA * max(0.0, otdi) / q)
+            return round(pos + HALQA * max(0.0, otdi) / q, 1)
         otdi -= q
         pos += HALQA
         j += 1
-    return int(pos)
+    return float(pos)
 
 
 def _sinov_botlar(conn, hafta, now):
@@ -590,9 +590,9 @@ async def api_poyga(request):
         k = _kesh.get(hafta)
         if k and uid in k["ism"]:
             try:
-                pos = max(0, min(int(body.get("pos")), 100000))
+                pos = round(max(0.0, min(float(body.get("pos")), 100000.0)), 1)      # kasr bilan - raqiblar ekranda silliq ko'rinsin
             except (TypeError, ValueError):
-                pos = 0
+                pos = 0.0
             jon = _jonli.setdefault(hafta, {})
             birinchi = pos >= UCHDI and jon.get(uid, 0) < UCHDI
             if uid in k["tirik"]:
