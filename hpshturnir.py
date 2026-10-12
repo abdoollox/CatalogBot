@@ -28,6 +28,7 @@ from aiohttp import web
 import hpchess
 import hpcup
 import hpdars
+import hpgolib
 
 BOSH_HAFTA = "2026-10-12"     # birinchi turnir shu haftada (chorshanba 14-oktabr)
 TURNIR_KUN = 2                # chorshanba (dushanba = 0)
@@ -343,6 +344,8 @@ def _holat(uid):
                      "players": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "me": r["user_id"] == uid} for r in qat]},
             "rules": {"base": BASE, "gap": ORALIQ, "first": hpchess.FIRST_MOVE, "points": {str(k): v for k, v in BOSQICH_BALL.items()}},
             "cup": {"size": None},
+            # eng oxirgi tugagan turnir g'oliblari (ballari bilan) - keyingisi tugaguncha turadi
+            "champs": hpgolib.tor(conn, "sh_match", hafta, "shaxmat", uid, "SELECT COUNT(*) FROM sh_qatnash WHERE hafta=?", _turnir_vaqti),
         }
         if not tr:
             return javob

@@ -166,6 +166,8 @@ async def amain():
     await ask(6); await ask(7)
     d = await ask(6)
     check("keyingi hafta: o'tgan g'olib ko'rinadi", d["phase"] == "zal" and d["last"] and d["last"]["uid"] == 2 and d["last"]["n"] == 5)
+    check("g'oliblar kartasi: birinchi uchlik, o'rin va haqiqatan berilgan ball", d["champs"]["n"] == 5
+          and [(r["uid"], r["place"], r["points"]) for r in d["champs"]["top"]] == [(2, 1, 30), (1, 2, 20), (3, 3, 10)] and not d["champs"]["top"][0]["me"])
     soat[0] = datetime(2026, 10, 26, 21, 0, 30, tzinfo=TZ)
     d = await ask(6)
     check("hech kim uchmayapti: poyga hali ochiq", d["phase"] == "poyga" and d["race"]["rings"] == 10)

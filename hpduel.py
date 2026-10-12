@@ -53,6 +53,7 @@ from aiohttp import web
 
 import hpcup
 import hpdars
+import hpgolib
 
 TURLAR = ("hujum", "himoya", "hiyla")
 YENGADI = {"hujum": "hiyla", "hiyla": "himoya", "himoya": "hujum"}
@@ -726,6 +727,8 @@ def _holat(uid):
                      "n": len(qat), "close": YOPILISH,
                      "players": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "r": int(round(r["reyting"])),
                                   "me": r["user_id"] == uid} for r in qat[:30]]},
+            # eng oxirgi tugagan turnir g'oliblari (ballari bilan) - keyingisi tugaguncha turadi
+            "champs": hpgolib.tor(conn, "duel_match", hafta, "duel", uid, "SELECT COUNT(*) FROM duel_qatnash WHERE hafta=?", _turnir_vaqti),
             "cup": _kubok(conn, uid, hafta), "admin": uid in set(_cfg.get("admin_ids") or ()), "now": _ep(),
         }
     finally:

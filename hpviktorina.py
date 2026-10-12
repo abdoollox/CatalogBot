@@ -29,6 +29,7 @@ from aiohttp import web
 
 import hpcup
 import hpdars
+import hpgolib
 
 BOSH_HAFTA = "2026-10-12"     # birinchi viktorina shu haftada (juma 16-oktabr)
 TURNIR_KUN = 4                # juma (dushanba = 0)
@@ -277,6 +278,16 @@ def _ism(conn, uid):
     return {"uid": uid, "name": hpdars._ism(r["name"]) if r else "Sehrgar", "house": r["house"] if r else None}
 
 
+def _goliblar(conn, hafta, uid):
+    """Eng oxirgi tugagan viktorinaning birinchi uchligi (ballari bilan) - keyingisi tugaguncha sahifada turadi."""
+    r = conn.execute("SELECT hafta, soni FROM vk_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta <= ? ORDER BY hafta DESC LIMIT 1", (hafta,)).fetchone()
+    if not r:
+        return None
+    orinlar = [(x["user_id"], x["orin"]) for x in conn.execute(
+        "SELECT user_id, orin FROM vk_oyinchi WHERE hafta=? AND orin <= 3 AND togri > 0 ORDER BY orin", (r["hafta"],))]
+    return hpgolib.karta(conn, orinlar, "viktorina:%s" % r["hafta"], uid, r["soni"], _turnir_vaqti(r["hafta"]))
+
+
 def _oxirgi(conn, hafta_dan_oldin):
     """Oldingi viktorina g'olibi (sahifada ko'rsatish uchun)."""
     r = conn.execute("SELECT hafta, golib, soni FROM vk_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta < ? ORDER BY hafta DESC LIMIT 1",
@@ -304,6 +315,7 @@ def _holat(uid, lang="uz"):
             "rules": {"q": SAVOL_T, "show": NATIJA_T, "max": SAVOL_MAX, "hall": ZAL, "good": YAXSHI, "good_pts": BALL_YAXSHI,
                       "points": {str(k): v for k, v in BALL_ORIN.items()}},
             "last": _oxirgi(conn, hafta),
+            "champs": _goliblar(conn, hafta, uid),
             "me": {"in": bool(men), "alive": bool(men and men["tirik"]), "out": men["chiqdi"] if men else None,
                    "right": men["togri"] if men else 0, "place": men["orin"] if men else None},
         }

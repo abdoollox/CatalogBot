@@ -35,6 +35,7 @@ from aiohttp import web
 
 import hpcup
 import hpdars
+import hpgolib
 
 BOSH_HAFTA = "2026-10-12"     # birinchi poyga shu haftada (dushanba 12-oktabr; egasi 19-oktabrdan shu kunga ko'chirdi)
 TURNIR_KUN = 0                # dushanba
@@ -513,6 +514,16 @@ def _oxirgi(conn, hafta_dan_oldin):
     return dict(_ism(conn, r["golib"]), n=r["soni"]) if r else None
 
 
+def _goliblar(conn, hafta, uid):
+    """Eng oxirgi tugagan poyganing birinchi uchligi (ballari bilan) - keyingi poyga tugaguncha sahifada turadi."""
+    r = conn.execute("SELECT hafta, soni FROM pg_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta <= ? AND hafta NOT LIKE 'sinov:%' "
+                     "ORDER BY hafta DESC LIMIT 1", (hafta,)).fetchone()
+    if not r:
+        return None
+    orinlar = [(x["user_id"], x["orin"]) for x in conn.execute("SELECT user_id, orin FROM pg_oyinchi WHERE hafta=? AND orin <= 3 ORDER BY orin", (r["hafta"],))]
+    return hpgolib.karta(conn, orinlar, "poyga:%s" % r["hafta"], uid, r["soni"], _turnir_vaqti(r["hafta"]))
+
+
 def _ball(orin):
     return BALL_ORIN.get(orin, BALL_KEYIN if orin and orin <= BALL_KEYIN_ORIN else 0)
 
@@ -535,6 +546,7 @@ def _holat(uid):
             "rules": {"count": SANOQ, "every": HALQA, "hall": ZAL, "wait": NAZORAT_T, "next_pts": BALL_KEYIN, "next_to": BALL_KEYIN_ORIN,
                       "points": {str(k): v for k, v in BALL_ORIN.items()}},
             "last": _oxirgi(conn, hafta if not _sinov_hafta(hafta) else "9"),
+            "champs": _goliblar(conn, hafta if not _sinov_hafta(hafta) else "9", uid),
             "test": _sinov_hafta(hafta), "can_test": uid in (_cfg.get("admin_ids") or ()),
             "me": {"in": bool(men), "alive": bool(men and men["tirik"]), "out": men["chiqdi"] if men else None, "place": men["orin"] if men else None},
         }
