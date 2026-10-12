@@ -43,6 +43,7 @@ from datetime import timedelta
 from aiohttp import web
 
 import hpcup
+import hpdokon
 import hpsandiq
 
 _cfg = {}
@@ -106,6 +107,7 @@ TOP_N = 10
 
 
 def _init():
+    hpdokon._init()                              # do'kon jadvallari (jihoz/damlama) shu modulda ham ishlatiladi
     conn = hpcup._connect()
     try:
         conn.execute("CREATE TABLE IF NOT EXISTS dars_daraja ("
@@ -714,10 +716,15 @@ def _tugat(uid, dars, kun, xato):
         if sof > ENG_KOP_MS:
             conn.commit()
             return None
-        ms = max(ENG_KAM_MS, sof) + max(0, min(int(xato), 50)) * XATO_MS
+        xato = max(0, min(int(xato), 50))
+        # Do'kon: «diqqat» damlamasi birinchi xatoni kechiradi; fan jihozi har xato jarimasini kamaytiradi (hpdokon)
+        kechirildi = xato > 0 and hpdokon.damlama_ishlat(conn, uid, "diqqat")
+        jarima = hpdokon.jarima_ms(conn, uid, dars)
+        ms = max(ENG_KAM_MS, sof) + (xato - (1 if kechirildi else 0)) * jarima
+        _tugat.oxirgi = {"penalty": jarima, "forgiven": bool(kechirildi)}
         if r["ms"] is None or ms < r["ms"]:
             conn.execute("UPDATE dars_bellashuv SET ms=?, xato=?, vaqt=? WHERE kun=? AND dars=? AND user_id=?",
-                         (ms, max(0, min(int(xato), 50)), hpcup._utc_iso(hpcup.now_tk()), kun, dars, uid))
+                         (ms, xato, hpcup._utc_iso(hpcup.now_tk()), kun, dars, uid))
         conn.commit()
         return ms, (ms if r["ms"] is None else min(ms, r["ms"]))
     finally:
@@ -821,6 +828,7 @@ def _ish(uid, body):
             javob.update(ok=False, error="not_started")
             return javob
         javob["ms"], javob["best"] = r
+        javob["shop"] = getattr(_tugat, "oxirgi", None)       # jihoz/damlama ta'siri (ilova ko'rsatadi)
     javob["lessons"] = _holat(uid, kun)
     try:
         javob["kurs"] = kurs(uid)

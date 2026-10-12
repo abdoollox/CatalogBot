@@ -29,6 +29,7 @@ from aiohttp import web
 
 import hpcup
 import hpdars
+import hpdokon
 import hpgolib
 
 BOSH_HAFTA = "2026-10-12"     # birinchi viktorina shu haftada (juma 16-oktabr)
@@ -57,6 +58,7 @@ def _ep():
 
 
 def _init():
+    hpdokon._init()                              # do'kon jadvallari (jihoz/damlama) shu modulda ham ishlatiladi
     conn = hpcup._connect()
     try:
         conn.execute("CREATE TABLE IF NOT EXISTS vk_turnir (hafta TEXT PRIMARY KEY, holat TEXT NOT NULL DEFAULT 'ketmoqda', savol INTEGER NOT NULL DEFAULT 0,"
@@ -144,9 +146,14 @@ def _yur(conn, hafta, berish, now):
         if yutgan:                               # hech kim topmasa savol bekor - hamma qoladi
             for r in tiriklar:
                 if r["user_id"] not in yutgan:
+                    # Do'kon: «Feliks Felitsis» bitta xatoni kechiradi (har viktorinada bir marta)
+                    if hpdokon.damlama_ishlat(conn, r["user_id"], "feliks", "vik:%s" % hafta):
+                        conn.execute("INSERT OR IGNORE INTO dokon_ishlatildi (user_id, kod, ref, vaqt) VALUES (?,?,?,?)",
+                                     (r["user_id"], "feliks_q", "vik:%s:%d" % (hafta, n), hpcup._utc_iso(hpcup.now_tk())))
+                        continue
                     conn.execute("UPDATE vk_oyinchi SET tirik=0, chiqdi=? WHERE hafta=? AND user_id=?", (n, hafta, r["user_id"]))
         conn.execute("UPDATE vk_turnir SET savol=? WHERE hafta=?", (n + 1, hafta))
-        qoldi = len(yutgan) if yutgan else len(tiriklar)
+        qoldi = conn.execute("SELECT COUNT(*) FROM vk_oyinchi WHERE hafta=? AND tirik=1", (hafta,)).fetchone()[0]
         if qoldi <= 1 or n + 1 >= len(tartib):
             _yakunla(conn, hafta, berish, now)
         t = conn.execute("SELECT * FROM vk_turnir WHERE hafta=?", (hafta,)).fetchone()
@@ -319,6 +326,13 @@ def _holat(uid, lang="uz"):
             "me": {"in": bool(men), "alive": bool(men and men["tirik"]), "out": men["chiqdi"] if men else None,
                    "right": men["togri"] if men else 0, "place": men["orin"] if men else None},
         }
+        # «Feliks Felitsis» qaysi savolda qutqargani (ilova xabar ko'rsatadi)
+        fq = conn.execute("SELECT ref FROM dokon_ishlatildi WHERE user_id=? AND kod='feliks_q' AND ref LIKE ?", (uid, "vik:%s:%%" % hafta)).fetchone()
+        if fq:
+            try:
+                javob["me"]["saved"] = int(fq["ref"].rsplit(":", 1)[1])
+            except (ValueError, IndexError):
+                pass
         if now < T0 - ZAL:
             javob["phase"] = "kutish"
             return javob

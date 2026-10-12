@@ -53,6 +53,7 @@ from aiohttp import web
 
 import hpcup
 import hpdars
+import hpdokon
 import hpgolib
 
 TURLAR = ("hujum", "himoya", "hiyla")
@@ -96,6 +97,7 @@ def _ep(dt=None):
 
 
 def _init():
+    hpdokon._init()                              # do'kon jadvallari (jihoz/damlama) shu modulda ham ishlatiladi
     conn = hpcup._connect()
     try:
         conn.execute("CREATE TABLE IF NOT EXISTS duel_oyin ("
@@ -127,17 +129,18 @@ def _init():
         conn.close()
 
 
-def kuch(tur, acc, raqib_turi):
-    """Afsun kuchi: chizish aniqligi + ustun tur uchun qo'shimcha. Aniqlik KAM dan past - afsun chiqmadi (0)."""
+def kuch(tur, acc, raqib_turi, qosh=0):
+    """Afsun kuchi: chizish aniqligi + ustun tur uchun qo'shimcha + jihoz (do'kondagi duel qo'lqopi - `qosh`).
+    Aniqlik KAM dan past - afsun chiqmadi (0; jihoz ham yordam bermaydi)."""
     if acc < KAM:
         return 0
-    return acc + (USTUN if YENGADI[tur] == raqib_turi else 0)
+    return acc + (USTUN if YENGADI[tur] == raqib_turi else 0) + qosh
 
 
-def hal_qil(men, macc, u, uacc):
+def hal_qil(men, macc, u, uacc, mq=0, uq=0):
     """Raund natijasi: 1 - men yutdim, -1 - yutqazdim, 0 - durang. KUCHI baland yutadi (egasi, 2026-10-09:
     ilgari tur hal qilardi - bu omad o'yini edi; endi aniqlik hal qiladi, to'g'ri tur esa ustunlik beradi)."""
-    mk, uk = kuch(men, macc, u), kuch(u, uacc, men)
+    mk, uk = kuch(men, macc, u, mq), kuch(u, uacc, men, uq)
     if abs(mk - uk) < DURANG:
         return 0
     return 1 if mk > uk else -1
@@ -324,10 +327,11 @@ def _match_yur(conn, m, now, berish, rnd=random):
         ay, aa = "hujum", 0
     if not by:
         by, ba = "hujum", 0
-    w = hal_qil(ay, aa, by, ba)
+    aq, bq = hpdokon.duel_kuch(conn, m["a"]), hpdokon.duel_kuch(conn, m["b"])       # duel qo'lqopi (do'kon)
+    w = hal_qil(ay, aa, by, ba, aq, bq)
     aj, bj = m["a_jon"] - (1 if w < 0 else 0), m["b_jon"] - (1 if w > 0 else 0)
     asum, bsum = m["a_sum"] + aa, m["b_sum"] + ba
-    ox = json.dumps({"r": m["raund"], "a": [ay, aa], "b": [by, ba], "w": w})
+    ox = json.dumps({"r": m["raund"], "a": [ay, aa], "b": [by, ba], "w": w, "q": [aq, bq]})
     tugadi = aj <= 0 or bj <= 0 or m["raund"] >= RAUND_MAX
     tarix = _tarix_ol(m)
     tarix.append({"a": [ay, aa], "b": [by, ba], "w": w})
@@ -564,7 +568,9 @@ def _arena(uid, mid, tur=None, acc=0, rnd=random):
         last = None
         if ox:
             w = ox["w"] if yon == "a" else -ox["w"]
-            last = {"r": ox["r"], "mine": ox[yon][0], "acc": ox[yon][1], "his": ox[u][0], "racc": ox[u][1], "win": w}
+            q = ox.get("q") or [0, 0]                 # duel qo'lqopi qo'shgan kuch: [a, b]
+            last = {"r": ox["r"], "mine": ox[yon][0], "acc": ox[yon][1], "his": ox[u][0], "racc": ox[u][1], "win": w,
+                    "q": q[0] if yon == "a" else q[1], "rq": q[1] if yon == "a" else q[0]}
         if m["holat"] == "tugadi":
             phase = "reveal" if (m["sabab"] == "duel" and now < (m["r_bosh"] or 0)) else "over"
         elif m["holat"] == "kutmoqda":
@@ -758,7 +764,8 @@ def _yur(uid, oyin, tur, acc, rnd=random):
             return None
         daraja = int(g["daraja"])
         utur, uacc = _raqib_yurishi(daraja, g["turlar"], rnd)
-        w = hal_qil(tur, acc, utur, uacc)
+        mq = hpdokon.duel_kuch(conn, uid)             # duel qo'lqopi (do'kon)
+        w = hal_qil(tur, acc, utur, uacc, mq, 0)
         jon, rjon, raund = int(g["jon"]) - (1 if w < 0 else 0), int(g["rjon"]) - (1 if w > 0 else 0), int(g["raund"]) + 1
         acc_sum = int(g["acc_sum"]) + acc
         tugadi = jon <= 0 or rjon <= 0 or raund >= RAUND_MAX
@@ -777,7 +784,7 @@ def _yur(uid, oyin, tur, acc, rnd=random):
                       json.dumps(tarix), g["id"]))
         farq = _elo_bot(conn, uid, daraja, yutdi) if tugadi else 0
         conn.commit()
-        return {"round": {"mine": tur, "his": utur, "acc": acc, "racc": uacc, "win": w},
+        return {"round": {"mine": tur, "his": utur, "acc": acc, "racc": uacc, "win": w, "q": mq, "rq": 0},
                 "game": {"id": g["id"], "level": daraja, "lives": jon, "rlives": rjon, "round": raund,
                          "over": tugadi, "won": bool(yutdi), "score": natija, "delta": farq}}
     finally:
