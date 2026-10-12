@@ -75,7 +75,7 @@ async def amain():
     async def elon(matnlar):
         elonlar.append(matnlar["uz"][0])
         return 0
-    P.register(app, dict(cfg, xat=xat, elon=elon))
+    P.register(app, dict(cfg, xat=xat, elon=elon, admin_ids={42}))
     soat = [datetime(2026, 10, 14, 12, 0, tzinfo=TZ)]          # chorshanba; birinchi poyga - dushanba 19-oktabr 21:00
     P._now = lambda: soat[0]
     hpdars._hafta = lambda: (soat[0].date() - timedelta(days=soat[0].weekday())).strftime("%Y-%m-%d")
@@ -212,6 +212,43 @@ async def amain():
     soat[0] = datetime(2026, 11, 2, 21, 0, 10, tzinfo=TZ)
     d = await ask(7)
     check("bir kishi kelsa poyga o'tmaydi", d["phase"] == "tugadi" and d["played"] is False and ball(7) == 0)
+
+    # ---------- sinov poygasi (faqat admin): kompyuter uchuvchilar bilan, ballsiz ----------
+    db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (42,'Admin','ravenclaw','2026-10-01T00:00:00Z')")
+    soat[0] = datetime(2026, 11, 4, 12, 0, tzinfo=TZ)
+    d = await ask(1, sinov=1)
+    check("oddiy o'quvchi sinov poygasini boshlay olmaydi", "sinov_ok" not in d and not d["test"] and not d["can_test"] and d["phase"] == "kutish")
+    d = await ask(42)
+    check("adminga sinov tugmasi ko'rinadi", d["can_test"] and not d["test"])
+    d = await ask(42, sinov=1)
+    check("sinov: start chizig'i, 10 uchuvchi", d.get("sinov_ok") and d["test"] and d["phase"] == "zal" and d["total"] == 10 and 0 < d["starts_in"] <= P.SINOV_KUT)
+    check("sinov boshqalarga ko'rinmaydi", (await ask(1))["phase"] == "kutish")
+    ilgari(P.SINOV_KUT + 1)
+    d = await ask(42)
+    check("sinov: uch bosqich, birinchisi boshlandi", d["phase"] == "poyga" and d["heats"] == 3 and d["heat"]["n"] == 0 and d["me"]["alive"])
+    bosqichlar = 0
+    for _ in range(3):
+        k = d["heat"]["n"]
+        ilgari(P.SANOQ + 25)
+        d = await ask(42, heat=k, ms=25000, xato=0)
+        check("sinov: %d-bosqich natijasi qabul qilindi" % (k + 1), d.get("heat_ok") and 25000 <= d["heat"]["mine"]["ms"] <= 29000)
+        for _q in range(40):                     # qolganlar uchib bo'lguncha
+            ilgari(2)
+            d = await ask(42)
+            if d["phase"] != "poyga":
+                break
+        bosqichlar += 1
+        if d["phase"] == "tugadi":
+            break
+        men = [r for r in d["results"] if r["me"]][0]
+        check("sinov: %d-bosqichdan o'tdi, raqiblar ismli" % (k + 1), d["phase"] == "natija" and men["through"] and any(r["name"] == "Viktor" for r in d["results"]))
+        ilgari(d["next_in"])
+        d = await ask(42)
+    check("sinov: uch bosqichdan keyin tugadi, o'rin bor, ball YO'Q", bosqichlar == 3 and d["phase"] == "tugadi" and d["played"] and d["me"]["place"] in (1, 2, 3)
+          and ball(42) == 0 and len(d["top"]) == 10)
+    d = await ask(42, sinov=0)
+    check("sinov to'xtatildi: yana haqiqiy poyga holati, izlar tozalandi", d.get("sinov_ok") and not d["test"] and d["phase"] == "kutish"
+          and db("SELECT COUNT(*) FROM pg_oyinchi WHERE hafta LIKE 'sinov:%'")[0][0] == 0)
 
     print("Poyga: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)

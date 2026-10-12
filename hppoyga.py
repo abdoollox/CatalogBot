@@ -16,6 +16,10 @@ Vaqt: ilova uchish vaqtini o'zi o'lchaydi, server uni o'z soati bilan solishtira
 ko'pi bilan MUHLAT_MS ga kam bo'lishi mumkin - sanoqdagi kechikish uchun), shuning uchun internet tezligi natijaga ta'sir qilmaydi.
 
 So'rovlar - POST /api/poyga: {} holat, {join: 1|0} yozilish, {heat: n, ms, xato} bosqich natijasi.
+
+SINOV POYGASI (faqat admin; {sinov: 1} boshlaydi, {sinov: 0} to'xtatadi): haqiqiy poyganing o'zi, lekin raqiblar - SINOV_BOT ta kompyuter
+uchuvchi (manfiy id), start SINOV_KUT soniyadan keyin, ball berilmaydi, haqiqiy poygaga ta'sir qilmaydi. Hafta kaliti "sinov:<uid>:<vaqt>".
+Sinov holati xotirada (_sinov) - bot qayta ishga tushsa sinov yo'qoladi.
 """
 
 import asyncio
@@ -45,8 +49,18 @@ BALL_ORIN = {1: 30, 2: 20, 3: 10}
 BALL_FINAL = 5
 TUGASH = 3 * 3600             # boshlanganidan shuncha o'tgach keyingi haftaga yozilish ochiladi
 
+SINOV_KUT = 20                # sinov poygasi shuncha soniyadan keyin boshlanadi
+SINOV_UMR = 900               # sinov shuncha vaqtdan keyin o'zi unutiladi
+SINOV_BOT = 9                 # kompyuter uchuvchilar soni (admin bilan 10 kishi - uch bosqich)
+# (ism, fakultet, o'rtacha uchish vaqti soniyada) - tezdan sekinga
+SINOV_BOTLAR = (("Viktor", "slytherin", 23.6), ("Jinni", "gryffindor", 24.8), ("Sedrik", "hufflepuff", 26.0), ("Chjou", "ravenclaw", 27.4),
+                ("Oliver", "gryffindor", 29.0), ("Draco", "slytherin", 30.8), ("Luna", "ravenclaw", 33.0), ("Ron", "gryffindor", 36.0),
+                ("Nevill", "gryffindor", 41.0))
+BOT_UID0 = -9100              # kompyuter uchuvchilar: BOT_UID0 - i
+
 _cfg = {}
 _qulf = None
+_sinov = {}                   # uid -> {"hafta": kalit, "t0": start vaqti}
 
 
 def _now():
@@ -73,7 +87,16 @@ def _init():
         conn.close()
 
 
+def _sinov_hafta(hafta):
+    return str(hafta).startswith("sinov:")
+
+
 def _turnir_vaqti(hafta):
+    if _sinov_hafta(hafta):
+        for v in list(_sinov.values()):
+            if v["hafta"] == hafta:
+                return v["t0"]
+        return 0.0
     y, m, d = (int(x) for x in hafta.split("-"))
     return (datetime(y, m, d, SOAT, 0, 0, tzinfo=_now().tzinfo) + timedelta(days=TURNIR_KUN)).timestamp()
 
@@ -85,6 +108,67 @@ def _hafta():
         y, m, d = (int(x) for x in h.split("-"))
         h = (datetime(y, m, d) + timedelta(days=7)).strftime("%Y-%m-%d")
     return h
+
+
+def _hafta_uchun(uid):
+    """Shu odam hozir qaysi poygada: faol sinovi bo'lsa - o'sha, aks holda navbatdagi haqiqiy poyga."""
+    v = _sinov.get(int(uid))
+    if v and _ep() < v["t0"] + SINOV_UMR:
+        return v["hafta"]
+    if v:
+        _sinov.pop(int(uid), None)
+    return _hafta()
+
+
+def _sinov_bosh(uid):
+    """Admin uchun sinov poygasi: o'zi + kompyuter uchuvchilar, SINOV_KUT soniyadan keyin."""
+    uid, now = int(uid), _ep()
+    hafta = "sinov:%d:%d" % (uid, int(now))
+    conn = hpcup._connect()
+    try:
+        for j in ("pg_turnir", "pg_oyinchi", "pg_natija"):
+            conn.execute("DELETE FROM %s WHERE hafta LIKE ?" % j, ("sinov:%d:%%" % uid,))
+        conn.execute("INSERT INTO pg_oyinchi (hafta, user_id, keldi) VALUES (?,?,?)", (hafta, uid, now))
+        for i in range(SINOV_BOT):
+            conn.execute("INSERT INTO pg_oyinchi (hafta, user_id, keldi) VALUES (?,?,?)", (hafta, BOT_UID0 - i, now))
+        conn.commit()
+    finally:
+        conn.close()
+    _sinov[uid] = {"hafta": hafta, "t0": now + SINOV_KUT}
+    return True
+
+
+def _sinov_toxtat(uid):
+    v = _sinov.pop(int(uid), None)
+    if not v:
+        return False
+    conn = hpcup._connect()
+    try:
+        for j in ("pg_turnir", "pg_oyinchi", "pg_natija"):
+            conn.execute("DELETE FROM %s WHERE hafta=?" % j, (v["hafta"],))
+        conn.commit()
+    finally:
+        conn.close()
+    return True
+
+
+def _sinov_botlar(conn, hafta, now):
+    """Kompyuter uchuvchilar: har biri o'z vaqtida «marraga yetadi» (o'rtacha vaqti atrofida, bosqich va haftadan doimiy)."""
+    t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
+    if not t or t["holat"] != "ketmoqda":
+        return
+    k, start = t["bosqich"], t["bosh"] + SANOQ
+    bor = {r["user_id"] for r in conn.execute("SELECT user_id FROM pg_natija WHERE hafta=? AND bosqich=?", (hafta, k))}
+    for r in conn.execute("SELECT user_id FROM pg_oyinchi WHERE hafta=? AND tirik=1 AND user_id < 0", (hafta,)).fetchall():
+        u = r["user_id"]
+        i = BOT_UID0 - u
+        if u in bor or not 0 <= i < len(SINOV_BOTLAR):
+            continue
+        tasodif = int(hashlib.sha256(("%s|%s|%s" % (hafta, k, u)).encode()).hexdigest()[:6], 16) / float(0xFFFFFF)
+        ms = int((SINOV_BOTLAR[i][2] + k * 1.5 + (tasodif - 0.5) * 3.0) * 1000)
+        if now >= start + ms / 1000.0:
+            conn.execute("INSERT OR IGNORE INTO pg_natija (hafta, user_id, bosqich, ms, xato, vaqt) VALUES (?,?,?,?,?,?)",
+                         (hafta, u, k, ms, 0, start + ms / 1000.0))
 
 
 def _urug(hafta, bosqich):
@@ -120,7 +204,7 @@ def _yakunla(conn, hafta, t, berish, now):
     for i, u in enumerate(tartib):
         orin = i + 1
         conn.execute("UPDATE pg_oyinchi SET orin=? WHERE hafta=? AND user_id=?", (orin, hafta, u))
-        if u in final_ms:                        # ball faqat finalda uchib bo'lganlarga
+        if u in final_ms and not _sinov_hafta(hafta):   # ball faqat finalda uchib bo'lganlarga (sinovda berilmaydi)
             berish.append((u, "poyga:%s" % hafta, BALL_ORIN.get(orin, BALL_FINAL)))
     golib = tartib[0] if tartib and tartib[0] in final_ms else None
     conn.execute("UPDATE pg_turnir SET holat='tugadi', golib=?, tugadi=? WHERE hafta=?", (golib, now, hafta))
@@ -190,6 +274,12 @@ def _tick():
     try:
         _yur(conn, hafta, berish, now)
         _eslatmalar(conn, hafta, xabarlar)
+        for uid, v in list(_sinov.items()):      # sinov poygalari: kompyuter uchuvchilar va bosqichlar
+            if now >= v["t0"] + SINOV_UMR:
+                _sinov.pop(uid, None)
+                continue
+            _sinov_botlar(conn, v["hafta"], now)
+            _yur(conn, v["hafta"], [], now)
         conn.commit()
     finally:
         conn.close()
@@ -245,7 +335,7 @@ async def kuzatuvchi(interval=15):
             logging.error("Poyga kuzatuvchisi: %s", e)
         try:
             T0 = _turnir_vaqti(_hafta())
-            tez = T0 - 600 <= _ep() <= T0 + 3 * (BOSQICH_T + NATIJA_T) + 60
+            tez = T0 - 600 <= _ep() <= T0 + 3 * (BOSQICH_T + NATIJA_T) + 60 or bool(_sinov)
         except Exception:
             tez = False
         await asyncio.sleep(2 if tez else interval)
@@ -269,7 +359,7 @@ def _yozil(uid, on):
 
 def _natija_yoz(uid, bosqich, ms, xato):
     """Bosqich natijasi: faqat tirik ishtirokchi, faqat hozirgi bosqichga, bir marta. Vaqt server soati bilan tekshiriladi."""
-    uid, hafta, now = int(uid), _hafta(), _ep()
+    uid, hafta, now = int(uid), _hafta_uchun(uid), _ep()
     conn = hpcup._connect()
     try:
         t = conn.execute("SELECT * FROM pg_turnir WHERE hafta=?", (hafta,)).fetchone()
@@ -296,12 +386,15 @@ def _natija_yoz(uid, bosqich, ms, xato):
 
 
 def _ism(conn, uid):
+    if uid < 0 and 0 <= BOT_UID0 - uid < len(SINOV_BOTLAR):      # sinov poygasining kompyuter uchuvchisi
+        b = SINOV_BOTLAR[BOT_UID0 - uid]
+        return {"uid": None, "name": b[0], "house": b[1]}
     r = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name, house FROM users WHERE user_id=?", (uid,)).fetchone()
     return {"uid": uid, "name": hpdars._ism(r["name"]) if r else "Sehrgar", "house": r["house"] if r else None}
 
 
 def _oxirgi(conn, hafta_dan_oldin):
-    r = conn.execute("SELECT hafta, golib, soni FROM pg_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta < ? ORDER BY hafta DESC LIMIT 1",
+    r = conn.execute("SELECT hafta, golib, soni FROM pg_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta < ? AND hafta NOT LIKE 'sinov:%' ORDER BY hafta DESC LIMIT 1",
                      (hafta_dan_oldin,)).fetchone()
     return dict(_ism(conn, r["golib"]), n=r["soni"]) if r else None
 
@@ -326,7 +419,7 @@ def _natijalar_hamma(conn, hafta, bosqich):
 
 
 def _holat(uid):
-    uid, hafta, now = int(uid), _hafta(), _ep()
+    uid, hafta, now = int(uid), _hafta_uchun(uid), _ep()
     T0 = _turnir_vaqti(hafta)
     conn = hpcup._connect()
     try:
@@ -343,7 +436,8 @@ def _holat(uid):
                      "joined": conn.execute("SELECT 1 FROM pg_qatnash WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone() is not None},
             "rules": {"count": SANOQ, "heat": BOSQICH_T, "show": NATIJA_T, "hall": ZAL, "penalty": XATO_MS // 1000, "keep": QOLADI,
                       "final_pts": BALL_FINAL, "points": {str(k): v for k, v in BALL_ORIN.items()}},
-            "last": _oxirgi(conn, hafta),
+            "last": _oxirgi(conn, hafta if not _sinov_hafta(hafta) else "9"),
+            "test": _sinov_hafta(hafta), "can_test": uid in (_cfg.get("admin_ids") or ()),
             "me": {"in": bool(men), "alive": bool(men and men["tirik"]), "out": men["chiqdi"] if men else None, "place": men["orin"] if men else None},
         }
         if now < T0 - ZAL:
@@ -409,7 +503,12 @@ async def api_poyga(request):
         await tick()                             # avval holat hozirgi vaqtga keltiriladi
     except Exception as e:
         logging.error("Poyga tick: %s", e)
-    if body.get("join") is not None:
+    if body.get("sinov") is not None and uid in (_cfg.get("admin_ids") or ()):
+        if body.get("sinov"):
+            qosh["sinov_ok"] = await asyncio.to_thread(_sinov_bosh, uid)
+        else:
+            qosh["sinov_ok"] = await asyncio.to_thread(_sinov_toxtat, uid)
+    elif body.get("join") is not None:
         qosh["join_ok"] = await asyncio.to_thread(_yozil, uid, bool(body.get("join")))
     elif body.get("heat") is not None:
         try:
@@ -422,7 +521,7 @@ async def api_poyga(request):
             logging.error("Poyga tick: %s", e)
     javob = await asyncio.to_thread(_holat, uid)
     javob.update(qosh)
-    if javob.get("phase") == "tugadi" and javob["me"].get("place") and _cfg.get("log") and body.get("log_end"):
+    if javob.get("phase") == "tugadi" and javob["me"].get("place") and _cfg.get("log") and body.get("log_end") and not javob.get("test"):
         try:
             await _cfg["log"](user, "poyga_%d" % javob["me"]["place"])
         except Exception:
@@ -431,7 +530,7 @@ async def api_poyga(request):
 
 
 def register(app, cfg):
-    """cfg: verify_init_data, cors, log, xat, elon. hpdars DAN KEYIN ulanadi."""
+    """cfg: verify_init_data, cors, log, xat, elon, admin_ids. hpdars DAN KEYIN ulanadi."""
     global _qulf
     _cfg.update(cfg)
     _qulf = asyncio.Lock()

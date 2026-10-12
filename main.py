@@ -2643,7 +2643,7 @@ async def main():
                                    "elon": hppochta.saralanganlarga_tarqat})
         asyncio.create_task(hpviktorina.kuzatuvchi())
         hppoyga.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
-                               "elon": hppochta.saralanganlarga_tarqat})
+                               "elon": hppochta.saralanganlarga_tarqat, "admin_ids": ADMIN_IDS})
         asyncio.create_task(hppoyga.kuzatuvchi())
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
     except Exception as qoriq_error:
