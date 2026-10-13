@@ -17,6 +17,9 @@ from aiohttp import web
 import hpcup
 
 YOQIQ = True                   # egasi 2026-10-12 da tasdiqladi: variantlar 20/21/22, 18-oktabrgacha, faqat bosh sahifada (xabar yuborilmaydi)
+# 2026-10-13: egasi so'rovnomani yopdi. NATIJA (18 ovoz): 20:00 - 4, 21:00 - 3, 22:00 - 11 -> hamma turnirlar 22:00 ga ko'chirildi.
+# Yangi so'rovnoma uchun: SOROV ni almashtiring (yangi id) va YOPILDI = False qiling.
+YOPILDI = True
 SOROV = {
     "id": "turnir-vaqti-1",
     "tugaydi": "2026-10-18T23:59:00+05:00",
@@ -59,6 +62,8 @@ def _ovoz(uid, variant):
 
 
 def _holat(uid, admin):
+    if YOPILDI:                                  # so'rovnoma yakunlangan - hech kimga ko'rinmaydi
+        return {"ok": True, "on": False}
     if not YOQIQ and not admin:
         return {"ok": True, "on": False}
     conn = hpcup._connect()
@@ -93,7 +98,7 @@ async def api_sorov(request):
         return cors(web.json_response({"ok": False, "error": "no_house"}))
     admin = uid in (_cfg.get("admin_ids") or ())
     qosh = {}
-    if body.get("vote") is not None and (YOQIQ or admin):
+    if body.get("vote") is not None and (YOQIQ or admin) and not YOPILDI:
         qosh["vote_ok"] = await asyncio.to_thread(_ovoz, uid, str(body.get("vote")))
         if qosh["vote_ok"] and _cfg.get("log"):
             try:

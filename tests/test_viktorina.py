@@ -28,6 +28,7 @@ sheets.read_csv = _none
 sys.modules["sheets"] = sheets
 
 import hpcup, hpdars, hpviktorina as V   # noqa: E402
+V.SOAT = 21                                  # sinovlar shu soatga yozilgan (jonlida 22:00)
 
 TZ = timezone(timedelta(hours=5))
 ok = fail = 0

@@ -1,4 +1,4 @@
-"""Supurgi poygasi (egasi, 2026-10-12) - to'rtinchi haftalik turnir: DUSHANBA 21:00 (Toshkent).
+"""Supurgi poygasi (egasi, 2026-10-12) - to'rtinchi haftalik turnir: DUSHANBA 22:00 (Toshkent).
 
 BITTA UZLUKSIZ POYGA (egasi 2026-10-12 da bosqichli variantni rad etdi): hamma bir vaqtda BIR XIL yo'lda uchadi
 (Uchish darsi o'yini, «aniqlik = tezlik» qoidasi). Har HALQA (10) ta halqada NAZORAT chizig'i: unga ENG OXIRIDA yetgan
@@ -39,7 +39,7 @@ import hpgolib
 
 BOSH_HAFTA = "2026-10-12"     # birinchi poyga shu haftada (dushanba 12-oktabr; egasi 19-oktabrdan shu kunga ko'chirdi)
 TURNIR_KUN = 0                # dushanba
-SOAT = 21
+SOAT = 22
 ZAL = 120                     # boshlanishidan shuncha soniya oldin «zal» ochiladi (kelganlar sanaladi)
 SANOQ = 6                     # poyga ochilgach uchishgacha sanoq
 HALQA = 10                    # har shuncha halqada bitta uchuvchi chiqadi
@@ -397,16 +397,16 @@ def _tick():
 
 def xat_matni(tur):
     if tur == "elon":
-        return {"uz": ("Bugun 21:00 da birinchi supurgi poygasi!", "Hamma bir vaqtda bir xil yo'lda uchadi: halqalarning o'rtasidan o'tgan tezlashadi. Har 10 halqada eng oxirgi uchuvchi poygani tark etadi — oxirida qolgan g'olib. Soat 21:00 da ilovada Xogvarts → Poyga sahifasida bo'ling. G'olibga +30 ball. Hozirdan mashq qilsangiz bo'ladi."),
-                "ru": ("Сегодня в 21:00 первая гонка на мётлах!", "Все летят одновременно по одной трассе: кто точнее проходит кольца — тот быстрее. Каждые 10 колец последний пилот выбывает — побеждает тот, кто останется. В 21:00 будьте в приложении: Хогвартс → Гонка. Победителю +30 очков. Потренироваться можно уже сейчас."),
-                "en": ("The first broom race is today at 21:00!", "Everyone flies the same course at once: pass the hoops dead centre to go faster. Every 10 hoops the last flyer drops out — the last one left wins. Be in the app at 21:00: Hogwarts → Race. +30 points for the winner. You can practise right now.")}
+        return {"uz": ("Bugun 22:00 da birinchi supurgi poygasi!", "Hamma bir vaqtda bir xil yo'lda uchadi: halqalarning o'rtasidan o'tgan tezlashadi. Har 10 halqada eng oxirgi uchuvchi poygani tark etadi — oxirida qolgan g'olib. Soat 22:00 da ilovada Xogvarts → Poyga sahifasida bo'ling. G'olibga +30 ball. Hozirdan mashq qilsangiz bo'ladi."),
+                "ru": ("Сегодня в 22:00 первая гонка на мётлах!", "Все летят одновременно по одной трассе: кто точнее проходит кольца — тот быстрее. Каждые 10 колец последний пилот выбывает — побеждает тот, кто останется. В 22:00 будьте в приложении: Хогвартс → Гонка. Победителю +30 очков. Потренироваться можно уже сейчас."),
+                "en": ("The first broom race is today at 22:00!", "Everyone flies the same course at once: pass the hoops dead centre to go faster. Every 10 hoops the last flyer drops out — the last one left wins. Be in the app at 22:00: Hogwarts → Race. +30 points for the winner. You can practise right now.")}
     if tur == "ertalab":
-        return {"uz": ("Bugun 21:00 da supurgi poygasi", "Poyga bugun soat 21:00 da. Ilovaga kiring: Xogvarts → Poyga. Kechikkanlar faqat tomosha qiladi. Hozircha mashq qilib oling."),
-                "ru": ("Сегодня в 21:00 гонка на мётлах", "Гонка сегодня в 21:00. Зайдите: Хогвартс → Гонка. Опоздавшие только смотрят. А пока — потренируйтесь."),
-                "en": ("The broom race is today at 21:00", "The race is today at 21:00. Come in: Hogwarts → Race. Latecomers can only watch. Meanwhile, practise.")}
-    return {"uz": ("Poygaga 10 daqiqa qoldi!", "Supurgi poygasi 21:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Poyga."),
-            "ru": ("До гонки 10 минут!", "Гонка на мётлах начнётся в 21:00. Зайдите прямо сейчас: Хогвартс → Гонка."),
-            "en": ("10 minutes to the race!", "The broom race starts at 21:00. Come in now: Hogwarts → Race.")}
+        return {"uz": ("Bugun 22:00 da supurgi poygasi", "Poyga bugun soat 22:00 da. Ilovaga kiring: Xogvarts → Poyga. Kechikkanlar faqat tomosha qiladi. Hozircha mashq qilib oling."),
+                "ru": ("Сегодня в 22:00 гонка на мётлах", "Гонка сегодня в 22:00. Зайдите: Хогвартс → Гонка. Опоздавшие только смотрят. А пока — потренируйтесь."),
+                "en": ("The broom race is today at 22:00", "The race is today at 22:00. Come in: Hogwarts → Race. Latecomers can only watch. Meanwhile, practise.")}
+    return {"uz": ("Poygaga 10 daqiqa qoldi!", "Supurgi poygasi 22:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Poyga."),
+            "ru": ("До гонки 10 минут!", "Гонка на мётлах начнётся в 22:00. Зайдите прямо сейчас: Хогвартс → Гонка."),
+            "en": ("10 minutes to the race!", "The broom race starts at 22:00. Come in now: Hogwarts → Race.")}
 
 
 async def _elon_yubor():

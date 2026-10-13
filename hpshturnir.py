@@ -1,6 +1,6 @@
 """Shaxmat turniri — duel turniri bilan bir xil mexanizm (egasi, 2026-10-11).
 
-Haftada bir marta, CHORSHANBA 21:00 (Toshkent), bir oqshomda tugaydi:
+Haftada bir marta, CHORSHANBA 22:00 (Toshkent), bir oqshomda tugaydi:
   - saralash yo'q: «Qatnashaman» tugmasini bosgan har bir saralangan o'quvchi o'ynaydi;
     yozilish turnirdan YOPILISH soniya oldin yopiladi va to'r tuziladi;
   - istalgan sondagi ishtirokchi: to'r eng yaqin 2 ning darajasiga to'ldiriladi, shaxmat reytingi
@@ -32,7 +32,7 @@ import hpgolib
 
 BOSH_HAFTA = "2026-10-12"     # birinchi turnir shu haftada (chorshanba 14-oktabr)
 TURNIR_KUN = 2                # chorshanba (dushanba = 0)
-SOAT = 21
+SOAT = 22
 YOPILISH = 300                # yozilish turnirdan shuncha soniya oldin yopiladi
 ORALIQ = 60                   # ikkala raqib aniqlangach o'yin shuncha soniyadan keyin boshlanadi
 TUGASH = 3 * 3600             # turnir boshlanganidan shuncha o'tgach keyingi haftaga yozilish ochiladi
@@ -230,16 +230,16 @@ def _oyin_yoz(mid, gid):
 
 def xat_matni(tur):
     if tur == "elon":
-        return {"uz": ("Bugun 21:00 da birinchi shaxmat turniri!", "Xogvartsda birinchi shaxmat turniri bugun soat 21:00 da o'tadi. Qatnashish uchun ilovada Xogvarts → Shaxmat sahifasiga kiring va «Qatnashaman» tugmasini bosing. Har o'yinchiga 5 daqiqa, g'alabalar fakultetingizga ball olib keladi. Yozilish 20:55 da yopiladi."),
-                "ru": ("Сегодня в 21:00 первый шахматный турнир!", "Первый шахматный турнир Хогвартса пройдёт сегодня в 21:00 (время Ташкента). Чтобы участвовать, откройте Хогвартс → Шахматы и нажмите «Участвую». Каждому игроку 5 минут, победы приносят очки факультету. Запись закрывается в 20:55."),
-                "en": ("The first chess tournament is today at 21:00!", "Hogwarts holds its first chess tournament today at 21:00 (Tashkent time). To take part, open Hogwarts → Chess in the app and tap “I'm in”. Each player has 5 minutes and wins earn points for your House. Sign-up closes at 20:55.")}
+        return {"uz": ("Bugun 22:00 da birinchi shaxmat turniri!", "Xogvartsda birinchi shaxmat turniri bugun soat 22:00 da o'tadi. Qatnashish uchun ilovada Xogvarts → Shaxmat sahifasiga kiring va «Qatnashaman» tugmasini bosing. Har o'yinchiga 5 daqiqa, g'alabalar fakultetingizga ball olib keladi. Yozilish 20:55 da yopiladi."),
+                "ru": ("Сегодня в 22:00 первый шахматный турнир!", "Первый шахматный турнир Хогвартса пройдёт сегодня в 22:00 (время Ташкента). Чтобы участвовать, откройте Хогвартс → Шахматы и нажмите «Участвую». Каждому игроку 5 минут, победы приносят очки факультету. Запись закрывается в 20:55."),
+                "en": ("The first chess tournament is today at 22:00!", "Hogwarts holds its first chess tournament today at 22:00 (Tashkent time). To take part, open Hogwarts → Chess in the app and tap “I'm in”. Each player has 5 minutes and wins earn points for your House. Sign-up closes at 20:55.")}
     if tur == "ertalab":
-        return {"uz": ("Bugun 21:00 da shaxmat turniri", "Siz turnirga yozilgansiz. Soat 21:00 da ilovaga kiring: Xogvarts → Shaxmat. Birinchi yurishini 1 daqiqada qilmagan o'yinchi yutqazadi."),
-                "ru": ("Сегодня в 21:00 шахматный турнир", "Вы записаны на турнир. Зайдите в 21:00: Хогвартс → Шахматы. Кто не сделает первый ход за 1 минуту — проигрывает."),
-                "en": ("The chess tournament is today at 21:00", "You are signed up. Come in at 21:00: Hogwarts → Chess. Anyone who does not make their first move within a minute loses.")}
-    return {"uz": ("Turnirga 10 daqiqa qoldi!", "Shaxmat turniri 21:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Shaxmat."),
-            "ru": ("До турнира 10 минут!", "Шахматный турнир начнётся в 21:00. Зайдите прямо сейчас: Хогвартс → Шахматы."),
-            "en": ("10 minutes to the tournament!", "The chess tournament starts at 21:00. Come in now: Hogwarts → Chess.")}
+        return {"uz": ("Bugun 22:00 da shaxmat turniri", "Siz turnirga yozilgansiz. Soat 22:00 da ilovaga kiring: Xogvarts → Shaxmat. Birinchi yurishini 1 daqiqada qilmagan o'yinchi yutqazadi."),
+                "ru": ("Сегодня в 22:00 шахматный турнир", "Вы записаны на турнир. Зайдите в 22:00: Хогвартс → Шахматы. Кто не сделает первый ход за 1 минуту — проигрывает."),
+                "en": ("The chess tournament is today at 22:00", "You are signed up. Come in at 22:00: Hogwarts → Chess. Anyone who does not make their first move within a minute loses.")}
+    return {"uz": ("Turnirga 10 daqiqa qoldi!", "Shaxmat turniri 22:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Shaxmat."),
+            "ru": ("До турнира 10 минут!", "Шахматный турнир начнётся в 22:00. Зайдите прямо сейчас: Хогвартс → Шахматы."),
+            "en": ("10 minutes to the tournament!", "The chess tournament starts at 22:00. Come in now: Hogwarts → Chess.")}
 
 
 _qulf = asyncio.Lock() if hasattr(asyncio, "Lock") else None

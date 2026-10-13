@@ -8,13 +8,13 @@ har kim o'z vaqtida o'ynaydigan duel YOQMADI - qayta taklif qilmang). Ball: pley
 yarim final +15, final +20, g'olib +30 - SHU HAFTA kubogiga tushishi shart (keyingi haftaga o'tmasin).
 
 PLEY-OFF (2-bosqich): payshanba 00:00 dan keyin birinchi so'rovda TO'R tuziladi (saralash jadvalining eng yaxshi
-16 / 8 / 4 / 2 tasi; 1-o'rin oxirgisi bilan). Har bosqich o'z kunida soat 21:00 da (Toshkent): 16 - payshanba,
+16 / 8 / 4 / 2 tasi; 1-o'rin oxirgisi bilan). Har bosqich o'z kunida soat 22:00 da (Toshkent): 16 - payshanba,
 8 - juma, 4 - shanba, 2 - yakshanba. Duelchi «arena»ga kiradi ({arena: id} - har 1,5 soniyada so'raydi); ikkalasi
 kelgach duel boshlanadi; 5 daqiqa ichida kelmagan yutqazadi (ikkalasi kelmasa - saralashda yuqori turgani o'tadi).
 Raund: 30 soniya ichida tur + aniqlik yuboriladi ({arena, move, acc}); yubormagan - «afsun chiqmadi». Holat DANGASA
 hisoblanadi (har so'rovda va 15 soniyada bir fon aylanasi - `kuzatuvchi`). BALL: to'rga kirganga +5; g'alaba uchun
 1/8 da +10, chorakda +15, yarim finalda +20, finalda +30 ('dars' manbasi, ref duel:<hafta>:<bosqich>) - darhol,
-ya'ni SHU hafta kubogiga. ESLATMA: o'sha kuni 10:00 da va duelga 10 daqiqa qolganda (20:50) - boyo'g'li + bot.
+ya'ni SHU hafta kubogiga. ESLATMA: o'sha kuni 10:00 da va duelga 10 daqiqa qolganda (21:50) - boyo'g'li + bot.
 Sinov: admin {sinov: 1} - kompyuter raqib bilan arena (ballsiz), jonli oqimni tekshirish uchun.
 
 QOIDA: har duelchida 5 jon (JON). Har raundda ikkalasi bir vaqtda tur tanlaydi - hujum / himoya / hiyla - va afsunni
@@ -23,7 +23,7 @@ himoya hujumdan ustun). Kuchi baland yutadi (farq 5 dan kam - durang). Aniqlik 3
 Yutqazgan 1 jon yo'qotadi. Ya'ni yaxshi chizgan odam noqulay turda ham yuta oladi - mahorat omaddan muhimroq.
 
 YANGI FORMAT (egasi, 2026-10-10) - yuqoridagi «saralash + 4 kunlik pley-off» o'rniga:
-  SARALASH YO'Q, 16 CHEGARASI YO'Q. Turnir HAFTADA BIR MARTA, BIR OQSHOMDA: TURNIR_KUN (yakshanba) soat 21:00 da boshlanib,
+  SARALASH YO'Q, 16 CHEGARASI YO'Q. Turnir HAFTADA BIR MARTA, BIR OQSHOMDA: TURNIR_KUN (yakshanba) soat 22:00 da boshlanib,
   g'olib shu kuni aniqlanadi. Qatnashish - «Qatnashaman» tugmasi ({join: 1}), yozilish turnirdan YOPILISH (5 daqiqa) oldin yopiladi.
   ISTALGAN SONDAGI ishtirokchi: to'r eng yaqin 2 ning darajasiga to'ldiriladi, REYTINGI yuqorilar birinchi bosqichni
   o'tkazib yuboradi («bye» - futbol kubogidagi kabi), pastdagilar dastlabki bosqichda o'ynaydi. Har duelga eng ko'pi MATCH_T
@@ -69,7 +69,7 @@ TOP = 16
 
 PLEYOFF_DAN = "2026-10-05"     # shu haftadan (dushanba sanasi) boshlab turnir o'tkaziladi
 TURNIR_KUN = 6                 # haftaning kuni (0 - dushanba): yakshanba. Kelajakda har kunga alohida turnir bo'lishi mumkin
-SOAT = 21                      # turnir boshlanadigan soat (Toshkent)
+SOAT = 22                      # turnir boshlanadigan soat (Toshkent)
 MATCH_T = 300                  # bitta duelga eng ko'p vaqt (s)
 ORALIQ = 60                    # bosqichlar orasidagi tanaffus (s)
 YOPILISH = 300                 # yozilish turnirdan shuncha oldin yopiladi va to'r tuziladi
@@ -387,12 +387,12 @@ def _tick():
 def xat_matni(tur, bosqich=0):
     """{til: (sarlavha, matn)} - duel turniri xatlari (yozilganlarga)."""
     if tur == "ertalab":
-        return {"uz": ("Bugun 21:00 da duel turniri", "Siz turnirga yozilgansiz. Soat 21:00 da ilovaga kiring: Xogvarts → Duel. Turnir bir oqshomda tugaydi; 1 daqiqa ichida kelmagan duelchi yutqazadi."),
-                "ru": ("Сегодня в 21:00 дуэльный турнир", "Вы записаны на турнир. Зайдите в 21:00: Хогвартс → Дуэль. Турнир проходит за один вечер; кто не придёт в течение минуты — проигрывает."),
-                "en": ("The duelling tournament is today at 21:00", "You are signed up. Come in at 21:00: Hogwarts → Duel. The tournament is played in one evening; anyone who is a minute late loses.")}
-    return {"uz": ("Turnirga 10 daqiqa qoldi!", "Duel turniri 21:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Duel."),
-            "ru": ("До турнира 10 минут!", "Дуэльный турнир начнётся в 21:00. Зайдите прямо сейчас: Хогвартс → Дуэль."),
-            "en": ("10 minutes to the tournament!", "The duelling tournament starts at 21:00. Come in now: Hogwarts → Duel.")}
+        return {"uz": ("Bugun 22:00 da duel turniri", "Siz turnirga yozilgansiz. Soat 22:00 da ilovaga kiring: Xogvarts → Duel. Turnir bir oqshomda tugaydi; 1 daqiqa ichida kelmagan duelchi yutqazadi."),
+                "ru": ("Сегодня в 22:00 дуэльный турнир", "Вы записаны на турнир. Зайдите в 22:00: Хогвартс → Дуэль. Турнир проходит за один вечер; кто не придёт в течение минуты — проигрывает."),
+                "en": ("The duelling tournament is today at 22:00", "You are signed up. Come in at 22:00: Hogwarts → Duel. The tournament is played in one evening; anyone who is a minute late loses.")}
+    return {"uz": ("Turnirga 10 daqiqa qoldi!", "Duel turniri 22:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Duel."),
+            "ru": ("До турнира 10 минут!", "Дуэльный турнир начнётся в 22:00. Зайдите прямо сейчас: Хогвартс → Дуэль."),
+            "en": ("10 minutes to the tournament!", "The duelling tournament starts at 22:00. Come in now: Hogwarts → Duel.")}
 
 
 async def tick():

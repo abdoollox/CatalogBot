@@ -27,6 +27,7 @@ sheets.read_csv = _none
 sys.modules["sheets"] = sheets
 
 import hpcup, hpdars, hpduel   # noqa: E402
+hpduel.SOAT = 21                                  # sinovlar shu soatga yozilgan (jonlida 22:00)
 
 ok = fail = 0
 def check(name, cond):
@@ -204,7 +205,7 @@ async def amain():
     check("turnirdan oldin: to'r yo'q, ball yo'q", d["cup"]["size"] is None and ball(11) == 0)
     vaqt(18, 10, 5)
     await hpduel.tick(); await hpduel.tick()
-    check("turnir kuni 10:00: yozilgan 9 kishiga eslatma, bir marta", len(xatlar) == 9 and "21:00" in xatlar[0][1])
+    check("turnir kuni 10:00: yozilgan 9 kishiga eslatma, bir marta", len(xatlar) == 9 and "22:00" in xatlar[0][1])      # xat matnida jonli soat (22:00)
     vaqt(18, 20, 51); await hpduel.tick(); await hpduel.tick()
     check("10 daqiqa qolganda yana eslatma", len(xatlar) == 18 and "10 daqiqa" in xatlar[-1][1])
     st, d = await ask(11)

@@ -1,6 +1,6 @@
 """Jonli viktorina «Oxirgi sehrgar» (egasi, 2026-10-11) - uchinchi haftalik turnir.
 
-Haftada bir marta, JUMA 21:00 (Toshkent). Hamma bir vaqtda BITTA savolga javob beradi:
+Haftada bir marta, JUMA 22:00 (Toshkent). Hamma bir vaqtda BITTA savolga javob beradi:
   - savolga SAVOL_T soniya; xato javob bergan yoki javob bermagan CHIQIB KETADI;
   - keyin NATIJA_T soniya to'g'ri javob va zalda nechta sehrgar qolgani ko'rsatiladi; so'ng keyingi savol;
   - oxirida BITTA sehrgar qolsa - u g'olib. Savolda qolganlarning HAMMASI xato qilsa, hech kim chiqmaydi
@@ -34,7 +34,7 @@ import hpgolib
 
 BOSH_HAFTA = "2026-10-12"     # birinchi viktorina shu haftada (juma 16-oktabr)
 TURNIR_KUN = 4                # juma (dushanba = 0)
-SOAT = 21
+SOAT = 22
 ZAL = 120                     # boshlanishidan shuncha soniya oldin «zal» ochiladi (kelganlar sanaladi)
 SAVOL_T = 15                  # savolga javob vaqti
 NATIJA_T = 7                  # to'g'ri javob ko'rsatiladigan vaqt
@@ -191,16 +191,16 @@ def _tick():
 
 def xat_matni(tur):
     if tur == "elon":
-        return {"uz": ("Bugun 21:00 da birinchi viktorina — «Oxirgi sehrgar»!", "Hamma bir vaqtda bitta savolga javob beradi, xato qilgan chiqib ketadi — oxirida qolgan g'olib. Soat 21:00 da ilovada Xogvarts → Viktorina sahifasida bo'ling. G'olibga +30 ball."),
-                "ru": ("Сегодня в 21:00 первая викторина — «Последний волшебник»!", "Все одновременно отвечают на один вопрос, ошибся — выбыл; побеждает тот, кто останется последним. В 21:00 будьте в приложении: Хогвартс → Викторина. Победителю +30 очков."),
-                "en": ("The first quiz is today at 21:00 — “The Last Wizard”!", "Everyone answers the same question at once; one mistake and you are out — the last one standing wins. Be in the app at 21:00: Hogwarts → Quiz. +30 points for the winner.")}
+        return {"uz": ("Bugun 22:00 da birinchi viktorina — «Oxirgi sehrgar»!", "Hamma bir vaqtda bitta savolga javob beradi, xato qilgan chiqib ketadi — oxirida qolgan g'olib. Soat 22:00 da ilovada Xogvarts → Viktorina sahifasida bo'ling. G'olibga +30 ball."),
+                "ru": ("Сегодня в 22:00 первая викторина — «Последний волшебник»!", "Все одновременно отвечают на один вопрос, ошибся — выбыл; побеждает тот, кто останется последним. В 22:00 будьте в приложении: Хогвартс → Викторина. Победителю +30 очков."),
+                "en": ("The first quiz is today at 22:00 — “The Last Wizard”!", "Everyone answers the same question at once; one mistake and you are out — the last one standing wins. Be in the app at 22:00: Hogwarts → Quiz. +30 points for the winner.")}
     if tur == "ertalab":
-        return {"uz": ("Bugun 21:00 da viktorina", "«Oxirgi sehrgar» bugun soat 21:00 da. Ilovaga kiring: Xogvarts → Viktorina. Kechikkanlar faqat tomosha qiladi."),
-                "ru": ("Сегодня в 21:00 викторина", "«Последний волшебник» сегодня в 21:00. Зайдите: Хогвартс → Викторина. Опоздавшие только смотрят."),
-                "en": ("The quiz is today at 21:00", "“The Last Wizard” is today at 21:00. Come in: Hogwarts → Quiz. Latecomers can only watch.")}
-    return {"uz": ("Viktorinaga 10 daqiqa qoldi!", "«Oxirgi sehrgar» 21:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Viktorina."),
-            "ru": ("До викторины 10 минут!", "«Последний волшебник» начнётся в 21:00. Зайдите прямо сейчас: Хогвартс → Викторина."),
-            "en": ("10 minutes to the quiz!", "“The Last Wizard” starts at 21:00. Come in now: Hogwarts → Quiz.")}
+        return {"uz": ("Bugun 22:00 da viktorina", "«Oxirgi sehrgar» bugun soat 22:00 da. Ilovaga kiring: Xogvarts → Viktorina. Kechikkanlar faqat tomosha qiladi."),
+                "ru": ("Сегодня в 22:00 викторина", "«Последний волшебник» сегодня в 22:00. Зайдите: Хогвартс → Викторина. Опоздавшие только смотрят."),
+                "en": ("The quiz is today at 22:00", "“The Last Wizard” is today at 22:00. Come in: Hogwarts → Quiz. Latecomers can only watch.")}
+    return {"uz": ("Viktorinaga 10 daqiqa qoldi!", "«Oxirgi sehrgar» 22:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Viktorina."),
+            "ru": ("До викторины 10 минут!", "«Последний волшебник» начнётся в 22:00. Зайдите прямо сейчас: Хогвартс → Викторина."),
+            "en": ("10 minutes to the quiz!", "“The Last Wizard” starts at 22:00. Come in now: Hogwarts → Quiz.")}
 
 
 async def _elon_yubor():

@@ -28,6 +28,7 @@ sheets.read_csv = _none
 sys.modules["sheets"] = sheets
 
 import hpcup, hpdars, hpsorov as P   # noqa: E402
+P.YOPILDI = False                             # sinovlar ochiq so'rovnoma uchun (jonlida yopilgan)
 
 TZ = timezone(timedelta(hours=5))
 ok = fail = 0
@@ -97,6 +98,10 @@ async def amain():
     d = await ask(2, vote="20")
     check("muddat tugagach ovoz qabul qilinmaydi, natija hammaga ko'rinadi", d["vote_ok"] is False and not d["open"] and d["mine"] == "21"
           and (await ask(42))["total"] == 3)
+
+    P.YOPILDI = True
+    d = await ask(42)
+    check("yopilgan so'rovnoma hech kimga ko'rinmaydi (adminga ham) va ovoz olinmaydi", d["on"] is False and "vote_ok" not in (await ask(1, vote="20")))
 
     print("So'rovnoma: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
