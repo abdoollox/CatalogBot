@@ -50,6 +50,7 @@ import hppoyga
 import hpsorov
 import hpdokon
 import hptosh
+import hpmjang
 import hpnishon
 import hppatronus
 import hpsandiq
@@ -2055,14 +2056,24 @@ TAKLIF_T = {
         "en": {"title": "Gobstones", "call": "<b>%s</b> challenges you to a game of Gobstones!", "how": "Knock the stones out of the ring with your own — whoever knocks out more wins.",
                "free": "A friendly game — the loser gets squirted with stinky liquid", "tap": "Tap the button below — the game opens right away.", "btn": "Join the game",
                "desc": "Challenge your friend to Gobstones"}},
+    "mjang": {
+        "uz": {"title": "Maxluqlar jangi", "call": "<b>%s</b> sizni Maxluqlar jangiga chaqirmoqda!", "how": "Har raundda bitta maxluq kartasini chiqarasiz — kim kuchli bo'lsa, raund o'shaniki. 3 raund yutgan g'olib.",
+               "free": "Do'stona jang — maxluqingiz bo'lmasa ham maktab kartalari beriladi", "tap": "Pastdagi tugmani bosing — jang darhol ochiladi.", "btn": "Jangga kirish",
+               "desc": "Do'stingizni Maxluqlar jangiga chaqiring"},
+        "ru": {"title": "Битва существ", "call": "<b>%s</b> зовёт вас на Битву существ!", "how": "В каждом раунде вы выкладываете карту существа — сильнейшая берёт раунд. Кто выиграл 3 раунда, тот победил.",
+               "free": "Дружеская битва — нет существ? Дадим школьные карты", "tap": "Нажмите кнопку ниже — битва откроется сразу.", "btn": "В бой",
+               "desc": "Позовите друга на Битву существ"},
+        "en": {"title": "Creature Battle", "call": "<b>%s</b> challenges you to a Creature Battle!", "how": "Each round you play one creature card — the stronger one takes the round. First to 3 rounds wins.",
+               "free": "A friendly battle — no creatures yet? You get school cards", "tap": "Tap the button below — the battle opens right away.", "btn": "Join the battle",
+               "desc": "Challenge your friend to a Creature Battle"}},
 }
-TAKLIF_QUERY = re.compile(r"^(duel|tosh)_(\d{1,10})$")
-TAKLIF_EMOJI = {"duel": "⚡", "tosh": "🔮"}
+TAKLIF_QUERY = re.compile(r"^(duel|tosh|mjang)_(\d{1,10})$")
+TAKLIF_EMOJI = {"duel": "⚡", "tosh": "🔮", "mjang": "🐉"}
 
 
 def taklif_info(tur, mid):
     try:
-        return (hpduel if tur == "duel" else hptosh).taklif_info(int(mid))
+        return {"duel": hpduel, "tosh": hptosh, "mjang": hpmjang}[tur].taklif_info(int(mid))
     except Exception as e:
         logging.error("Taklif ma'lumoti olinmadi (%s %s): %s", tur, mid, e)
         return None
@@ -2798,6 +2809,9 @@ async def main():
         hpdokon.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpsorov.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS})
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
+        hpmjang.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
+                               "elon": hppochta.saralanganlarga_tarqat, "admin_ids": ADMIN_IDS})
+        asyncio.create_task(hpmjang.kuzatuvchi())
     except Exception as qoriq_error:
         logging.error("Qo'riqxona moduli ishga tushmadi: %s", qoriq_error)
 

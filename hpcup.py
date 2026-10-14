@@ -3017,6 +3017,8 @@ async def test_reset(user_id, bosqich=None):
                     "DELETE FROM dokon_damlama WHERE user_id=?",
                     "DELETE FROM dokon_ishlatildi WHERE user_id=?",
                     "DELETE FROM tosh_qatnash WHERE user_id=?",
+                    "DELETE FROM mj_qatnash WHERE user_id=?",
+                    "DELETE FROM mj_toplam WHERE user_id=?",
                     "DELETE FROM pochta WHERE user_id=?",
                     "UPDATE users SET invited_by=NULL, ref_awarded_at=NULL WHERE invited_by=?",
                     "DELETE FROM users WHERE user_id=?"):
