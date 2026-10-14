@@ -50,7 +50,7 @@ BOSQICH_BALL = {16: 5, 8: 10, 4: 20, 2: 30}
 
 QOL = 5                       # har kimga karta
 YUTISH = 3                    # shuncha raund yutgan - g'olib
-RAUND_T = 20                  # har tanlovga
+RAUND_T = 30                  # har tanlovga (egasi 2026-10-14 sinab ko'rdi: 20 soniya o'ylashga yetmadi - karta o'zi qo'yilib qolardi)
 PAUZA = 4.5                   # raund natijasi ko'rsatiladi, keyin keyingi raund
 BOSH_KUT = 3                  # o'yin boshlanishidan oldin
 KELMADI_SKIP = 2
@@ -486,9 +486,9 @@ def xat_matni(tur):
                 "ru": ("Сегодня в 22:00 первая Битва существ!", "Ваши существа из заповедника выходят на бой в виде карточек: в каждом раунде одна карта, побеждает сильнейшая. У кого нет существ — получат школьные карты. В приложении: Хогвартс → Битва существ. Потренируйтесь и нажмите «Участвую». Победителю +30 очков."),
                 "en": ("The first Creature Battle is today at 22:00!", "Your creatures from the sanctuary now fight as cards: one card per round, the stronger one wins. No creatures yet? You get school cards. In the app: Hogwarts → Creature Battle. Practise and tap “I'm in”. +30 points for the winner.")}
     if tur == "ertalab":
-        return {"uz": ("Bugun 22:00 da Maxluqlar jangi", "Siz turnirga yozilgansiz. Soat 22:00 da ilovaga kiring: Xogvarts → Maxluqlar jangi. Har raundda 20 soniyada karta tanlang."),
-                "ru": ("Сегодня в 22:00 Битва существ", "Вы записаны. Зайдите в 22:00: Хогвартс → Битва существ. В каждом раунде выберите карту за 20 секунд."),
-                "en": ("The Creature Battle is today at 22:00", "You are signed up. Come in at 22:00: Hogwarts → Creature Battle. Pick a card within 20 seconds each round.")}
+        return {"uz": ("Bugun 22:00 da Maxluqlar jangi", "Siz turnirga yozilgansiz. Soat 22:00 da ilovaga kiring: Xogvarts → Maxluqlar jangi. Har tanlovga 30 soniya beriladi."),
+                "ru": ("Сегодня в 22:00 Битва существ", "Вы записаны. Зайдите в 22:00: Хогвартс → Битва существ. На каждый выбор — 30 секунд."),
+                "en": ("The Creature Battle is today at 22:00", "You are signed up. Come in at 22:00: Hogwarts → Creature Battle. You have 30 seconds for each choice.")}
     return {"uz": ("Turnirga 10 daqiqa qoldi!", "Maxluqlar jangi 22:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Maxluqlar jangi."),
             "ru": ("До турнира 10 минут!", "Битва существ начнётся в 22:00. Зайдите прямо сейчас: Хогвартс → Битва существ."),
             "en": ("10 minutes to the tournament!", "The Creature Battle starts at 22:00. Come in now: Hogwarts → Creature Battle.")}
@@ -559,7 +559,7 @@ def _oyin_holat(conn, m, uid, now):
             "a": _ism(conn, m["a"]) if m["a"] is not None else None, "b": _ism(conn, m["b"]) if m["b"] is not None else None,
             "hand": {"a": json.loads(m["a_qol"] or "[]"), "b": json.loads(m["b_qol"] or "[]")},
             "turn": m["navbat"], "attack": json.loads(m["hujum"]) if m["hujum"] else None, "phase": faza, "hist": tarix,
-            "wins": [m["a_win"], m["b_win"]], "in": max(0, round((m["faza_bosh"] or 0) - now, 2)),
+            "wins": [m["a_win"], m["b_win"]], "in": max(0, round((m["faza_bosh"] or 0) - now, 2)), "turn_t": RAUND_T,
             "left": max(0, round((m["faza_bosh"] or 0) + RAUND_T - now, 2)),
             "winner": ("a" if m["golib"] == m["a"] else "b") if m["golib"] is not None else None, "why": m["sabab"], "stage": m["bosqich"],
             "starts_in": max(0, round((m["bosh"] or 0) - now, 1)) if m["holat"] == "kutmoqda" and m["tur"] != "dost" else 0,
