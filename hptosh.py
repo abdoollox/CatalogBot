@@ -63,6 +63,7 @@ MAX_T = 7.0
 JOY_MIN, JOY_MAX = -150.0, -30.0   # otuvchi tosh joyi: pastki yoy (gradus; 0 - o'ngda, -90 - pastda)
 TOSH_SONI = 9
 
+DOST_MUDDAT = 1800            # do'stga taklif (Telegram yoki ilova) shuncha soniya kutadi
 BOT_UID0 = -9300              # kompyuter raqiblar: BOT_UID0 - daraja
 BOTLAR = {1: ("Nevill", "gryffindor"), 2: ("Ron", "gryffindor"), 3: ("Jorj Uizli", "gryffindor")}
 BOT_NOMZOD = {1: 1, 2: 4, 3: 12}                  # nechta zarbani o'ylab ko'radi (zarba boshiga o'rtacha 0,4 / 0,6 / 0,85 toshcha)
@@ -415,8 +416,10 @@ def _tick(rnd=random):
         _turnir_boshla(conn, now)
         for m in conn.execute("SELECT * FROM tosh_match WHERE holat='ketmoqda'").fetchall():
             _oyin_yur(conn, m, berish, now, rnd)
+        # muddati o'tgan do'stona takliflar yopiladi
+        conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='muddat' WHERE tur='dost' AND holat='kutmoqda' AND bosh < ?", (now,))
         # tashlab ketilgan mashq o'yinlari (1 soatdan eski) yopiladi
-        conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='tashlandi' WHERE holat='ketmoqda' AND tur IN ('mashq','sinov') AND bosh < ?", (now - 3600,))
+        conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='tashlandi' WHERE holat='ketmoqda' AND tur IN ('mashq','sinov','dost') AND bosh < ?", (now - 3600,))
         _eslatmalar(conn, hafta, xabarlar)
         conn.commit()
     finally:
@@ -498,7 +501,8 @@ def _oyin_holat(conn, m, uid, seen, now):
              "per": ZARBA, "extra": QOSHIMCHA, "turn": m["navbat"], "stones": json.loads(m["toshlar"] or "[]"),
              "turn_in": max(0, round((m["navbat_bosh"] or 0) - now, 2)), "turn_left": max(0, round((m["navbat_bosh"] or 0) + NAVBAT_T - now, 2)),
              "winner": ("a" if m["golib"] == m["a"] else "b") if m["golib"] is not None else None, "why": m["sabab"], "stage": m["bosqich"],
-             "starts_in": max(0, round((m["bosh"] or 0) - now, 1)) if m["holat"] == "kutmoqda" else 0}
+             "starts_in": max(0, round((m["bosh"] or 0) - now, 1)) if m["holat"] == "kutmoqda" and m["tur"] != "dost" else 0,
+             "expires_in": max(0, round((m["bosh"] or 0) - now)) if m["holat"] == "kutmoqda" and m["tur"] == "dost" else None}
     if m["oxirgi"]:
         ox = json.loads(m["oxirgi"])
         javob["last_n"] = ox.get("n")
@@ -579,6 +583,65 @@ def _sinov(uid):
         conn.close()
 
 
+def _dost(uid):
+    """Do'stga taklif: a = chaqiruvchi, b bo'sh, `bosh` - taklif muddati. Oldingi ochiq taklifi bekor bo'ladi."""
+    now = _ep()
+    conn = hpcup._connect()
+    try:
+        conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='bekor' WHERE tur='dost' AND holat='kutmoqda' AND a=?", (uid,))
+        cur = conn.execute("INSERT INTO tosh_match (tur, a, a_seed, b_seed, bosh, holat, vaqt) VALUES ('dost',?,1,2,?,'kutmoqda',?)",
+                           (uid, now + DOST_MUDDAT, hpcup._utc_iso(_now())))
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def _qabul(uid, mid):
+    """Taklifni qabul qilish. (id | None, xato)."""
+    now = _ep()
+    conn = hpcup._connect()
+    try:
+        m = conn.execute("SELECT * FROM tosh_match WHERE id=? AND tur='dost'", (int(mid),)).fetchone()
+        if not m:
+            return None, "yoq"
+        if uid in (m["a"], m["b"]):
+            return m["id"], None
+        if m["b"] is not None:
+            return None, "band"
+        if m["holat"] != "kutmoqda" or now >= (m["bosh"] or 0):
+            return None, "muddat"
+        cur = conn.execute("UPDATE tosh_match SET b=?, holat='ketmoqda', bosh=?, toshlar=?, navbat='a', navbat_bosh=?, zarba=0, a_ball=0, b_ball=0, b_seen=? "
+                           "WHERE id=? AND b IS NULL AND holat='kutmoqda'", (uid, now, json.dumps(boshlangich()), now + 4, now, m["id"]))
+        conn.commit()
+        return (m["id"], None) if cur.rowcount else (None, "band")
+    finally:
+        conn.close()
+
+
+def _bekor(uid, mid):
+    conn = hpcup._connect()
+    try:
+        n = conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='bekor' WHERE id=? AND tur='dost' AND holat='kutmoqda' AND a=?", (int(mid), uid)).rowcount
+        conn.commit()
+        return n > 0
+    finally:
+        conn.close()
+
+
+def taklif_info(mid):
+    """Telegram kartasi uchun: ochiq taklif bo'lsa {a, name}, aks holda None."""
+    conn = hpcup._connect()
+    try:
+        m = conn.execute("SELECT * FROM tosh_match WHERE id=? AND tur='dost'", (int(mid),)).fetchone()
+        if not m or m["b"] is not None or m["holat"] != "kutmoqda" or _ep() >= (m["bosh"] or 0):
+            return None
+        r = conn.execute("SELECT first_name FROM users WHERE user_id=?", (m["a"],)).fetchone()
+        return {"a": m["a"], "name": (r["first_name"] if r else None) or "Sehrgar"}
+    finally:
+        conn.close()
+
+
 def _otish(uid, oyin, shot):
     now = _ep()
     conn = hpcup._connect()
@@ -631,11 +694,27 @@ async def api_tosh(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
     uid = int(user["id"])
-    if not hpcup._get_house(uid):
+    # do'stona o'yin (Telegram taklifi bilan kelgan yangi o'quvchi ham) - saralanmagan bo'lsa ham o'ynaydi
+    dostona = body.get("qabul") is not None or body.get("oyin") is not None
+    if not hpcup._get_house(uid) and not dostona:
         return cors(web.json_response({"ok": False, "error": "no_house"}))
     qosh = {}
     try:
-        if body.get("shot") is not None and body.get("oyin") is not None:
+        if body.get("dost"):
+            body = {"oyin": await asyncio.to_thread(_dost, uid)}
+            if _cfg.get("log"):
+                try:
+                    await _cfg["log"](user, "tosh_dost_taklif")
+                except Exception:
+                    pass
+        elif body.get("qabul") is not None:
+            mid, xato = await asyncio.to_thread(_qabul, uid, int(body.get("qabul")))
+            if xato:
+                return cors(web.json_response({"ok": False, "error": xato}))
+            body = {"oyin": mid}
+        elif body.get("bekor") is not None:
+            qosh["bekor_ok"] = await asyncio.to_thread(_bekor, uid, int(body.get("bekor")))
+        elif body.get("shot") is not None and body.get("oyin") is not None:
             qosh["shot_ok"] = await asyncio.to_thread(_otish, uid, int(body.get("oyin")), body.get("shot") if isinstance(body.get("shot"), dict) else {})
             while _berish_keyin:
                 u, ref, pts = _berish_keyin.pop()

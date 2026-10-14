@@ -357,6 +357,16 @@ async def amain():
     rooms = await hpcup.chat_bump_duel(m5)
     check("chat kartasi: xona yangilanadi", rooms == ["global"])
 
+    # ---------- Telegram chatiga taklif ----------
+    st, d = await ask(1, tg_invite=1)
+    tid = d.get("friend_id")
+    info = hpduel.taklif_info(tid) if tid else None
+    check("Telegram taklifi: ochiq do'stona duel, 30 daqiqa, karta uchun egasi", tid and info and info["a"] == 1
+          and db("SELECT bosh - ? FROM duel_match WHERE id=?", (hpduel._ep(), tid))[0][0] > 1700)
+    db("INSERT OR IGNORE INTO users (user_id, first_name, created_at) VALUES (77,'Yangi','2026-10-01T00:00:00Z')")
+    st, d = await ask(77, accept=tid)
+    check("saralanmagan do'st ham Telegram taklifini qabul qiladi", d.get("friend_id") == tid and hpduel.taklif_info(tid) is None)
+
     print("Duel: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     return fail
 

@@ -979,6 +979,12 @@ async def inline_search(query: types.InlineQuery):
         await answer_chess(query, lang, m.group(1))
         return
 
+    # "duel_123" / "tosh_45" - ilovadan do'stni duel yoki Toshchalar o'yiniga chaqirish kartasi.
+    tm = TAKLIF_QUERY.match(raw.lower())
+    if tm:
+        await answer_taklif(query, lang, tm.group(1), tm.group(2))
+        return
+
     # "sr_s1e3_uz" - serial qismi ostidagi "Ulashish" tugmasi: o'sha qismning kartasi.
     qism = hpserial.inline_result(raw, query.from_user.id)
     if qism:
@@ -1774,6 +1780,8 @@ def card_images():
     for lang in catalog.LANGS:
         yield lang, promo_path(lang)
         yield "chess_" + lang, "%s/chess_%s.jpg" % (IMG_URL, lang)
+        for tur in TAKLIF_T:
+            yield "%s_%s" % (tur, lang), "%s/%s_%s.jpg" % (IMG_URL, tur, lang)
 
 
 async def load_promo():
@@ -2020,6 +2028,141 @@ async def prepare_chess_share(user_id, code, lang, info):
         logging.error("savePreparedInlineMessage: %s", data.get("description"))
         return None
     return data["result"]["id"]
+
+
+# --- DUEL VA TOSHCHALAR: DO'STNI TELEGRAM CHATIDAN CHAQIRISH (egasi, 2026-10-14; shaxmat kartasi qolipida) ---
+# Ilova taklif yaratadi (hpduel {tg_invite} / hptosh {dost}), so'ng /api/taklif dan tayyor karta id sini oladi va
+# WebApp.shareMessage bilan chat tanlatadi; eski Telegramda - inline so'rov "duel_<id>" / "tosh_<id>".
+# Karta tugmasi ilovani startapp=duel_<id> / tosh_<id> bilan ochadi - do'st darhol o'yinga kiradi (saralanmagan bo'lsa ham).
+TAKLIF_T = {
+    "duel": {
+        "uz": {"title": "Sehrgarlar dueli", "call": "<b>%s</b> sizni duelga chaqirmoqda!", "how": "Afsunni barmoq bilan chizasiz — kim aniqroq chizsa, o'sha kuchli.",
+               "free": "Do'stona duel — ball ham, reyting ham yo'q", "tap": "Pastdagi tugmani bosing — duel darhol ochiladi.", "btn": "Duelga kirish",
+               "desc": "Do'stingizni sehrgarlar dueliga chaqiring"},
+        "ru": {"title": "Дуэль волшебников", "call": "<b>%s</b> вызывает вас на дуэль!", "how": "Рисуете заклинание пальцем — кто точнее, тот сильнее.",
+               "free": "Дружеская дуэль — без очков и рейтинга", "tap": "Нажмите кнопку ниже — дуэль откроется сразу.", "btn": "На дуэль",
+               "desc": "Вызовите друга на дуэль волшебников"},
+        "en": {"title": "Wizards' duel", "call": "<b>%s</b> challenges you to a duel!", "how": "You draw the spell with your finger — the more precise, the stronger.",
+               "free": "A friendly duel — no points, no rating", "tap": "Tap the button below — the duel opens right away.", "btn": "Join the duel",
+               "desc": "Challenge your friend to a wizards' duel"}},
+    "tosh": {
+        "uz": {"title": "Toshchalar", "call": "<b>%s</b> sizni Toshchalar o'yiniga chaqirmoqda!", "how": "Doiradagi toshchalarni o'z toshingiz bilan urib chiqaring — kim ko'p chiqarsa, o'sha yutadi.",
+               "free": "Do'stona o'yin — yutqazganga sassiq suyuqlik sepiladi", "tap": "Pastdagi tugmani bosing — o'yin darhol ochiladi.", "btn": "O'yinga kirish",
+               "desc": "Do'stingizni Toshchalar o'yiniga chaqiring"},
+        "ru": {"title": "Плюй-камни", "call": "<b>%s</b> зовёт вас сыграть в плюй-камни!", "how": "Выбивайте камешки из круга своим камнем — кто выбьет больше, тот победил.",
+               "free": "Дружеская игра — проигравшего обрызгает вонючей жидкостью", "tap": "Нажмите кнопку ниже — игра откроется сразу.", "btn": "Войти в игру",
+               "desc": "Позовите друга сыграть в плюй-камни"},
+        "en": {"title": "Gobstones", "call": "<b>%s</b> challenges you to a game of Gobstones!", "how": "Knock the stones out of the ring with your own — whoever knocks out more wins.",
+               "free": "A friendly game — the loser gets squirted with stinky liquid", "tap": "Tap the button below — the game opens right away.", "btn": "Join the game",
+               "desc": "Challenge your friend to Gobstones"}},
+}
+TAKLIF_QUERY = re.compile(r"^(duel|tosh)_(\d{1,10})$")
+TAKLIF_EMOJI = {"duel": "⚡", "tosh": "🔮"}
+
+
+def taklif_info(tur, mid):
+    try:
+        return (hpduel if tur == "duel" else hptosh).taklif_info(int(mid))
+    except Exception as e:
+        logging.error("Taklif ma'lumoti olinmadi (%s %s): %s", tur, mid, e)
+        return None
+
+
+def taklif_link(tur, mid):
+    return "https://t.me/%s/catalog?startapp=%s_%s" % (BOT_USERNAME, tur, mid)
+
+
+def taklif_caption(tur, lang, info):
+    c = TAKLIF_T[tur].get(lang, TAKLIF_T[tur][DEFAULT_LANG])
+    return "\n".join([
+        "%s <b>%s</b>" % (TAKLIF_EMOJI[tur], c["title"]),
+        "— — — — — — — — — —",
+        "%s %s" % (emoji.tag("dostlar"), c["call"] % html.escape(info["name"] or "")),
+        c["how"],
+        "%s %s" % (emoji.tag("yulduz"), c["free"]),
+        "",
+        c["tap"],
+    ])
+
+
+def taklif_photo(tur, lang):
+    """Karta rasmi: Telegramga yuklangan bo'lsa file_id, aks holda manzil."""
+    file_id = (promo_state.get("%s_%s" % (tur, lang)) or {}).get("id")
+    return file_id, "%s/%s_%s.jpg" % (IMG_URL, tur, lang)
+
+
+async def answer_taklif(query, lang, tur, mid):
+    info = taklif_info(tur, mid)
+    if not info:
+        await query.answer([], cache_time=0, is_personal=True)
+        return
+    c = TAKLIF_T[tur].get(lang, TAKLIF_T[tur][DEFAULT_LANG])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=c["btn"], url=taklif_link(tur, mid), icon_custom_emoji_id=emoji.icon("tomosha"))]])
+    file_id, url = taklif_photo(tur, lang)
+    if file_id:
+        card = types.InlineQueryResultCachedPhoto(id="%s_%s" % (tur, mid), photo_file_id=file_id, title=c["title"], description=c["desc"],
+                                                  caption=taklif_caption(tur, lang, info), parse_mode="HTML", reply_markup=kb)
+    else:
+        card = types.InlineQueryResultPhoto(id="%s_%s" % (tur, mid), photo_url=url, thumbnail_url=url, photo_width=1280, photo_height=720,
+                                            title=c["title"], description=c["desc"], caption=taklif_caption(tur, lang, info), parse_mode="HTML", reply_markup=kb)
+    try:
+        await query.answer([card], cache_time=0, is_personal=True)
+    except Exception as e:
+        logging.error("Taklif kartasida xato (%s): %s", tur, e)
+
+
+async def prepare_taklif_share(user_id, tur, mid, lang, info):
+    """Tayyor karta id si (WebApp.shareMessage uchun) - shaxmatdagidek Bot API ga to'g'ridan-to'g'ri."""
+    lang = await chess_lang(user_id, lang)
+    c = TAKLIF_T[tur].get(lang, TAKLIF_T[tur][DEFAULT_LANG])
+    tugma = {"text": c["btn"], "url": taklif_link(tur, mid)}
+    if emoji.icon("tomosha"):
+        tugma["icon_custom_emoji_id"] = emoji.icon("tomosha")
+    result = {"type": "photo", "id": "%s_%s" % (tur, mid), "caption": taklif_caption(tur, lang, info), "parse_mode": "HTML",
+              "reply_markup": {"inline_keyboard": [[tugma]]}}
+    file_id, url = taklif_photo(tur, lang)
+    if file_id:
+        result["photo_file_id"] = file_id
+    else:
+        result.update(photo_url=url, thumbnail_url=url, photo_width=1280, photo_height=720)
+    payload = {"user_id": int(user_id), "result": result, "allow_user_chats": True, "allow_group_chats": True}
+    vaqt = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=vaqt) as s2:
+        async with s2.post("https://api.telegram.org/bot%s/savePreparedInlineMessage" % TOKEN, json=payload) as r:
+            data = await r.json()
+    if not data.get("ok"):
+        logging.error("Taklif savePreparedInlineMessage: %s", data.get("description"))
+        return None
+    return data["result"]["id"]
+
+
+async def api_taklif(request):
+    """POST {kind: duel|tosh, id, lang} -> {ok, id} - faqat taklif egasi uchun, taklif ochiq bo'lsa."""
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    user = verify_init_data(request.headers.get("X-Telegram-Init-Data", "") or str(body.get("initData", "")))
+    if not user:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+    tur = body.get("kind")
+    if tur not in TAKLIF_T:
+        return _cors(web.json_response({"ok": False, "error": "kind"}, status=400))
+    try:
+        mid = int(body.get("id"))
+    except (TypeError, ValueError):
+        return _cors(web.json_response({"ok": False, "error": "id"}, status=400))
+    info = await asyncio.to_thread(taklif_info, tur, mid)
+    if not info or info["a"] != int(user["id"]):
+        return _cors(web.json_response({"ok": False, "error": "yopiq"}))
+    try:
+        pid = await prepare_taklif_share(int(user["id"]), tur, mid, str(body.get("lang") or ""), info)
+    except Exception as e:
+        logging.error("Taklif kartasi tayyorlanmadi (%s %s): %s", tur, mid, e)
+        pid = None
+    return _cors(web.json_response({"ok": bool(pid), "id": pid}))
 
 
 def sq_url(movie_key, lang):
@@ -2477,6 +2620,7 @@ async def main():
     app.router.add_route('*', '/api/house', handle_house)
     app.router.add_route('*', '/api/profile', handle_house)
     app.router.add_route('*', '/api/send', api_send)
+    app.router.add_route('*', '/api/taklif', api_taklif)
     app.router.add_route('*', '/api/films', api_films)
     app.router.add_route('*', '/api/undo', api_undo)
     app.router.add_route('*', '/api/loglar', api_loglar)

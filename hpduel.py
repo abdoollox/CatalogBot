@@ -81,6 +81,7 @@ BOSQICH_BALL = {16: 5, 8: 10, 4: 20, 2: 30}    # shu bosqichdagi G'ALABA uchun (
 REYTING0, K_JONLI, K_BOT = 1000, 32, 16
 BOT_R = {1: 850, 2: 1050, 3: 1250}              # kompyuter raqiblarning qat'iy reytingi
 DOST_MUDDAT = 600             # do'stona duel taklifi shuncha soniya amal qiladi
+TG_MUDDAT = 1800              # Telegram chatiga yuborilgan taklif (do'st botni ochib ulgurishi kerak)
 DOST_BOSH = 8                 # qabul qilingach duel shuncha soniyadan keyin boshlanadi
 _ozgargan = set()             # holati o'zgargan do'stona duellar - chatdagi kartasi yangilanadi (_dost_xabar)
 BOT_UID = -999                 # sinov raqibi (kompyuter)
@@ -618,7 +619,7 @@ def _yozil(uid, on):
 
 
 # ---------- do'stona duel (chatdagi taklif orqali; ball va reytingga ta'sir qilmaydi) ----------
-def _dost_yarat(uid):
+def _dost_yarat(uid, muddat=DOST_MUDDAT):
     """Yangi taklif: a = chaqiruvchi, b bo'sh; `bosh` - taklif muddati tugaydigan payt. Oldingi ochiq taklifi bekor bo'ladi."""
     uid, now = int(uid), _ep()
     conn = hpcup._connect()
@@ -627,7 +628,7 @@ def _dost_yarat(uid):
             conn.execute("UPDATE duel_match SET holat='tugadi', sabab='bekor' WHERE id=?", (r["id"],))
             _ozgargan.add(r["id"])
         cur = conn.execute("INSERT INTO duel_match (hafta, bosqich, joy, a, a_seed, bosh, a_jon, b_jon, a_keldi) VALUES (?,2,0,?,1,?,?,?,?)",
-                           ("dost:%d:%s" % (uid, uuid.uuid4().hex[:12]), uid, now + DOST_MUDDAT, JON, JON, now))
+                           ("dost:%d:%s" % (uid, uuid.uuid4().hex[:12]), uid, now + muddat, JON, JON, now))
         conn.commit()
         return cur.lastrowid
     finally:
@@ -672,6 +673,19 @@ def _dost_bekor(uid, mid):
         if cur.rowcount:
             _ozgargan.add(int(mid))
         return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
+def taklif_info(mid):
+    """Telegram kartasi uchun: ochiq do'stona taklif bo'lsa {a, name}, aks holda None."""
+    conn = hpcup._connect()
+    try:
+        m = conn.execute("SELECT * FROM duel_match WHERE id=? AND hafta LIKE 'dost%'", (int(mid),)).fetchone()
+        if not m or m["b"] is not None or m["holat"] != "kutmoqda" or _ep() >= (m["bosh"] or 0):
+            return None
+        r = conn.execute("SELECT first_name FROM users WHERE user_id=?", (m["a"],)).fetchone()
+        return {"a": m["a"], "name": (r["first_name"] if r else None) or "Sehrgar"}
     finally:
         conn.close()
 
@@ -803,7 +817,8 @@ async def api_duel(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
     uid = int(user["id"])
-    if not hpcup._get_house(uid):
+    dostona = body.get("accept") is not None or body.get("arena") is not None
+    if not hpcup._get_house(uid) and not dostona:
         return cors(web.json_response({"ok": False, "error": "no_house"}))
     qosh = {}
     try:
@@ -827,6 +842,14 @@ async def api_duel(request):
         if rp is None:
             return cors(web.json_response({"ok": False, "error": "no_duel"}))
         qosh["replay"] = rp
+    elif body.get("tg_invite"):
+        # Telegram chatiga yuboriladigan taklif (karta - main.py /api/taklif): 30 daqiqa amal qiladi
+        qosh["friend_id"] = await asyncio.to_thread(_dost_yarat, uid, TG_MUDDAT)
+        if _cfg.get("log"):
+            try:
+                await _cfg["log"](user, "duel_tg_taklif")
+            except Exception:
+                pass
     elif body.get("accept") is not None or body.get("cancel") is not None:
         try:
             mid = int(body.get("accept") if body.get("accept") is not None else body.get("cancel"))

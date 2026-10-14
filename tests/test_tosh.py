@@ -200,6 +200,28 @@ async def amain():
     check("admin sinov o'yini: kompyuter bilan, turnir oqimi", d["game"]["kind"] == "sinov" and d["game"]["b"]["name"] == "Ron")
     check("oddiy o'quvchi sinov ochmaydi", "game" not in (await ask(6, sinov=1)))
 
+    # ---------- do'st bilan (Telegram taklifi) ----------
+    vaqt(21, 12)
+    d = await ask(1, dost=1)
+    tid = d["game"]["id"]
+    check("do'stga taklif: o'yin kutmoqda, muddati bor", d["game"]["kind"] == "dost" and d["game"]["state"] == "kutmoqda" and d["game"]["expires_in"] > 1000)
+    check("taklif ma'lumoti (karta uchun) - egasi va ismi", P.taklif_info(tid) == {"a": 1, "name": "U1"})
+    db("INSERT OR IGNORE INTO users (user_id, first_name, created_at) VALUES (31,'Yangi','2026-10-01T00:00:00Z')")
+    d = await ask(31, qabul=tid)
+    check("saralanmagan (yangi) do'st ham taklifni qabul qila oladi - o'yin boshlandi", d["ok"] and d["game"]["state"] == "ketmoqda" and d["game"]["me"] == "b")
+    check("qabul qilingan taklif yopiq - karta endi chiqmaydi", P.taklif_info(tid) is None)
+    check("ikkinchi odam qabul qila olmaydi", (await ask(2, qabul=tid)).get("error") == "band")
+    check("saralanmagan odam turnirga yozila olmaydi", (await ask(31, join=1)).get("error") == "no_house")
+    d = await ask(2, dost=1)
+    t2 = d["game"]["id"]
+    d = await ask(2, bekor=t2)
+    check("taklifni bekor qilish", d.get("bekor_ok") and P.taklif_info(t2) is None)
+    d = await ask(3, dost=1)
+    t3 = d["game"]["id"]
+    ilgari(P.DOST_MUDDAT + 5)
+    await P.tick()
+    check("muddati o'tgan taklif yopiladi", P.taklif_info(t3) is None and (await ask(4, qabul=t3)).get("error") == "muddat")
+
     print("Toshchalar: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
 
