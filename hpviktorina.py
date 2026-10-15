@@ -295,6 +295,14 @@ def _goliblar(conn, hafta, uid):
     return hpgolib.karta(conn, orinlar, "viktorina:%s" % r["hafta"], uid, r["soni"], _turnir_vaqti(r["hafta"]))
 
 
+def _yozilganlar(conn, hafta, uid):
+    """Turnir sahifasidagi «Yozilganlar» ro'yxati (barcha turnirlarda bir xil ko'rinish): oldin yozilgan - tepada."""
+    rows = conn.execute(
+        "SELECT q.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM vk_qatnash q JOIN users u ON u.user_id = q.user_id "
+        "WHERE q.hafta=? AND u.house IS NOT NULL AND q.user_id > 0 ORDER BY q.vaqt ASC", (hafta,)).fetchall()
+    return [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "me": r["user_id"] == uid} for r in rows]
+
+
 def _oxirgi(conn, hafta_dan_oldin):
     """Oldingi viktorina g'olibi (sahifada ko'rsatish uchun)."""
     r = conn.execute("SELECT hafta, golib, soni FROM vk_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta < ? ORDER BY hafta DESC LIMIT 1",
@@ -318,7 +326,8 @@ def _holat(uid, lang="uz"):
         javob = {
             "ok": True, "now": now,
             "tour": {"ts": T0, "now": now, "open": now < T0, "n": yozilgan,
-                     "joined": conn.execute("SELECT 1 FROM vk_qatnash WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone() is not None},
+                     "joined": conn.execute("SELECT 1 FROM vk_qatnash WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone() is not None,
+                     "players": _yozilganlar(conn, hafta, uid)},
             "rules": {"q": SAVOL_T, "show": NATIJA_T, "max": SAVOL_MAX, "hall": ZAL, "good": YAXSHI, "good_pts": BALL_YAXSHI,
                       "points": {str(k): v for k, v in BALL_ORIN.items()}},
             "last": _oxirgi(conn, hafta),

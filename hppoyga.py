@@ -508,6 +508,14 @@ def _nazorat_yoz(uid, hafta, cps, uchdi):
         conn.close()
 
 
+def _yozilganlar(conn, hafta, uid):
+    """Turnir sahifasidagi «Yozilganlar» ro'yxati (barcha turnirlarda bir xil ko'rinish): oldin yozilgan - tepada."""
+    rows = conn.execute(
+        "SELECT q.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM pg_qatnash q JOIN users u ON u.user_id = q.user_id "
+        "WHERE q.hafta=? AND u.house IS NOT NULL AND q.user_id > 0 ORDER BY q.vaqt ASC", (hafta,)).fetchall()
+    return [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "me": r["user_id"] == uid} for r in rows]
+
+
 def _oxirgi(conn, hafta_dan_oldin):
     r = conn.execute("SELECT hafta, golib, soni FROM pg_turnir WHERE holat='tugadi' AND golib IS NOT NULL AND hafta < ? AND hafta NOT LIKE 'sinov:%' "
                      "ORDER BY hafta DESC LIMIT 1", (hafta_dan_oldin,)).fetchone()
@@ -542,7 +550,8 @@ def _holat(uid):
         javob = {
             "ok": True, "now": now,
             "tour": {"ts": T0, "now": now, "open": now < T0, "n": yozilgan,
-                     "joined": conn.execute("SELECT 1 FROM pg_qatnash WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone() is not None},
+                     "joined": conn.execute("SELECT 1 FROM pg_qatnash WHERE hafta=? AND user_id=?", (hafta, uid)).fetchone() is not None,
+                     "players": _yozilganlar(conn, hafta, uid)},
             "rules": {"count": SANOQ, "every": HALQA, "hall": ZAL, "wait": NAZORAT_T, "next_pts": BALL_KEYIN, "next_to": BALL_KEYIN_ORIN,
                       "points": {str(k): v for k, v in BALL_ORIN.items()}},
             "last": _oxirgi(conn, hafta if not _sinov_hafta(hafta) else "9"),

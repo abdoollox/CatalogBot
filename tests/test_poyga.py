@@ -100,6 +100,7 @@ async def amain():
     d = await ask(1, join=1)
     check("chorshanbada: navbatdagi poyga - dushanba 19-oktabr, yozilish ochiq", d["join_ok"] and d["tour"]["joined"] and d["phase"] == "kutish"
           and datetime.fromtimestamp(d["tour"]["ts"], TZ).strftime("%Y-%m-%d %H:%M") == "2026-10-19 21:00")
+    check("yozilganlar ro'yxati (ism, fakultet, o'zi belgilangan)", len(d["tour"]["players"]) == 1 and d["tour"]["players"][0]["me"] and d["tour"]["players"][0]["house"])
     vaqt(19, 10, 1)
     await P.tick(); await asyncio.sleep(0.05)
     vaqt(19, 20, 51)

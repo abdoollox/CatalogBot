@@ -98,6 +98,7 @@ async def amain():
     check("savollar: 30 ta, takrorsiz, hafta sayin boshqa", len(tartib) == 30 == len(set(tartib)) and tartib != V._savollar("2026-10-19"))
     d = await ask(1, join=1)
     check("yozilish va kutish holati", d["join_ok"] and d["tour"]["joined"] and d["tour"]["n"] == 1 and d["phase"] == "kutish" and not d["me"]["in"])
+    check("yozilganlar ro'yxati (ism, fakultet, o'zi belgilangan)", len(d["tour"]["players"]) == 1 and d["tour"]["players"][0]["me"] and d["tour"]["players"][0]["house"])
     vaqt(16, 10, 1)
     await V.tick(); await asyncio.sleep(0.05)
     vaqt(16, 20, 51)
