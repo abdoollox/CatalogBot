@@ -707,6 +707,30 @@ def _yozil(uid, on):
         conn.close()
 
 
+TARIX_N = 40
+
+
+def _tarix(uid):
+    """O'yinlar tarixi (egasi, 2026-10-15): o'quvchining oxirgi tugagan o'yinlari - mashq, do'stona va turnir.
+    Tashlab ketilgan mashq, qabul qilinmagan taklif va admin sinovi kirmaydi."""
+    uid = int(uid)
+    conn = hpcup._connect()
+    try:
+        rows = conn.execute("SELECT * FROM tosh_match WHERE (a=? OR b=?) AND holat='tugadi' AND b IS NOT NULL AND tur != 'sinov' "
+                            "AND COALESCE(sabab, '') NOT IN ('tashlandi', 'bekor', 'muddat', 'bye') ORDER BY id DESC LIMIT ?", (uid, uid, TARIX_N)).fetchall()
+        out = []
+        for m in rows:
+            men_a = m["a"] == uid
+            raq = m["b"] if men_a else m["a"]
+            men, u = (m["a_ball"], m["b_ball"]) if men_a else (m["b_ball"], m["a_ball"])
+            out.append({"id": m["id"], "kind": m["tur"], "stage": m["bosqich"], "opp": _ism(conn, raq) if raq else None,
+                        "score": [men, u], "res": "g" if m["golib"] == uid else ("d" if m["golib"] is None else "m"),
+                        "why": m["sabab"], "ts": m["bosh"]})
+        return out
+    finally:
+        conn.close()
+
+
 async def api_tosh(request):
     cors = _cfg["cors"]
     if request.method == "OPTIONS":
@@ -723,6 +747,8 @@ async def api_tosh(request):
     dostona = body.get("qabul") is not None or body.get("oyin") is not None
     if not hpcup._get_house(uid) and not dostona:
         return cors(web.json_response({"ok": False, "error": "no_house"}))
+    if body.get("history"):
+        return cors(web.json_response({"ok": True, "history": await asyncio.to_thread(_tarix, uid)}))
     qosh = {}
     try:
         if body.get("dost"):

@@ -198,6 +198,9 @@ async def amain():
     check("o'yin tugadi: kimdir 3 ta yutdi yoki 5 raund o'ynaldi", g["state"] == "tugadi" and (max(g["wins"]) >= 3 or len(g["hist"]) == 5))
     check("har karta bir marta ishlatildi", len({x["a"]["i"] for x in g["hist"]}) == len(g["hist"]))
     check("mashqda ball yo'q", ball(1) == 0)
+    h = (await ask(1, history=1))["history"]
+    check("o'yinlar tarixi: tugagan mashq o'yini, raqib - kompyuter, hisob va natija", len(h) >= 1 and h[0]["id"] == oid and h[0]["kind"] == "mashq"
+          and h[0]["opp"] and h[0]["opp"].get("bot") and h[0]["res"] in ("g", "m", "d") and len(h[0]["score"]) == 2)
 
     # vaqtida tanlamasa - karta o'zi qo'yiladi
     d = await ask(2, mashq=2)

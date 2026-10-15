@@ -144,6 +144,9 @@ async def amain():
     check("mashq tugadi: 5 + 5 zarba (yoki toshchalar tugadi), hisob to'g'ri", g["state"] == "tugadi" and (g["shots"] >= 10 or not g["stones"])
           and sum(g["score"]) + len(g["stones"]) == 9)
     check("mashqda ball berilmaydi", ball(1) == 0)
+    h = (await ask(1, history=1))["history"]
+    check("o'yinlar tarixi: tugagan mashq o'yini, raqib - kompyuter, hisob va natija", len(h) >= 1 and h[0]["id"] == oid and h[0]["kind"] == "mashq"
+          and h[0]["opp"] and h[0]["opp"].get("bot") and h[0]["res"] in ("g", "m", "d") and len(h[0]["score"]) == 2)
 
     # navbat vaqti: o'tkazib yuborish va kelmadi
     d = await ask(2, mashq=2)
