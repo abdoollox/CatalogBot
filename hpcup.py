@@ -446,6 +446,13 @@ def _migrate(conn, users_json):
         conn.execute("ALTER TABLE chat_messages ADD COLUMN duel INTEGER")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_duel ON chat_messages(duel)")
     conn.execute(DUEL_MATCH_DDL)
+    # Toshchalar va Maxluqlar jangi taklifi kartasi (hptosh, hpmjang) - duel kabi
+    for kol in ("tosh", "mjang"):
+        if kol not in chat_cols:
+            conn.execute("ALTER TABLE chat_messages ADD COLUMN %s INTEGER" % kol)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_%s ON chat_messages(%s)" % (kol, kol))
+    conn.execute(TOSH_MATCH_DDL)
+    conn.execute(MJ_MATCH_DDL)
     # Maxsus xabar turi: "join" - yangi saralangan o'quvchiga xush kelibsiz.
     if "kind" not in chat_cols:
         conn.execute("ALTER TABLE chat_messages ADD COLUMN kind TEXT")
@@ -2332,6 +2339,21 @@ DUEL_MATCH_DDL = ("CREATE TABLE IF NOT EXISTS duel_match ("
                   " a_sum INTEGER NOT NULL DEFAULT 0, b_sum INTEGER NOT NULL DEFAULT 0, a_keldi REAL, b_keldi REAL, oxirgi TEXT,"
                   " UNIQUE (hafta, bosqich, joy))")
 
+TOSH_MATCH_DDL = ("CREATE TABLE IF NOT EXISTS tosh_match ("
+                     " id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT NOT NULL, hafta TEXT, bosqich INTEGER, joy INTEGER,"
+                     " a INTEGER, b INTEGER, a_seed INTEGER, b_seed INTEGER, daraja INTEGER, bosh REAL,"
+                     " holat TEXT NOT NULL DEFAULT 'kutmoqda', golib INTEGER, sabab TEXT,"
+                     " toshlar TEXT, navbat TEXT, zarba INTEGER NOT NULL DEFAULT 0, a_ball INTEGER NOT NULL DEFAULT 0, b_ball INTEGER NOT NULL DEFAULT 0,"
+                     " a_skip INTEGER NOT NULL DEFAULT 0, b_skip INTEGER NOT NULL DEFAULT 0, navbat_bosh REAL, oxirgi TEXT,"
+                     " a_seen REAL, b_seen REAL, vaqt TEXT)")
+MJ_MATCH_DDL = ("CREATE TABLE IF NOT EXISTS mj_match ("
+                     " id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT NOT NULL, hafta TEXT, bosqich INTEGER, joy INTEGER,"
+                     " a INTEGER, b INTEGER, a_seed INTEGER, b_seed INTEGER, daraja INTEGER, bosh REAL,"
+                     " holat TEXT NOT NULL DEFAULT 'kutmoqda', golib INTEGER, sabab TEXT,"
+                     " a_qol TEXT, b_qol TEXT, navbat TEXT, hujum TEXT, faza_bosh REAL, tarix TEXT,"
+                     " a_win INTEGER NOT NULL DEFAULT 0, b_win INTEGER NOT NULL DEFAULT 0,"
+                     " a_skip INTEGER NOT NULL DEFAULT 0, b_skip INTEGER NOT NULL DEFAULT 0, a_seen REAL, b_seen REAL, vaqt TEXT)")
+
 _CHAT_SELECT = (
     "SELECT c.id, c.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house AS user_house, "
     "c.message, c.created_at, c.reply_to, c.edited_at, c.deleted, c.rev, c.kind, "
@@ -2339,7 +2361,11 @@ _CHAT_SELECT = (
     "c.chess, g.status AS g_status, g.base AS g_base, g.inc AS g_inc, g.white_uid AS g_w, g.black_uid AS g_b, "
     "g.winner_uid AS g_win, COALESCE(gw.first_name, 'Sehrgar') AS g_wn, COALESCE(gb.first_name, 'Sehrgar') AS g_bn, "
     "c.duel, d.holat AS d_h, d.a AS d_a, d.b AS d_b, d.golib AS d_g, d.sabab AS d_s, d.bosh AS d_bosh, d.a_jon AS d_aj, d.b_jon AS d_bj, "
-    "COALESCE(da.first_name, 'Sehrgar') AS d_an, COALESCE(db.first_name, 'Sehrgar') AS d_bn "
+    "COALESCE(da.first_name, 'Sehrgar') AS d_an, COALESCE(db.first_name, 'Sehrgar') AS d_bn, "
+    "c.tosh, t.holat AS t_h, t.a AS t_a, t.b AS t_b, t.golib AS t_g, t.sabab AS t_s, t.bosh AS t_bosh, t.a_ball AS t_as, t.b_ball AS t_bs, "
+    "COALESCE(ta.first_name, 'Sehrgar') AS t_an, COALESCE(tb.first_name, 'Sehrgar') AS t_bn, "
+    "c.mjang, j.holat AS j_h, j.a AS j_a, j.b AS j_b, j.golib AS j_g, j.sabab AS j_s, j.bosh AS j_bosh, j.a_win AS j_as, j.b_win AS j_bs, "
+    "COALESCE(ja.first_name, 'Sehrgar') AS j_an, COALESCE(jb.first_name, 'Sehrgar') AS j_bn "
     "FROM chat_messages c "
     "LEFT JOIN users u ON u.user_id = c.user_id "
     "LEFT JOIN chat_messages r ON r.id = c.reply_to "
@@ -2349,7 +2375,13 @@ _CHAT_SELECT = (
     "LEFT JOIN users gb ON gb.user_id = g.black_uid "
     "LEFT JOIN duel_match d ON d.id = c.duel "
     "LEFT JOIN users da ON da.user_id = d.a "
-    "LEFT JOIN users db ON db.user_id = d.b ")
+    "LEFT JOIN users db ON db.user_id = d.b "
+    "LEFT JOIN tosh_match t ON t.id = c.tosh "
+    "LEFT JOIN users ta ON ta.user_id = t.a "
+    "LEFT JOIN users tb ON tb.user_id = t.b "
+    "LEFT JOIN mj_match j ON j.id = c.mjang "
+    "LEFT JOIN users ja ON ja.user_id = j.a "
+    "LEFT JOIN users jb ON jb.user_id = j.b ")
 
 _NEXT_REV = "(SELECT COALESCE(MAX(rev), 0) + 1 FROM chat_messages)"
 
@@ -2396,6 +2428,16 @@ def _chat_row(r):
         m["duel"] = {"id": r["duel"], "status": st, "a": {"uid": r["d_a"], "name": r["d_an"]},
                      "b": {"uid": r["d_b"], "name": r["d_bn"]} if r["d_b"] else None,
                      "winner": r["d_g"], "lives": [r["d_aj"], r["d_bj"]], "why": r["d_s"]}
+    for kol, p in (("tosh", "t"), ("mjang", "j")):
+        # Toshchalar / Maxluqlar jangi taklifi (do'stona o'yin) - duel kartasi qolipida; hisob: chiqargan toshchalar / yutgan raundlar
+        if r[kol] and r[p + "_h"]:
+            if r[p + "_b"] is None:
+                st = "waiting" if (r[p + "_h"] == "kutmoqda" and (r[p + "_bosh"] or 0) > now_tk().timestamp()) else "expired"
+            else:
+                st = "finished" if r[p + "_h"] == "tugadi" else "active"
+            m[kol] = {"id": r[kol], "status": st, "a": {"uid": r[p + "_a"], "name": r[p + "_an"]},
+                      "b": {"uid": r[p + "_b"], "name": r[p + "_bn"]} if r[p + "_b"] else None,
+                      "winner": r[p + "_g"], "score": [r[p + "_as"], r[p + "_bs"]], "why": r[p + "_s"]}
     if r["reply_to"]:
         if r["r_uid"] is None or r["r_deleted"]:
             m["reply"] = {"id": r["reply_to"], "deleted": True}
@@ -2763,7 +2805,7 @@ async def chat_max_rev(house):
     return await asyncio.to_thread(_do)
 
 
-async def post_chat_message(house, user_id, message, reply_to=None, chess=None, duel=None):
+async def post_chat_message(house, user_id, message, reply_to=None, chess=None, duel=None, tosh=None, mjang=None):
     """Xabarni saqlaydi va uni ro'yxatdagi ko'rinishida qaytaradi.
 
     reply_to boshqa xonadagi yoki o'chirilgan xabarga ishora qilsa - e'tiborsiz qoldiriladi.
@@ -2779,9 +2821,9 @@ async def post_chat_message(house, user_id, message, reply_to=None, chess=None, 
                 target = int(reply_to) if ok else None
             stamp = _utc_iso(now_tk())
             cur = conn.execute(
-                "INSERT INTO chat_messages (house, user_id, message, created_at, reply_to, chess, duel, rev) "
-                "VALUES (?,?,?,?,?,?,?," + _NEXT_REV + ")",
-                (house, int(user_id), message.strip(), stamp, target, chess, duel)
+                "INSERT INTO chat_messages (house, user_id, message, created_at, reply_to, chess, duel, tosh, mjang, rev) "
+                "VALUES (?,?,?,?,?,?,?,?,?," + _NEXT_REV + ")",
+                (house, int(user_id), message.strip(), stamp, target, chess, duel, tosh, mjang)
             )
             conn.commit()
             return _chat_one(conn, cur.lastrowid, user_id)
@@ -2827,8 +2869,8 @@ async def edit_chat_message(house, user_id, msg_id, text):
             row = _own_live_message(conn, house, msg_id)
             if not row or row["user_id"] != int(user_id):
                 return "not_found"
-            special = conn.execute("SELECT chess, kind, duel FROM chat_messages WHERE id=?", (row["id"],)).fetchone()
-            if special[0] or special[1] or special[2]:
+            special = conn.execute("SELECT chess, kind, duel, tosh, mjang FROM chat_messages WHERE id=?", (row["id"],)).fetchone()
+            if any(special):
                 return "not_editable"       # shaxmat kartasi va xush kelibsiz tahrirlanmaydi
             made = _parse_iso(row["created_at"])
             if made and (now_tk() - made).total_seconds() > CHAT_EDIT_HOURS * 3600:
@@ -2869,6 +2911,23 @@ async def chat_bump_duel(match_id):
             rooms = [r[0] for r in conn.execute("SELECT DISTINCT house FROM chat_messages WHERE duel=? AND deleted=0", (int(match_id),))]
             if rooms:
                 conn.execute("UPDATE chat_messages SET rev=" + _NEXT_REV + " WHERE duel=? AND deleted=0", (int(match_id),))
+                conn.commit()
+            return rooms
+        finally:
+            conn.close()
+    return await asyncio.to_thread(_do)
+
+
+async def chat_bump_oyin(kol, match_id):
+    """Toshchalar ("tosh") / Maxluqlar jangi ("mjang") do'stona o'yini holati o'zgardi - chatdagi kartasi jonli yangilansin."""
+    assert kol in ("tosh", "mjang")
+
+    def _do():
+        conn = _connect()
+        try:
+            rooms = [r[0] for r in conn.execute("SELECT DISTINCT house FROM chat_messages WHERE %s=? AND deleted=0" % kol, (int(match_id),))]
+            if rooms:
+                conn.execute("UPDATE chat_messages SET rev=" + _NEXT_REV + " WHERE %s=? AND deleted=0" % kol, (int(match_id),))
                 conn.commit()
             return rooms
         finally:

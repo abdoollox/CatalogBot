@@ -205,10 +205,21 @@ async def amain():
     d = await ask(1, dost=1)
     tid = d["game"]["id"]
     check("do'stga taklif: o'yin kutmoqda, muddati bor", d["game"]["kind"] == "dost" and d["game"]["state"] == "kutmoqda" and d["game"]["expires_in"] > 1000)
+    # Xogvarts chatidagi taklif kartasi (o'quvchilar taklifi): ochiq -> ketmoqda, holati o'zgarsa karta yangilanadi
+    msg = await hpcup.post_chat_message("global", 1, "taklif", None, tosh=tid)
+    check("chat kartasi: ochiq taklif", msg.get("tosh") and msg["tosh"]["status"] == "waiting" and msg["tosh"]["b"] is None and msg["tosh"]["a"]["uid"] == 1)
     check("taklif ma'lumoti (karta uchun) - egasi va ismi", P.taklif_info(tid) == {"a": 1, "name": "U1"})
     db("INSERT OR IGNORE INTO users (user_id, first_name, created_at) VALUES (31,'Yangi','2026-10-01T00:00:00Z')")
     d = await ask(31, qabul=tid)
     check("saralanmagan (yangi) do'st ham taklifni qabul qila oladi - o'yin boshlandi", d["ok"] and d["game"]["state"] == "ketmoqda" and d["game"]["me"] == "b")
+    await P._dost_xabar()
+    rooms = await hpcup.chat_bump_oyin("tosh", tid)
+    _c = hpcup._connect()
+    try:
+        msg2 = hpcup._chat_one(_c, msg["id"], 1)
+    finally:
+        _c.close()
+    check("chat kartasi: raqib qabul qildi - o'yin ketmoqda, xona yangilanadi", rooms == ["global"] and msg2["tosh"]["status"] == "active" and msg2["tosh"]["b"]["uid"] == 31)
     check("qabul qilingan taklif yopiq - karta endi chiqmaydi", P.taklif_info(tid) is None)
     check("ikkinchi odam qabul qila olmaydi", (await ask(2, qabul=tid)).get("error") == "band")
     check("saralanmagan odam turnirga yozila olmaydi", (await ask(31, join=1)).get("error") == "no_house")

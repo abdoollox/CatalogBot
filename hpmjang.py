@@ -83,6 +83,7 @@ BOT_XATO = 0.15               # qiyin kompyuter ham ba'zan oddiy yuradi
 BOT_FIKR = 1.5                # kompyuter shuncha soniya «o'ylaydi»
 
 _cfg = {}
+_ozgargan = set()             # holati o'zgargan do'stona o'yinlar - chatdagi taklif kartasi yangilanadi (_dost_xabar)
 
 
 def _now():
@@ -96,13 +97,7 @@ def _ep():
 def _init():
     conn = hpcup._connect()
     try:
-        conn.execute("CREATE TABLE IF NOT EXISTS mj_match ("
-                     " id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT NOT NULL, hafta TEXT, bosqich INTEGER, joy INTEGER,"
-                     " a INTEGER, b INTEGER, a_seed INTEGER, b_seed INTEGER, daraja INTEGER, bosh REAL,"
-                     " holat TEXT NOT NULL DEFAULT 'kutmoqda', golib INTEGER, sabab TEXT,"
-                     " a_qol TEXT, b_qol TEXT, navbat TEXT, hujum TEXT, faza_bosh REAL, tarix TEXT,"
-                     " a_win INTEGER NOT NULL DEFAULT 0, b_win INTEGER NOT NULL DEFAULT 0,"
-                     " a_skip INTEGER NOT NULL DEFAULT 0, b_skip INTEGER NOT NULL DEFAULT 0, a_seen REAL, b_seen REAL, vaqt TEXT)")
+        conn.execute(hpcup.MJ_MATCH_DDL)            # DDL hpcup da - chat kartasi so'rovi shu jadvalga ulanadi
         conn.execute("CREATE INDEX IF NOT EXISTS mj_match_hafta ON mj_match (hafta, bosqich, joy)")
         conn.execute("CREATE TABLE IF NOT EXISTS mj_turnir (hafta TEXT PRIMARY KEY, hajm INTEGER NOT NULL DEFAULT 0, vaqt TEXT)")
         conn.execute("CREATE TABLE IF NOT EXISTS mj_qatnash (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (hafta, user_id))")
@@ -284,6 +279,8 @@ def _yakunla(conn, m, golib_yon, sabab, berish, now):
     conn.execute("UPDATE mj_match SET holat='tugadi', golib=?, sabab=?, navbat=NULL, hujum=NULL WHERE id=?", (golib, sabab, m["id"]))
     if m["tur"] == "turnir":
         _tor_keyingi(conn, dict(m), golib, sabab, berish, now)
+    if m["tur"] == "dost":
+        _ozgargan.add(m["id"])
 
 
 def _hujum_qoy(conn, m, i, s, now):
@@ -471,6 +468,8 @@ def _tick(rnd=random):
         _turnir_boshla(conn, now)
         for m in conn.execute("SELECT * FROM mj_match WHERE holat='ketmoqda'").fetchall():
             _oyin_yur(conn, m, berish, now, rnd)
+        for r in conn.execute("SELECT id FROM mj_match WHERE tur='dost' AND holat='kutmoqda' AND bosh < ?", (now,)).fetchall():
+            _ozgargan.add(r["id"])
         conn.execute("UPDATE mj_match SET holat='tugadi', sabab='muddat' WHERE tur='dost' AND holat='kutmoqda' AND bosh < ?", (now,))
         conn.execute("UPDATE mj_match SET holat='tugadi', sabab='tashlandi' WHERE holat='ketmoqda' AND tur IN ('mashq','sinov','dost') AND bosh < ?", (now - 3600,))
         _eslatmalar(conn, hafta, xabarlar)
@@ -502,8 +501,28 @@ async def _elon_yubor():
         logging.error("Maxluqlar jangi e'loni yuborilmadi: %s", e)
 
 
+async def _dost_xabar():
+    """Holati o'zgargan do'stona o'yinlarning chatdagi kartalarini yangilaydi (hpbot bergan chaqiruv orqali)."""
+    fn = _cfg.get("dost_ozgardi")
+    while _ozgargan:
+        mid = _ozgargan.pop()
+        if fn:
+            try:
+                await fn(mid)
+            except Exception as e:
+                logging.error("mjang kartasi yangilanmadi (%s): %s", mid, e)
+
+
+async def dost_yarat(uid):
+    """Chatdan taklif (hpbot): yangi do'stona o'yin, id."""
+    mid = await asyncio.to_thread(_dost, int(uid))
+    await _dost_xabar()
+    return mid
+
+
 async def tick():
     berish, xabarlar = await asyncio.to_thread(_tick)
+    await _dost_xabar()
     for uid, ref, pts in berish:
         if pts > 0 and uid and uid > 0:
             await asyncio.to_thread(hpcup._award, uid, "dars", ref, pts)
@@ -653,6 +672,8 @@ def _dost(uid):
     now = _ep()
     conn = hpcup._connect()
     try:
+        for r in conn.execute("SELECT id FROM mj_match WHERE tur='dost' AND holat='kutmoqda' AND a=?", (uid,)).fetchall():
+            _ozgargan.add(r["id"])
         conn.execute("UPDATE mj_match SET holat='tugadi', sabab='bekor' WHERE tur='dost' AND holat='kutmoqda' AND a=?", (uid,))
         cur = conn.execute("INSERT INTO mj_match (tur, a, a_seed, b_seed, bosh, holat, vaqt) VALUES ('dost',?,1,2,?,'kutmoqda',?)",
                            (uid, now + DOST_MUDDAT, hpcup._utc_iso(_now())))
@@ -680,6 +701,7 @@ def _qabul(uid, mid):
             return None, "band"
         _boshlash(conn, m["id"], m["a"], uid, now + BOSH_KUT + 2)
         conn.commit()
+        _ozgargan.add(m["id"])
         return m["id"], None
     finally:
         conn.close()
@@ -690,6 +712,8 @@ def _bekor(uid, mid):
     try:
         n = conn.execute("UPDATE mj_match SET holat='tugadi', sabab='bekor' WHERE id=? AND tur='dost' AND holat='kutmoqda' AND a=?", (int(mid), uid)).rowcount
         conn.commit()
+        if n:
+            _ozgargan.add(int(mid))
         return n > 0
     finally:
         conn.close()
@@ -827,6 +851,7 @@ async def api_mjang(request):
     javob = await asyncio.to_thread(_holat, uid, body.get("oyin"))
     await _ball_ber()
     javob.update(qosh)
+    await _dost_xabar()
     return cors(web.json_response(javob))
 
 

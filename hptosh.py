@@ -70,6 +70,7 @@ BOT_NOMZOD = {1: 1, 2: 4, 3: 12}                  # nechta zarbani o'ylab ko'rad
 BOT_SHOVQIN = {1: 0.12, 2: 0.06, 3: 0.02}         # nishonga olishdagi xato (radian)
 
 _cfg = {}
+_ozgargan = set()             # holati o'zgargan do'stona o'yinlar - chatdagi taklif kartasi yangilanadi (_dost_xabar)
 
 
 def _now():
@@ -83,13 +84,7 @@ def _ep():
 def _init():
     conn = hpcup._connect()
     try:
-        conn.execute("CREATE TABLE IF NOT EXISTS tosh_match ("
-                     " id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT NOT NULL, hafta TEXT, bosqich INTEGER, joy INTEGER,"
-                     " a INTEGER, b INTEGER, a_seed INTEGER, b_seed INTEGER, daraja INTEGER, bosh REAL,"
-                     " holat TEXT NOT NULL DEFAULT 'kutmoqda', golib INTEGER, sabab TEXT,"
-                     " toshlar TEXT, navbat TEXT, zarba INTEGER NOT NULL DEFAULT 0, a_ball INTEGER NOT NULL DEFAULT 0, b_ball INTEGER NOT NULL DEFAULT 0,"
-                     " a_skip INTEGER NOT NULL DEFAULT 0, b_skip INTEGER NOT NULL DEFAULT 0, navbat_bosh REAL, oxirgi TEXT,"
-                     " a_seen REAL, b_seen REAL, vaqt TEXT)")
+        conn.execute(hpcup.TOSH_MATCH_DDL)          # DDL hpcup da - chat kartasi so'rovi shu jadvalga ulanadi
         conn.execute("CREATE INDEX IF NOT EXISTS tosh_match_hafta ON tosh_match (hafta, bosqich, joy)")
         conn.execute("CREATE TABLE IF NOT EXISTS tosh_turnir (hafta TEXT PRIMARY KEY, hajm INTEGER NOT NULL DEFAULT 0, vaqt TEXT)")
         conn.execute("CREATE TABLE IF NOT EXISTS tosh_qatnash (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (hafta, user_id))")
@@ -249,6 +244,8 @@ def _yakunla(conn, m, golib_yon, sabab, berish, now):
     conn.execute("UPDATE tosh_match SET holat='tugadi', golib=?, sabab=?, navbat=NULL WHERE id=?", (golib, sabab, m["id"]))
     if m["tur"] == "turnir":
         _tor_keyingi(conn, dict(m), golib, sabab, berish, now)
+    if m["tur"] == "dost":
+        _ozgargan.add(m["id"])
 
 
 def _zarba_ber(conn, m, yon, shot, berish, now):
@@ -417,6 +414,8 @@ def _tick(rnd=random):
         for m in conn.execute("SELECT * FROM tosh_match WHERE holat='ketmoqda'").fetchall():
             _oyin_yur(conn, m, berish, now, rnd)
         # muddati o'tgan do'stona takliflar yopiladi
+        for r in conn.execute("SELECT id FROM tosh_match WHERE tur='dost' AND holat='kutmoqda' AND bosh < ?", (now,)).fetchall():
+            _ozgargan.add(r["id"])
         conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='muddat' WHERE tur='dost' AND holat='kutmoqda' AND bosh < ?", (now,))
         # tashlab ketilgan mashq o'yinlari (1 soatdan eski) yopiladi
         conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='tashlandi' WHERE holat='ketmoqda' AND tur IN ('mashq','sinov','dost') AND bosh < ?", (now - 3600,))
@@ -449,8 +448,28 @@ async def _elon_yubor():
         logging.error("Toshchalar e'loni yuborilmadi: %s", e)
 
 
+async def _dost_xabar():
+    """Holati o'zgargan do'stona o'yinlarning chatdagi kartalarini yangilaydi (hpbot bergan chaqiruv orqali)."""
+    fn = _cfg.get("dost_ozgardi")
+    while _ozgargan:
+        mid = _ozgargan.pop()
+        if fn:
+            try:
+                await fn(mid)
+            except Exception as e:
+                logging.error("tosh kartasi yangilanmadi (%s): %s", mid, e)
+
+
+async def dost_yarat(uid):
+    """Chatdan taklif (hpbot): yangi do'stona o'yin, id."""
+    mid = await asyncio.to_thread(_dost, int(uid))
+    await _dost_xabar()
+    return mid
+
+
 async def tick():
     berish, xabarlar = await asyncio.to_thread(_tick)
+    await _dost_xabar()
     for uid, ref, pts in berish:
         if pts > 0 and uid and uid > 0:
             await asyncio.to_thread(hpcup._award, uid, "dars", ref, pts)
@@ -588,6 +607,8 @@ def _dost(uid):
     now = _ep()
     conn = hpcup._connect()
     try:
+        for r in conn.execute("SELECT id FROM tosh_match WHERE tur='dost' AND holat='kutmoqda' AND a=?", (uid,)).fetchall():
+            _ozgargan.add(r["id"])
         conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='bekor' WHERE tur='dost' AND holat='kutmoqda' AND a=?", (uid,))
         cur = conn.execute("INSERT INTO tosh_match (tur, a, a_seed, b_seed, bosh, holat, vaqt) VALUES ('dost',?,1,2,?,'kutmoqda',?)",
                            (uid, now + DOST_MUDDAT, hpcup._utc_iso(_now())))
@@ -614,6 +635,8 @@ def _qabul(uid, mid):
         cur = conn.execute("UPDATE tosh_match SET b=?, holat='ketmoqda', bosh=?, toshlar=?, navbat='a', navbat_bosh=?, zarba=0, a_ball=0, b_ball=0, b_seen=? "
                            "WHERE id=? AND b IS NULL AND holat='kutmoqda'", (uid, now, json.dumps(boshlangich()), now + 4, now, m["id"]))
         conn.commit()
+        if cur.rowcount:
+            _ozgargan.add(m["id"])
         return (m["id"], None) if cur.rowcount else (None, "band")
     finally:
         conn.close()
@@ -624,6 +647,8 @@ def _bekor(uid, mid):
     try:
         n = conn.execute("UPDATE tosh_match SET holat='tugadi', sabab='bekor' WHERE id=? AND tur='dost' AND holat='kutmoqda' AND a=?", (int(mid), uid)).rowcount
         conn.commit()
+        if n:
+            _ozgargan.add(int(mid))
         return n > 0
     finally:
         conn.close()
@@ -741,6 +766,7 @@ async def api_tosh(request):
         if pts > 0 and u and u > 0:
             await asyncio.to_thread(hpcup._award, u, "dars", ref, pts)
     javob.update(qosh)
+    await _dost_xabar()
     return cors(web.json_response(javob))
 
 
