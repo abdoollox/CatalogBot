@@ -92,6 +92,9 @@ async def amain():
     c.close()
     sar, m = hppochta.kubok_matni("uz", d1)
     check("kubok xatida +39 galleon", n == 3 and d1["gal"] == 39 and "+39 galleon" in m)
+    check("kubok xatida galleon hisobi", "ball → " in m and "Jami +39 galleon" in m and d1.get("gb") is not None)
+    eski = dict(d1); eski.pop("gb")
+    check("eski xatda qisqa qator", "Mukofot: +39 galleon" in hppochta.kubok_matni("uz", eski)[1])
 
     # Migratsiya: faol mavsumdagi imtihon ballari arxivga ko'chadi (bir marta)
     yangi = await hpcup.current_season()

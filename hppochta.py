@@ -82,6 +82,8 @@ MATN = {
         "cupMe": "Siz %s ball qo'shdingiz.", "cupZero": "Siz bu hafta ball to'plamadingiz — yangi haftada fakultetingizga yordam bering.",
         "cupBadge": "Yangi nishon: %s", "cupGo": "🏆 Kubokni ko'rish",
         "cupGal": "Mukofot: +%s galleon hamyoningizga tushdi.",
+        "galB": "%s ball → %s galleon", "galW": "fakultet yutdi, ikki baravar → %s", "galT": "eng yaxshi uchlik +%s",
+        "galJ": "Jami +%s galleon hamyoningizga tushdi.",
         "houses": {"gryffindor": "Grifindor", "slytherin": "Sliterin", "ravenclaw": "Reyvenklo", "hufflepuff": "Xaffelpaff"},
         "badges": {"all_films": "Sakkiz qism", "flawless_exam": "Benuqson imtihon", "perfect_week": "Mukammal hafta", "streak_7": "Yetti kun ketma-ket"},
     },
@@ -106,6 +108,8 @@ MATN = {
         "cupMe": "Вы принесли %s очков.", "cupZero": "На этой неделе у вас нет очков — помогите факультету в новой неделе.",
         "cupBadge": "Новый значок: %s", "cupGo": "🏆 Открыть кубок",
         "cupGal": "Награда: +%s галлеонов в ваш кошелёк.",
+        "galB": "%s очков → %s галл.", "galW": "факультет победил, вдвое → %s", "galT": "тройка лучших +%s",
+        "galJ": "Всего +%s галлеонов в ваш кошелёк.",
         "houses": {"gryffindor": "Гриффиндор", "slytherin": "Слизерин", "ravenclaw": "Когтевран", "hufflepuff": "Пуффендуй"},
         "badges": {"all_films": "Восемь частей", "flawless_exam": "Безупречный экзамен", "perfect_week": "Идеальная неделя", "streak_7": "Семь дней подряд"},
     },
@@ -130,6 +134,8 @@ MATN = {
         "cupMe": "You earned %s points.", "cupZero": "You earned no points this week — help your house in the new one.",
         "cupBadge": "New badge: %s", "cupGo": "🏆 Open the Cup",
         "cupGal": "Reward: +%s Galleons added to your wallet.",
+        "galB": "%s points → %s Galleons", "galW": "your house won, doubled → %s", "galT": "top three +%s",
+        "galJ": "In total +%s Galleons added to your wallet.",
         "houses": {"gryffindor": "Gryffindor", "slytherin": "Slytherin", "ravenclaw": "Ravenclaw", "hufflepuff": "Hufflepuff"},
         "badges": {"all_films": "All eight parts", "flawless_exam": "Flawless exam", "perfect_week": "Perfect week", "streak_7": "Seven days in a row"},
     },
@@ -664,8 +670,21 @@ def kubok_matni(lang, d):
     for b in d.get("nish") or []:
         qator.append("🎖 " + t["cupBadge"] % t["badges"].get(b, b))
     if d.get("gal"):
-        qator.append("🪙 " + t["cupGal"] % _son(d["gal"]))
+        qator.append("🪙 " + _gal_qator(t, d))
     return sar, "\n".join(qator)
+
+
+def _gal_qator(t, d):
+    """Galleon qanday hisoblangani (egasi, 2026-10-17: odam pul qayerdan kelganini o'z misolida ko'rsin).
+    Eski xatlarda hisob yo'q (gb) - qisqa qator."""
+    if d.get("gb") is None:
+        return t["cupGal"] % _son(d["gal"])
+    q = [t["galB"] % (_son(d.get("gbl", d.get("ball", 0))), _son(d["gb"]))]
+    if d.get("gw"):
+        q.append(t["galW"] % _son(d["gb"] * hpcup.GAL_WIN_MULT))
+    if d.get("gt"):
+        q.append(t["galT"] % _son(d["gt"]))
+    return " · ".join(q) + ". " + t["galJ"] % _son(d["gal"])
 
 
 def _kubok_yangi(birinchi=False):
@@ -696,13 +715,17 @@ def _kubok_yoz(season_id):
         nish = {}
         for r in conn.execute("SELECT user_id, code FROM badges WHERE season_id=?", (season_id,)):
             nish.setdefault(r[0], []).append(r[1])
-        gal = {r[0]: r[1] for r in conn.execute(
-            "SELECT user_id, jami FROM galleon_mukofot WHERE season_id=?", (season_id,))}
+        gal = {r[0]: r for r in conn.execute(
+            "SELECT user_id, jami, ball, asos, golib, top FROM galleon_mukofot WHERE season_id=?", (season_id,))}
         v, n = _hozir(), 0
         for uid, uy in conn.execute("SELECT user_id, house FROM users WHERE house IS NOT NULL AND user_id > 0"):
             o, ub = orin.get(uy, (None, 0))
             d = {"s": season_id, "g": g, "uy": uy, "orin": o, "uy_ball": ub,
-                 "ball": int(ball.get(uid) or 0), "nish": nish.get(uid, []), "gal": int(gal.get(uid) or 0)}
+                 "ball": int(ball.get(uid) or 0), "nish": nish.get(uid, []), "gal": 0}
+            gr = gal.get(uid)
+            if gr:
+                d.update({"gal": int(gr[1] or 0), "gbl": int(gr[2] or 0), "gb": int(gr[3] or 0),
+                          "gw": 1 if gr[4] else 0, "gt": int(gr[5] or 0)})
             # Bot xabari faqat shu hafta ball to'plaganlarga; qolganlarga faqat ilovada
             conn.execute("INSERT INTO pochta (user_id, tur, qadam, n, yaratildi, matn, bot_holat) VALUES (?,?,?,?,?,?,?)",
                          (uid, "kubok", str(season_id), 1, v, json.dumps(d), None if d["ball"] else "jim"))
