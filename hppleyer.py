@@ -33,6 +33,7 @@ import json
 import logging
 import os
 import re
+import struct
 import time
 
 from aiohttp import web
@@ -43,6 +44,7 @@ import hpfilms
 
 STORE = "/data/pleyer.json"
 STAT = "/data/pleyer_stat.json"
+META = "/data/pleyer_meta.json"     # har nusxaning video turi (fayl ichidan bir marta o'qiladi)
 SESSION = "/data/pleyer"          # Telethon o'zi ".session" qo'shadi
 KEY_TTL = 6 * 3600
 REQ = 512 * 1024                  # Telegram'dan bir so'rovda olinadigan bo'lak (eng ko'pi 512 KB)
@@ -59,6 +61,8 @@ _msgs = {}                        # mid -> (xabar, vaqt)
 _stat = {}                        # "2026-10-17" -> {"b": bayt, "n": tomosha, "u": [odamlar]}
 _stat_dirty = False
 _ochiq_oqim = 0                   # hozir uzatilayotgan oqimlar soni
+_meta = {}                        # nusxa -> {"s": hajm, "c": video turi, "p": almashtiriladigan joy}
+_meta_locks = {}
 
 
 # --- SAQLASH ---
@@ -80,6 +84,11 @@ def load():
             _stat = json.load(f)
     except Exception:
         _stat = {}
+    try:
+        with open(META, encoding="utf-8") as f:
+            _meta.update(json.load(f))
+    except Exception:
+        pass
 
 
 def _save():
@@ -194,8 +203,13 @@ def versions(film):
                 k = hpfilms._mkey(film, lang, q, dub)
                 it = nusxa(k)
                 if it:
-                    out.append({"v": k, "lang": lang, "dub": dub or "", "q": q,
-                                "size": it["size"], "dur": it["dur"], "mime": it["mime"]})
+                    v = {"v": k, "lang": lang, "dub": dub or "", "q": q,
+                         "size": it["size"], "dur": it["dur"], "mime": it["mime"]}
+                    m = _meta.get(k)
+                    if m and m.get("s") == it["size"]:
+                        v["codec"] = m.get("c", "")
+                        v["p10"] = m.get("prof") == 110        # 10 bitli H.264 - Android brauzeri o'ynatmaydi
+                    out.append(v)
     return out
 
 
@@ -316,6 +330,126 @@ def parse_range(header, size):
     return start, end
 
 
+# --- MP4 ICHI: APPLE UCHUN HEVC BELGISI (2026-10-17) ---
+# Egasining o'zbekcha HD/SD fayllari HEVC, lekin "hev1" belgisi bilan. Safari (iPhone, Mac Telegram)
+# "hev1" ni o'ynatmaydi, xuddi shu fayl "hvc1" belgisi bilan o'ynaydi (WebKit'da sinab ko'rildi;
+# fayldagi hvcC da VPS/SPS/PPS bor). `ffmpeg -c copy -tag:v hvc1` ham AYNAN shu 4 baytni almashtiradi.
+# Shuning uchun server fayl ichidagi video turini bir marta o'qiydi (yuqori qutilar -> moov -> stsd)
+# va uzatishda o'sha 4 baytni "hvc1" ga almashtiradi. Hajm o'zgarmaydi, Telegram'dagi fayl o'zgarmaydi.
+# 10 bitli H.264 (profil 110) ni almashtirib bo'lmaydi - u faqat belgilanadi (p10).
+
+MOOV_OQ = 256 * 1024              # moov boshidan shuncha o'qiladi (stsd shu yerda turadi)
+_VIDEO = (b"avc1", b"avc3", b"hev1", b"hvc1", b"av01", b"vp09", b"mp4v")
+
+
+async def _read(item, off, n):
+    end = min(item["size"] - 1, off + n - 1)
+    if off > end:
+        return b""
+    buf = bytearray()
+    gen = _chunks(item, off, end)
+    try:
+        async for ch in gen:
+            buf += ch
+    finally:
+        await gen.aclose()
+    return bytes(buf)
+
+
+def _stsd(d, base):
+    """moov bo'lagidan video namunasi turi; hev1 bo'lsa uning fayldagi mutlaq joyi."""
+    out = {"c": "", "p": None}
+    i = 0
+    while True:
+        t = d.find(b"stsd", i)
+        if t < 4 or t + 20 > len(d):
+            return out
+        typ = d[t + 16:t + 20]          # stsd: tur(4) + versiya(4) + soni(4) + yozuv o'lchami(4) + yozuv turi
+        if typ in _VIDEO:
+            out["c"] = typ.decode()
+            if typ == b"hev1":
+                out["p"] = base + t + 16
+            elif typ in (b"avc1", b"avc3"):
+                a = d.find(b"avcC", t, t + 600)
+                if 0 < a and a + 6 <= len(d):
+                    out["prof"] = d[a + 5]       # avcC: versiya, keyin profil (100 High, 110 High 10)
+            return out
+        i = t + 4
+
+
+async def _taxlil(item):
+    size = item["size"]
+    off, buf_off, buf = 0, 0, b""
+    for _ in range(16):                 # yuqori qutilar: ftyp, free, mdat, moov...
+        if off + 8 > size:
+            break
+        if not (buf_off <= off and off + 16 <= buf_off + len(buf)):
+            buf_off, buf = off, await _read(item, off, 65536)
+        h = buf[off - buf_off:off - buf_off + 16]
+        bsize, typ = struct.unpack(">I4s", h[:8])
+        if bsize == 1:
+            bsize = struct.unpack(">Q", h[8:16])[0]
+        elif bsize == 0:
+            bsize = size - off
+        if typ == b"moov":
+            return _stsd(await _read(item, off, min(bsize, MOOV_OQ)), off)
+        if bsize < 8:
+            break
+        off += bsize
+    return {"c": "", "p": None}
+
+
+def _meta_save():
+    tmp = META + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_meta, f)
+        os.replace(tmp, META)
+    except Exception as e:
+        logging.warning("pleyer_meta yozilmadi: %s", e)
+
+
+async def meta(vkey, item):
+    """Nusxaning video turi - bir marta o'qiladi va eslab qolinadi (fayl almashsa - hajmidan bilinadi)."""
+    m = _meta.get(vkey)
+    if m and m.get("s") == item["size"]:
+        return m
+    lock = _meta_locks.setdefault(vkey, asyncio.Lock())
+    async with lock:
+        m = _meta.get(vkey)
+        if m and m.get("s") == item["size"]:
+            return m
+        try:
+            m = await asyncio.wait_for(_taxlil(item), 40)
+        except Exception as e:
+            logging.warning("Pleyer: %s ichi o'qilmadi: %s", vkey, e)
+            return {"c": "", "p": None}            # eslab qolinmaydi - keyingi safar yana urinadi
+        m["s"] = item["size"]
+        _meta[vkey] = m
+        _meta_save()
+        logging.info("Pleyer: %s - %s%s", vkey, m.get("c") or "?", " (hvc1 ga almashtiriladi)" if m.get("p") else "")
+        return m
+
+
+def _yamoq(chunk, pos, p):
+    """chunk fayldagi pos dan boshlanadi; p..p+3 baytlarni "hvc1" ga almashtiradi (qisman bo'lsa ham)."""
+    if p is None or pos >= p + 4 or p >= pos + len(chunk):
+        return chunk
+    b = bytearray(chunk)
+    for k in range(4):
+        j = p + k - pos
+        if 0 <= j < len(b):
+            b[j] = b"hvc1"[k]
+    return bytes(b)
+
+
+async def _meta_fon(vs):
+    for v in vs:
+        it = nusxa(v["v"])
+        if it and "codec" not in v:
+            await meta(v["v"], it)
+
+
 # --- ILOVA UCHUN ---
 
 async def api_info(request):
@@ -336,8 +470,11 @@ async def api_info(request):
     film = str(body.get("film") or "")[:12]
     if not ready():
         return cors(web.json_response({"ok": True, "ready": False, "versions": []}))
+    vs = versions(film)
+    if any("codec" not in v for v in vs):
+        asyncio.get_event_loop().create_task(_meta_fon(vs))     # birinchi tomoshagacha tayyor tursin
     return cors(web.json_response({
-        "ok": True, "ready": True, "versions": versions(film), "key": make_key(uid),
+        "ok": True, "ready": True, "versions": vs, "key": make_key(uid),
         "base": _cfg.get("public_base", "") + "/api/pleyer/v/",
     }))
 
@@ -372,6 +509,7 @@ async def api_video(request):
         return web.Response(status=200, headers=dict(head, **{"Content-Length": str(size)}))
 
     start, end = rng if rng else (0, size - 1)
+    patch = (await meta(vkey, item)).get("p")
     # Tomosha boshlandi: fayl boshidan katta bo'lak so'ralganda (Safari avval 2 baytni sinaydi)
     if start == 0 and end - start > 1024:
         _stat_add(uid, vkey)
@@ -386,7 +524,7 @@ async def api_video(request):
     gen = _chunks(item, start, end)
     try:
         async for chunk in gen:
-            await resp.write(chunk)
+            await resp.write(_yamoq(chunk, start + yuborildi, patch))
             yuborildi += len(chunk)
         await resp.write_eof()
     except (ConnectionResetError, asyncio.CancelledError):

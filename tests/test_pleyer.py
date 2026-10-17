@@ -35,6 +35,7 @@ import hpfilms, hppleyer, main               # noqa: E402
 hpfilms.STORE = os.path.join(TMP, "films.json")
 hppleyer.STORE = os.path.join(TMP, "pleyer.json")
 hppleyer.STAT = os.path.join(TMP, "pleyer_stat.json")
+hppleyer.META = os.path.join(TMP, "pleyer_meta.json")
 
 ok = fail = 0
 def check(name, cond):
@@ -184,6 +185,59 @@ async def amain():
     hppleyer._stat_dirty = True
     hppleyer._stat_save()
     check("statistika faylga yozildi", os.path.exists(hppleyer.STAT))
+
+    # --- MP4 ichi: hev1 -> hvc1 (Safari uchun) ---
+    import struct
+
+    def box(t, body):
+        return struct.pack(">I", 8 + len(body)) + t + body
+
+    def mp4(entry, mdat=300000, moov_oldin=False):
+        stsd = box(b"stsd", b"\0" * 4 + struct.pack(">I", 1) + entry)
+        moov = box(b"moov", box(b"mvhd", b"\0" * 100) + box(b"trak", box(b"mdia", box(b"minf", box(b"stbl", stsd)))))
+        bosh = box(b"ftyp", b"isom" + b"\0" * 4 + b"isomiso2mp41") + box(b"free", b"")
+        md = box(b"mdat", bytes(i % 251 for i in range(mdat)))
+        return bosh + (moov + md if moov_oldin else md + moov)
+
+    hev = mp4(box(b"hev1", b"\0" * 78 + box(b"hvcC", b"\x01" * 23)))
+    avc10 = mp4(box(b"avc1", b"\0" * 78 + box(b"avcC", bytes([1, 110, 0, 40]) + b"\0" * 10)), moov_oldin=True)
+    FAYL = {50: hev, 51: avc10}
+
+    async def mp4_chunks(item, start, end):
+        d = FAYL[item["mid"]]
+        i = start
+        while i <= end:
+            j = min(end, i + 70000)          # bo'laklar chegarasi "hev1" ni kesib o'tishi ham sinaladi
+            yield d[i:j + 1]
+            i = j + 1
+    hppleyer._chunks = mp4_chunks
+    hpfilms._data["map"]["hp3_uz@hd"] = {"mid": 50, "name": "hp3.mp4", "size": len(hev)}
+    hpfilms._data["map"]["hp3_uz"] = {"mid": 51, "name": "hp3.mp4", "size": len(avc10)}
+    m = await hppleyer.meta("hp3_uz@hd", hppleyer.nusxa("hp3_uz@hd"))
+    check("hev1 topildi, joyi aniq (moov fayl oxirida)", m["c"] == "hev1" and hev[m["p"]:m["p"] + 4] == b"hev1")
+    m2 = await hppleyer.meta("hp3_uz", hppleyer.nusxa("hp3_uz"))
+    check("10 bitli H.264 tanildi (moov boshida), almashtirilmaydi", m2["c"] == "avc1" and m2.get("prof") == 110 and m2["p"] is None)
+    vs3 = {v["v"]: v for v in hppleyer.versions("hp3")}
+    check("nusxalarda video turi va 10 bit belgisi", vs3["hp3_uz@hd"]["codec"] == "hev1" and vs3["hp3_uz"]["p10"] is True
+          and vs3["hp3_uz@hd"]["p10"] is False)
+    check("video turi faylga yozildi", json.load(open(hppleyer.META))["hp3_uz@hd"]["p"] == m["p"])
+    P = m["p"]
+    async with TestClient(TestServer(app)) as cl:
+        u3 = "/api/pleyer/v/%s?k=%s" % (urllib.parse.quote("hp3_uz@hd"), hppleyer.make_key(42))
+        r = await cl.get(u3)
+        b = await r.read()
+        check("butun fayl: faqat 4 bayt o'zgardi -> hvc1", len(b) == len(hev) and b[P:P + 4] == b"hvc1"
+              and b[:P] == hev[:P] and b[P + 4:] == hev[P + 4:])
+        r = await cl.get(u3, headers={"Range": "bytes=%d-%d" % (P + 2, P + 9)})
+        b = await r.read()
+        check("oraliq belgining o'rtasidan boshlansa ham", b == b"c1" + hev[P + 4:P + 10])
+        r = await cl.get(u3, headers={"Range": "bytes=0-99"})
+        check("belgiga tegmaydigan oraliq o'zgarmaydi", await r.read() == hev[:100])
+        u4 = "/api/pleyer/v/hp3_uz?k=" + hppleyer.make_key(42)
+        r = await cl.get(u4)
+        check("avc1 fayl o'zgarmasdan uzatiladi", await r.read() == avc10)
+    check("_yamoq: bo'lak chegarasida", hppleyer._yamoq(b"xxhe", 10, 12) == b"xxhv" and hppleyer._yamoq(b"v1yy", 14, 12) == b"c1yy")
+    hppleyer._chunks = fake_chunks
 
     # --- Admin buyrug'i: kalit tekshiruvi ---
     javob = []
