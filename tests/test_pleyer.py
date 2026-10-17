@@ -196,6 +196,39 @@ async def amain():
         r = await cl.get("/api/pleyer/v/hp1_en?k=" + key)
         check("yo'q nusxa - 404", r.status == 404)
 
+        # Hammaga ochiq rejim: obuna sharti, yuk chegarasi, jurnal
+        azo = {"v": False}
+        jurnal = []
+
+        async def soxta_azo(chat):
+            return azo["v"]
+
+        async def soxta_log(user, payload):
+            jurnal.append((user.get("first_name"), payload))
+        hppleyer._cfg.update({"is_subscribed": soxta_azo, "tg_chat_id": abs, "log": soxta_log})
+        hppleyer._data["ochiq"] = True
+        r = await cl.post("/api/pleyer", json={"film": "hp1"}, headers={"X-Telegram-Init-Data": init_data(7)})
+        check("ochiq rejim: kanalga a'zo bo'lmaganga - not_subscribed", (await r.json()) == {"ok": False, "error": "not_subscribed"})
+        azo["v"] = None
+        r = await cl.post("/api/pleyer", json={"film": "hp1"}, headers={"X-Telegram-Init-Data": init_data(7)})
+        check("Telegram javob bermasa (None) - o'tkaziladi", (await r.json()).get("ready") is True)
+        azo["v"] = True
+        r = await cl.post("/api/pleyer", json={"film": "hp1"}, headers={"X-Telegram-Init-Data": init_data(7)})
+        j7 = await r.json()
+        check("a'zo oddiy odam - nusxalar va kalit", j7.get("ready") and hppleyer.check_key(j7["key"]) == 7)
+        hppleyer._ochiq_oqim = hppleyer.MAX_OQIM
+        r = await cl.post("/api/pleyer", json={"film": "hp1"}, headers={"X-Telegram-Init-Data": init_data(7)})
+        check("oqimlar chegarasida - band", (await r.json()) == {"ok": False, "error": "band"})
+        hppleyer._ochiq_oqim = 0
+        u7 = "/api/pleyer/v/hp1_ru?k=" + j7["key"]
+        await (await cl.get(u7)).read()
+        await (await cl.get(u7)).read()
+        await (await cl.get(u7, headers={"Range": "bytes=1000-2000"})).read()
+        await asyncio.sleep(0.05)
+        check("jurnalga kuniga bir marta, ismi bilan", jurnal == [("T", "pleyer_hp1_ru")])
+        hppleyer._data["ochiq"] = False
+        hppleyer._cfg.pop("is_subscribed")
+
         # Tomoshabin yarmida yopib ketsa: manba darhol yopiladi
         yopildi = []
 
@@ -221,7 +254,7 @@ async def amain():
 
     s = hppleyer._stat[hppleyer._kun()]
     check("trafik sanaldi (2 + 100124 + to'liq fayl)", s["b"] >= 2 + 100124 + len(FILE))
-    check("tomosha: faqat boshidan katta so'rov sanaladi", s["n"] >= 1 and s["u"] == [42])
+    check("tomosha: faqat boshidan katta so'rov sanaladi", s["n"] >= 1 and sorted(s["u"]) == [7, 42])
     hppleyer._stat_dirty = True
     hppleyer._stat_save()
     check("statistika faylga yozildi", os.path.exists(hppleyer.STAT))

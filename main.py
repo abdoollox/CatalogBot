@@ -2831,8 +2831,12 @@ async def main():
 
     # --- Ilova ichidagi pleyer (film Telegram'dan oqim bilan; hpfilms jadvalidan) ---
     try:
+        async def _pleyer_log(user, payload):
+            await log_user_action(_WebUser(user), payload)
         hppleyer.register(dp, bot, app, {"admin_ids": ADMIN_IDS, "token": TOKEN, "cors": _cors,
-                                         "verify_init_data": verify_init_data, "public_base": PUBLIC_BASE})
+                                         "verify_init_data": verify_init_data, "public_base": PUBLIC_BASE,
+                                         "is_subscribed": is_subscribed, "tg_chat_id": tg_chat_id,
+                                         "log": _pleyer_log})
     except Exception as pleyer_error:
         logging.error("Pleyer moduli ishga tushmadi: %s", pleyer_error)
 

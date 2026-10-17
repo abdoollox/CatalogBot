@@ -50,6 +50,8 @@ KEY_TTL = 6 * 3600
 REQ = 512 * 1024                  # Telegram'dan bir so'rovda olinadigan bo'lak (eng ko'pi 512 KB)
 MSG_TTL = 20 * 60                 # xabar (fayl havolasi) shuncha vaqt eslab qolinadi
 STAT_KUN = 30                     # statistika necha kun saqlanadi
+MAX_OQIM = 30                     # bir vaqtda shuncha oqimdan ko'p bo'lsa yangi tomosha boshlanmaydi ("band")
+                                  # (har oqim xotirada ~4 MB; konteyner 384 MB, bot o'zi ~170 MB)
 
 _cfg = {}
 _data = {"api_id": 0, "api_hash": "", "ochiq": False}
@@ -61,6 +63,8 @@ _msgs = {}                        # mid -> (xabar, vaqt)
 _stat = {}                        # "2026-10-17" -> {"b": bayt, "n": tomosha, "u": [odamlar]}
 _stat_dirty = False
 _ochiq_oqim = 0                   # hozir uzatilayotgan oqimlar soni
+_korildi = set()                  # (kun, odam, nusxa) - jadvalga bir marta yoziladi
+_ismlar = {}                      # odam -> Telegram ma'lumoti (pleyer ochilganda; jurnalga ismi bilan yozilsin)
 _meta = {}                        # nusxa -> {"s": hajm, "c": video turi, "p": almashtiriladigan joy}
 _meta_locks = {}
 
@@ -508,9 +512,21 @@ async def api_info(request):
     uid = int(user["id"])
     if not allowed(uid):
         return cors(web.json_response({"ok": False, "error": "yopiq"}))
+    if len(_ismlar) > 3000:
+        _ismlar.clear()
+    _ismlar[uid] = {k: user.get(k) for k in ("id", "first_name", "last_name", "username")}
     film = str(body.get("film") or "")[:12]
     if not ready():
         return cors(web.json_response({"ok": True, "ready": False, "versions": []}))
+    # Bot filmni faqat kanalga a'zolarga beradi - pleyerda ham shu qoida (None - Telegram javob bermadi: o'tkazamiz)
+    if abs(uid) not in _cfg.get("admin_ids", ()) and _cfg.get("is_subscribed"):
+        try:
+            if await _cfg["is_subscribed"](_cfg["tg_chat_id"](uid)) is False:
+                return cors(web.json_response({"ok": False, "error": "not_subscribed"}))
+        except Exception as e:
+            logging.warning("Pleyer: a'zolik tekshirilmadi: %s", e)
+    if _ochiq_oqim >= MAX_OQIM:
+        return cors(web.json_response({"ok": False, "error": "band"}))
     vs = versions(film)
     if any("codec" not in v for v in vs):
         asyncio.get_event_loop().create_task(_meta_fon(vs))     # birinchi tomoshagacha tayyor tursin
@@ -554,6 +570,12 @@ async def api_video(request):
     # Tomosha boshlandi: fayl boshidan katta bo'lak so'ralganda (Safari avval 2 baytni sinaydi)
     if start == 0 and end - start > 1024:
         _stat_add(uid, vkey)
+        belgi = (_kun(), uid, vkey)
+        if belgi not in _korildi and _cfg.get("log"):
+            _korildi.add(belgi)
+            if len(_korildi) > 5000:
+                _korildi.clear()
+            asyncio.get_event_loop().create_task(_jurnal(uid, vkey))
 
     resp = web.StreamResponse(status=206 if rng else 200, headers=head)
     if rng:
@@ -580,6 +602,14 @@ async def api_video(request):
         except Exception:
             pass
     return resp
+
+
+async def _jurnal(uid, vkey):
+    """Foydalanuvchilar jadvaliga: «pleyer_hp1_uz@hd» (kuniga bir marta har nusxa uchun)."""
+    try:
+        await _cfg["log"](_ismlar.get(uid) or {"id": uid}, "pleyer_" + vkey)
+    except Exception as e:
+        logging.warning("Pleyer: jurnalga yozilmadi: %s", e)
 
 
 # --- ADMIN ---
@@ -644,7 +674,8 @@ async def _stat_kuzatuvchi():
 # --- ULASH ---
 
 def register(dp, bot, app, cfg):
-    """cfg: admin_ids, token, verify_init_data, cors, public_base. hpfilms DAN KEYIN ulanadi."""
+    """cfg: admin_ids, token, verify_init_data, cors, public_base, is_subscribed, tg_chat_id, log.
+    hpfilms DAN KEYIN ulanadi."""
     _cfg.update(cfg)
     _cfg["bot"] = bot
     load()
