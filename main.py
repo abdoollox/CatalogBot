@@ -39,6 +39,7 @@ import hpchatstat
 import hpfilms
 import hpserial
 import hpkitob
+import hppleyer
 import hpprofil
 import hpdars
 import hpqoriq
@@ -2827,6 +2828,13 @@ async def main():
         hpfilms.register(dp, bot, {"admin_ids": ADMIN_IDS})
     except Exception as films_error:
         logging.error("Filmlar moduli ishga tushmadi: %s", films_error)
+
+    # --- Ilova ichidagi pleyer (film Telegram'dan oqim bilan; hpfilms jadvalidan) ---
+    try:
+        hppleyer.register(dp, bot, app, {"admin_ids": ADMIN_IDS, "token": TOKEN, "cors": _cors,
+                                         "verify_init_data": verify_init_data, "public_base": PUBLIC_BASE})
+    except Exception as pleyer_error:
+        logging.error("Pleyer moduli ishga tushmadi: %s", pleyer_error)
 
     # --- Chiqib ketish so'rovi ---
     # Alohida try: bu ishlamay qolsa ham bot kino tarqatishda davom etsin.

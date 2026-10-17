@@ -6,3 +6,6 @@ gspread
 google-auth
 chess==1.11.2
 pillow==11.3.0
+# Ilova ichidagi pleyer: katta fayllarni Telegram'dan olish (MTProto); cryptg - tez shifrlash
+telethon==1.45.0
+cryptg==0.5.2
