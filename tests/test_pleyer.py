@@ -112,6 +112,46 @@ async def amain():
     except ValueError:
         check("range: chegaradan tashqari", True)
 
+    # --- Parallel bo'laklar: tartib buzilmasin, yopilsa qolganlari bekor ---
+    import random
+    asl_chunks, asl_blok, asl_client = hppleyer._chunks, hppleyer._blok, hppleyer._get_client
+    KATTA = bytes(random.randrange(256) for _ in range(5 * 1024 * 1024 + 12345))
+    sorovlar, bekor, kech = [], [], [0]
+
+    async def soxta_blok(c, item, off, n):
+        sorovlar.append(off)
+        try:
+            await asyncio.sleep(kech[0] if off else 0 if kech[0] else random.random() * 0.02)  # har xil tartibda tugaydi
+        except asyncio.CancelledError:
+            bekor.append(off)
+            raise
+        return KATTA[off:off + n]
+
+    async def soxta_client():
+        return object()
+    hppleyer._blok, hppleyer._get_client = soxta_blok, soxta_client
+    it_k = {"mid": 1, "size": len(KATTA)}
+
+    async def yig(a, b):
+        out = bytearray()
+        async for ch in asl_chunks(it_k, a, b):
+            out += ch
+        return bytes(out)
+    togri = True
+    for a, b in ((0, 1), (0, len(KATTA) - 1), (1048575, 1048577), (3000000, 5000000), (len(KATTA) - 10, len(KATTA) - 1), (2097152, 2097152)):
+        togri = togri and (await yig(a, b)) == KATTA[a:b + 1]
+    check("parallel bo'laklar: har qanday oraliq aynan to'g'ri tartibda", togri)
+    sorovlar.clear()
+    kech[0] = 0.3                     # birinchisidan boshqa bo'laklar sekin keladi
+    gen = asl_chunks(it_k, 0, len(KATTA) - 1)
+    await gen.__anext__()
+    check("oldindan 4 tagacha bo'lak so'raladi", 2 <= len(sorovlar) <= 5)
+    await gen.aclose()
+    await asyncio.sleep(0.05)
+    check("tomoshabin yopsa kutilayotgan bo'laklar bekor qilinadi, yangisi so'ralmaydi",
+          sorted(bekor) == sorted(sorovlar[1:]) and len(sorovlar) == 4)
+    hppleyer._blok, hppleyer._get_client = asl_blok, asl_client
+
     # --- HTTP ---
     app = web.Application()
     app.router.add_route("*", "/api/pleyer", hppleyer.api_info)

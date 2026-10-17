@@ -270,40 +270,60 @@ async def _message(c, mid, fresh=False):
     return msg
 
 
-async def _chunks(item, start, end):
-    """Fayl baytlari [start, end] oralig'ida, bo'lakma-bo'lak (Telegram'dan)."""
-    c = await _get_client()
-    if c is None:
-        raise RuntimeError("ulanish yo'q")
+BLOK = 1024 * 1024                # bir vazifa oladigan bo'lak (2 ta so'rov)
+PARALLEL = 4                      # bir vaqtda nechta bo'lak so'raladi (2026-10-17: ketma-ket ~0,5 MB/s edi)
+
+
+async def _blok(c, item, off, n):
+    """Fayldan [off, off+n) - bitta mustaqil yuklash (Telegram har so'rovga alohida javob beradi)."""
     for urinish in (0, 1):
         msg = await _message(c, item["mid"], fresh=bool(urinish))
         if msg is None:
             raise LookupError("xabar topilmadi")
-        left = end - start + 1
+        out = bytearray()
+        it = c.iter_download(msg.media.document, offset=off, request_size=REQ,
+                             limit=(n + REQ - 1) // REQ, file_size=item["size"] or None)
         try:
-            it = c.iter_download(msg.media.document, offset=start, request_size=REQ,
-                                 file_size=item["size"] or None)
-            try:
-                async for chunk in it:
-                    if left <= 0:
-                        break
-                    chunk = bytes(chunk[:left])
-                    left -= len(chunk)
-                    start += len(chunk)
-                    yield chunk
-            finally:
-                try:
-                    await it.close()        # boshqa markazdan olingan ulanish qaytariladi
-                except Exception:
-                    pass
-            return
-        except (ConnectionResetError, asyncio.CancelledError, GeneratorExit):
+            async for ch in it:
+                out += ch
+                if len(out) >= n:
+                    break
+            return bytes(out[:n])
+        except asyncio.CancelledError:
             raise
         except Exception as e:
             # Fayl havolasi eskirgan bo'lishi mumkin - xabarni yangidan olib bir marta qayta urinamiz
-            if urinish or left <= 0:
+            if urinish:
                 raise
-            logging.warning("Pleyer: oqim uzildi (%s), qayta urinish", e)
+            logging.warning("Pleyer: bo'lak olinmadi (%s), qayta urinish", e)
+        finally:
+            try:
+                await it.close()            # boshqa markazdan olingan ulanish qaytariladi
+            except Exception:
+                pass
+
+
+async def _chunks(item, start, end):
+    """Fayl baytlari [start, end] oralig'ida, tartib bilan. Bo'laklar PARALLEL tarzda oldindan so'raladi."""
+    c = await _get_client()
+    if c is None:
+        raise RuntimeError("ulanish yo'q")
+    bosh = start - start % BLOK
+    joylar = list(range(bosh, end + 1, BLOK))
+    navbat = []
+    try:
+        for i, off in enumerate(joylar):
+            while len(navbat) < PARALLEL and len(navbat) + i < len(joylar):
+                o = joylar[i + len(navbat)]
+                navbat.append(asyncio.ensure_future(_blok(c, item, o, min(BLOK, item["size"] - o))))
+            data = await navbat.pop(0)
+            a = max(start, off) - off
+            b = min(end, off + BLOK - 1) - off + 1
+            if a < b:
+                yield data[a:b]
+    finally:
+        for t in navbat:
+            t.cancel()
 
 
 # --- RANGE ---
