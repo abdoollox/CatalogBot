@@ -463,6 +463,27 @@ def _yamoq(chunk, pos, p):
     return bytes(b)
 
 
+async def _meta_hammasi():
+    """Bot ishga tushganda hamma nusxalarning video turi oldindan aniqlanadi (eslab qolinganlari o'tkaziladi) -
+    ilova birinchi ochilishdayoq qaysi nusxa qurilmada o'ynashini biladi."""
+    await asyncio.sleep(30)
+    if not ready() or not hpfilms._data.get("group"):
+        return
+    import catalog
+    soni = 0
+    for film in catalog.FILMS:
+        for v in versions(film):
+            if "codec" in v:
+                continue
+            it = nusxa(v["v"])
+            if it:
+                await meta(v["v"], it)
+                soni += 1
+                await asyncio.sleep(1)
+    if soni:
+        logging.info("Pleyer: %d ta nusxaning video turi aniqlandi", soni)
+
+
 async def _meta_fon(vs):
     for v in vs:
         it = nusxa(v["v"])
@@ -631,5 +652,6 @@ def register(dp, bot, app, cfg):
     app.router.add_route("*", "/api/pleyer", api_info)
     app.router.add_route("*", "/api/pleyer/v/{v}", api_video)
     asyncio.get_event_loop().create_task(_stat_kuzatuvchi())
+    asyncio.get_event_loop().create_task(_meta_hammasi())
     logging.info("Pleyer: kalit %s, rejim %s", "bor" if ready() else "yo'q",
                  "ochiq" if _data.get("ochiq") else "sinov")
