@@ -20,6 +20,11 @@ chiqib ketish faqat nazorat yozuvlaridan (pg_natija) hal qilinadi.
 
 So'rovlar - POST /api/poyga: {} holat (to'liq), {join: 1|0} yozilish, {pos: n, cps: {k: ms}} uchish paytida (yengil javob).
 
+DO'ST BILAN POYGA (o'quvchi taklifi, 2026-10-17; Toshchalar/Maxluqlar jangi qolipida): {dost: 1} ochiq taklif (DOST_MUDDAT),
+{dqabul: id} - birinchi qabul qilgan raqib bo'ladi, {dbekor: id}; {doyin: id} holat, {doyin, dpos} uchish paytida joy, {doyin, dfin: ms} marra,
+{doyin, dtashla: 1} - taslim. Ikkalasi DOST_SANOQ soniyadan keyin BIR XIL yo'ldan (DOST_HALQA halqa) uchadi; marraga tezroq yetgan yutadi.
+Ball yo'q. Chatdagi karta (hpcup, ustun `poyga`) holati jonli yangilanadi (_ozgargan -> _dost_xabar).
+
 SINOV POYGASI (faqat admin; {sinov: 1} boshlaydi, {sinov: 0} to'xtatadi): haqiqiy poyganing o'zi, lekin raqiblar - SINOV_BOT ta kompyuter
 uchuvchi (manfiy id), start SINOV_KUT soniyadan keyin, ball berilmaydi, haqiqiy poygaga ta'sir qilmaydi. Hafta kaliti "sinov:<uid>:<vaqt>".
 Sinov holati xotirada (_sinov) - bot qayta ishga tushsa sinov yo'qoladi.
@@ -29,6 +34,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import random
 from datetime import datetime, timedelta
 
 from aiohttp import web
@@ -61,6 +67,12 @@ SINOV_BOT = 9                 # kompyuter uchuvchilar soni
 SINOV_BOTLAR = (("Viktor", "slytherin", 0.80), ("Jinni", "gryffindor", 0.86), ("Sedrik", "hufflepuff", 0.92), ("Chjou", "ravenclaw", 0.98),
                 ("Oliver", "gryffindor", 1.05), ("Draco", "slytherin", 1.13), ("Luna", "ravenclaw", 1.22), ("Ron", "gryffindor", 1.33),
                 ("Nevill", "gryffindor", 1.50))
+DOST_HALQA = 30               # do'st bilan poyga yo'li (mashq bilan bir xil)
+DOST_MUDDAT = 1800            # taklif shuncha soniya ochiq turadi
+DOST_SANOQ = 8                # qabul qilingach start shuncha soniyadan keyin
+DOST_KUT = 40                 # birinchisi marraga yetgach ikkinchisiga shuncha soniya
+DOST_KELMADI = 30             # start bo'lib shuncha vaqt o'tsa ham uchmagan - kelmadi
+DOST_MAX = 200                # poyga eng ko'pi shuncha davom etadi (keyin o'tgan halqalar bo'yicha)
 BOT_UID0 = -9100              # kompyuter uchuvchilar: BOT_UID0 - i
 
 _cfg = {}
@@ -68,6 +80,7 @@ _qulf = None
 _sinov = {}                   # uid -> {"hafta": kalit, "t0": start vaqti}
 _jonli = {}                   # hafta -> {uid: o'tilgan halqalar} (faqat ko'rsatish uchun)
 _kesh = {}                    # hafta -> poyga holatining xotiradagi nusxasi (yengil javoblar uchun)
+_ozgargan = set()             # holati o'zgargan do'stona poygalar - chatdagi taklif kartasi yangilanadi (_dost_xabar)
 
 
 def _now():
@@ -90,6 +103,7 @@ def _init():
         conn.execute("CREATE TABLE IF NOT EXISTS pg_natija (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, bosqich INTEGER NOT NULL, ms INTEGER NOT NULL,"
                      " xato INTEGER NOT NULL DEFAULT 0, vaqt REAL NOT NULL, PRIMARY KEY (hafta, user_id, bosqich))")
         conn.execute("CREATE TABLE IF NOT EXISTS pg_eslatma (hafta TEXT NOT NULL, tur TEXT NOT NULL, PRIMARY KEY (hafta, tur))")
+        conn.execute(hpcup.PG_DOST_DDL)
         conn.commit()
     finally:
         conn.close()
@@ -375,6 +389,7 @@ def _tick():
     try:
         _yur(conn, hafta, berish, now)
         _eslatmalar(conn, hafta, xabarlar)
+        _dost_tick(conn, now)
         if now >= _turnir_vaqti(hafta):
             _kesh_yangila(conn, hafta)
         for uid, v in list(_sinov.items()):      # sinov poygalari: kompyuter uchuvchilar va nazoratlar
@@ -420,6 +435,7 @@ async def _elon_yubor():
 async def tick():
     async with _qulf:
         berish, xabarlar = await asyncio.to_thread(_tick)
+    await _dost_xabar()
     for uid, ref, pts in berish:
         if pts > 0 and uid and uid > 0:
             await asyncio.to_thread(hpcup._award, uid, "dars", ref, pts)
@@ -597,6 +613,194 @@ def _yengil(uid, hafta, now, tasdiq):
             "board": _taxta(hafta, uid, now), "ack": tasdiq or []}
 
 
+# ---------- do'st bilan poyga (o'quvchi taklifi, 2026-10-17) ----------
+
+def _dost(uid):
+    """Do'stga taklif: a = chaqiruvchi, b bo'sh, `bosh` - taklif muddati. Oldingi ochiq taklifi bekor bo'ladi."""
+    now = _ep()
+    conn = hpcup._connect()
+    try:
+        for r in conn.execute("SELECT id FROM pg_dost WHERE holat='kutmoqda' AND a=?", (uid,)).fetchall():
+            _ozgargan.add(r["id"])
+        conn.execute("UPDATE pg_dost SET holat='tugadi', sabab='bekor' WHERE holat='kutmoqda' AND a=?", (uid,))
+        cur = conn.execute("INSERT INTO pg_dost (a, bosh, holat, vaqt) VALUES (?,?,'kutmoqda',?)", (uid, now + DOST_MUDDAT, hpcup._utc_iso(_now())))
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def _dost_qabul(uid, mid):
+    """Taklifni qabul qilish. (id | None, xato)."""
+    now = _ep()
+    conn = hpcup._connect()
+    try:
+        m = conn.execute("SELECT * FROM pg_dost WHERE id=?", (int(mid),)).fetchone()
+        if not m:
+            return None, "yoq"
+        if uid in (m["a"], m["b"]):
+            return m["id"], None
+        if m["b"] is not None:
+            return None, "band"
+        if m["holat"] != "kutmoqda" or now >= (m["bosh"] or 0):
+            return None, "muddat"
+        cur = conn.execute("UPDATE pg_dost SET b=?, holat='ketmoqda', bosh=?, urug=? WHERE id=? AND b IS NULL AND holat='kutmoqda'",
+                           (uid, now + DOST_SANOQ, random.randint(1000, 900999), m["id"]))
+        conn.commit()
+        if cur.rowcount:
+            _ozgargan.add(m["id"])
+        return (m["id"], None) if cur.rowcount else (None, "band")
+    finally:
+        conn.close()
+
+
+def _dost_bekor(uid, mid):
+    conn = hpcup._connect()
+    try:
+        n = conn.execute("UPDATE pg_dost SET holat='tugadi', sabab='bekor' WHERE id=? AND holat='kutmoqda' AND a=?", (int(mid), uid)).rowcount
+        conn.commit()
+        if n:
+            _ozgargan.add(int(mid))
+        return n > 0
+    finally:
+        conn.close()
+
+
+def taklif_info(mid):
+    """Telegram kartasi uchun: ochiq taklif bo'lsa {a, name}, aks holda None."""
+    conn = hpcup._connect()
+    try:
+        m = conn.execute("SELECT * FROM pg_dost WHERE id=?", (int(mid),)).fetchone()
+        if not m or m["b"] is not None or m["holat"] != "kutmoqda" or _ep() >= (m["bosh"] or 0):
+            return None
+        r = conn.execute("SELECT first_name FROM users WHERE user_id=?", (m["a"],)).fetchone()
+        return {"a": m["a"], "name": (r["first_name"] if r else None) or "Sehrgar"}
+    finally:
+        conn.close()
+
+
+def _dost_yakun(conn, m, golib, sabab):
+    conn.execute("UPDATE pg_dost SET holat='tugadi', golib=?, sabab=? WHERE id=? AND holat='ketmoqda'", (golib, sabab, m["id"]))
+    _ozgargan.add(m["id"])
+    return conn.execute("SELECT * FROM pg_dost WHERE id=?", (m["id"],)).fetchone()
+
+
+def _dost_yur(conn, m, now):
+    """Natija vaqti kelgan bo'lsa poygani yakunlaydi: ikkalasi marraga yetdi - tezrog'i; bittasi yetib, ikkinchisiga DOST_KUT
+    o'tdi - yetgani; hech kim uchmadi - kelmadi; DOST_MAX dan keyin - ko'proq halqa o'tgani."""
+    if not m or m["holat"] != "ketmoqda":
+        return m
+    bosh, fa, fb = m["bosh"] or 0, m["a_ms"], m["b_ms"]
+    if fa is not None and fb is not None:
+        return _dost_yakun(conn, m, None if fa == fb else (m["a"] if fa < fb else m["b"]), "oyin")
+    if fa is not None or fb is not None:
+        bir = m["a_fin"] if fa is not None else m["b_fin"]
+        if now >= (bir or now) + DOST_KUT or now >= bosh + DOST_MAX:
+            return _dost_yakun(conn, m, m["a"] if fa is not None else m["b"], "oyin")
+        return m
+    pa, pb = m["a_pos"] or 0, m["b_pos"] or 0
+    if now >= bosh + DOST_KELMADI and (pa <= 0 or pb <= 0):
+        if pa <= 0 and pb <= 0:
+            return _dost_yakun(conn, m, None, "ikkalasi")
+        return _dost_yakun(conn, m, m["a"] if pa > 0 else m["b"], "kelmadi")
+    if now >= bosh + DOST_MAX:
+        return _dost_yakun(conn, m, None if pa == pb else (m["a"] if pa > pb else m["b"]), "vaqt")
+    return m
+
+
+def _dost_tick(conn, now):
+    """Fon aylanasi: muddati o'tgan takliflar va natijasi kelgan poygalar (hech kim ilovani ochmasa ham chat kartasi yangilansin)."""
+    for r in conn.execute("SELECT id FROM pg_dost WHERE holat='kutmoqda' AND bosh <= ?", (now,)).fetchall():
+        _ozgargan.add(r["id"])
+    conn.execute("UPDATE pg_dost SET holat='tugadi', sabab='muddat' WHERE holat='kutmoqda' AND bosh <= ?", (now,))
+    for m in conn.execute("SELECT * FROM pg_dost WHERE holat='ketmoqda'").fetchall():
+        _dost_yur(conn, m, now)
+
+
+def _dost_holat(conn, m, uid, now):
+    yon = "a" if m["a"] == uid else "b" if m["b"] == uid else None
+    g = {"id": m["id"], "state": m["holat"], "me": yon, "friend": True, "rings": DOST_HALQA, "every": HALQA,
+         "a": _ism(conn, m["a"]), "b": _ism(conn, m["b"]) if m["b"] else None,
+         "pos": [round(m["a_pos"] or 0, 1), round(m["b_pos"] or 0, 1)], "ms": [m["a_ms"], m["b_ms"]],
+         "winner": "a" if m["golib"] and m["golib"] == m["a"] else "b" if m["golib"] and m["golib"] == m["b"] else None, "why": m["sabab"]}
+    if m["holat"] == "kutmoqda":
+        g["expires_in"] = max(0, int((m["bosh"] or 0) - now))
+    elif m["b"] is not None:
+        g["seed"] = m["urug"]
+        g["start_in"] = round((m["bosh"] or 0) - now, 2)
+        g["wait"] = DOST_KUT
+    return g
+
+
+def _dost_oyin(uid, mid, pos=None, fin=None, tashla=False):
+    """Do'stona poyga holati; uchayotgan o'yinchi joyini (pos), marra vaqtini (fin, ms) yoki taslimni aytadi."""
+    now = _ep()
+    conn = hpcup._connect()
+    try:
+        m = conn.execute("SELECT * FROM pg_dost WHERE id=?", (int(mid),)).fetchone()
+        if not m:
+            return {"ok": False, "error": "yoq"}
+        yon = "a" if m["a"] == uid else "b" if m["b"] == uid else None
+        if yon and m["holat"] == "ketmoqda" and m["b"] is not None:
+            if tashla and m[yon + "_ms"] is None:
+                m = _dost_yakun(conn, m, m["b"] if yon == "a" else m["a"], "tashladi")
+            elif fin is not None and m[yon + "_ms"] is None:
+                otdi = (now - (m["bosh"] or 0)) * 1000                # server o'lchagan uchish vaqti
+                if otdi >= DOST_HALQA * HALQA_MS:
+                    sof = int(min(otdi, max(float(fin), otdi - MUHLAT_MS)))
+                    conn.execute("UPDATE pg_dost SET %s_ms=?, %s_fin=?, %s_pos=? WHERE id=?" % (yon, yon, yon), (sof, now, DOST_HALQA, m["id"]))
+                    _ozgargan.add(m["id"])
+            elif pos is not None and now >= (m["bosh"] or 0) - 1:
+                conn.execute("UPDATE pg_dost SET %s_pos=MAX(%s_pos, ?) WHERE id=?" % (yon, yon), (max(0.0, min(float(pos), DOST_HALQA)), m["id"]))
+            m = conn.execute("SELECT * FROM pg_dost WHERE id=?", (m["id"],)).fetchone()
+        m = _dost_yur(conn, m, now)
+        conn.commit()
+        return {"ok": True, "dost": _dost_holat(conn, m, uid, now)}
+    finally:
+        conn.close()
+
+
+async def _dost_xabar():
+    """Holati o'zgargan do'stona poygalarning chatdagi kartalarini yangilaydi (hpbot bergan chaqiruv orqali)."""
+    fn = _cfg.get("dost_ozgardi")
+    while _ozgargan:
+        mid = _ozgargan.pop()
+        if fn:
+            try:
+                await fn(mid)
+            except Exception as e:
+                logging.error("poyga kartasi yangilanmadi (%s): %s", mid, e)
+
+
+async def dost_yarat(uid):
+    """Chatdan taklif (hpbot): yangi do'stona poyga, id."""
+    mid = await asyncio.to_thread(_dost, int(uid))
+    await _dost_xabar()
+    return mid
+
+
+async def _dost_api(uid, body):
+    """Do'stona poyga so'rovlari - saralanmagan do'st ham qatnasha oladi (Telegram kartasi bilan kelgan yangi odam)."""
+    try:
+        if body.get("dqabul") is not None:
+            mid, xato = await asyncio.to_thread(_dost_qabul, uid, int(body.get("dqabul")))
+            if xato:
+                return {"ok": False, "error": xato}
+            javob = await asyncio.to_thread(_dost_oyin, uid, mid)
+        elif body.get("dbekor") is not None:
+            ok = await asyncio.to_thread(_dost_bekor, uid, int(body.get("dbekor")))
+            javob = {"ok": True, "bekor_ok": ok}
+        else:
+            pos = body.get("dpos")
+            fin = body.get("dfin")
+            javob = await asyncio.to_thread(_dost_oyin, uid, int(body.get("doyin")), float(pos) if pos is not None else None,
+                                            float(fin) if fin is not None else None, bool(body.get("dtashla")))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "bad"}
+    await _dost_xabar()
+    return javob
+
+
 async def api_poyga(request):
     cors = _cfg["cors"]
     if request.method == "OPTIONS":
@@ -609,6 +813,8 @@ async def api_poyga(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
     uid = int(user["id"])
+    if body.get("dqabul") is not None or body.get("dbekor") is not None or body.get("doyin") is not None:
+        return cors(web.json_response(await _dost_api(uid, body)))
     if body.get("pos") is not None:              # uchish paytidagi tez-tez so'rov: iloji boricha yengil
         hafta, now = _hafta_uchun(uid), _ep()
         k = _kesh.get(hafta)
@@ -647,6 +853,15 @@ async def api_poyga(request):
             qosh["sinov_ok"] = await asyncio.to_thread(_sinov_toxtat, uid)
     elif body.get("join") is not None:
         qosh["join_ok"] = await asyncio.to_thread(_yozil, uid, bool(body.get("join")))
+    elif body.get("dost"):
+        mid = await asyncio.to_thread(_dost, uid)
+        await _dost_xabar()
+        if _cfg.get("log"):
+            try:
+                await _cfg["log"](user, "poyga_dost_taklif")
+            except Exception:
+                pass
+        return cors(web.json_response(await asyncio.to_thread(_dost_oyin, uid, mid)))
     javob = await asyncio.to_thread(_holat, uid)
     javob.update(qosh)
     if javob.get("phase") == "tugadi" and javob["me"].get("place") and _cfg.get("log") and body.get("log_end") and not javob.get("test"):

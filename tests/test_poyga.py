@@ -225,6 +225,78 @@ async def amain():
     check("sinov to'xtatildi: yana haqiqiy poyga holati, izlar tozalandi", d.get("sinov_ok") and not d["test"] and d["phase"] == "kutish"
           and db("SELECT COUNT(*) FROM pg_oyinchi WHERE hafta LIKE 'sinov:%'")[0][0] == 0)
 
+    # ---------- do'st bilan poyga (o'quvchi taklifi, 2026-10-17) ----------
+    vaqt(20, 15, 0)
+    ball0 = ball(1)
+    d = await ask(30, dost=1)
+    check("do'st poygasi: saralanmagan taklif yarata olmaydi", d.get("error") == "no_house")
+    d = await ask(1, dost=1)
+    g = d["dost"]
+    did = g["id"]
+    check("taklif ochiq: kutmoqda, raqib yo'q, yo'l ko'rsatilmaydi", g["state"] == "kutmoqda" and g["me"] == "a" and g["b"] is None and "seed" not in g
+          and g["expires_in"] > 1700)
+    check("Telegram kartasi uchun ma'lumot", P.taklif_info(did) == {"a": 1, "name": "U1"})
+    msg = await hpcup.post_chat_message("global", 1, "poyga", None, poyga=did)
+    check("chat kartasi: kutmoqda", msg.get("poyga", {}).get("status") == "waiting")
+    d = await ask(30, dqabul=did)                 # saralanmagan do'st ham qatnasha oladi
+    g = d["dost"]
+    check("qabul: ikkalasiga bir xil yo'l, start sanoqdan keyin", d["ok"] and g["state"] == "ketmoqda" and g["me"] == "b" and g["seed"] > 0
+          and 7 <= g["start_in"] <= 8 and P.taklif_info(did) is None)
+    check("ikkinchi odam qabul qila olmaydi", (await ask(2, dqabul=did)).get("error") == "band")
+    await P._dost_xabar()
+    with sqlite3.connect(os.environ["HP_DB_PATH"]) as _c:
+        _c.row_factory = sqlite3.Row
+        m2 = hpcup._chat_one(_c, msg["id"], 1)
+    check("chat kartasi: ketmoqda", m2["poyga"]["status"] == "active" and m2["poyga"]["b"]["uid"] == 30)
+    ilgari(8 + 20)
+    d = await ask(1, doyin=did, dpos=14.5)
+    d = await ask(30, doyin=did, dpos=12)
+    check("uchish paytida ikkalasining joyi ko'rinadi", d["dost"]["pos"] == [14.5, 12.0])
+    d = await ask(1, doyin=did, dfin=5000)        # juda tez - server o'z soati bilan tuzatadi
+    check("marra: vaqt server soati bilan tekshiriladi", 20000 - 2500 <= d["dost"]["ms"][0] <= 20000 and d["dost"]["state"] == "ketmoqda")
+    ilgari(5)
+    d = await ask(30, doyin=did, dfin=24800)
+    g = d["dost"]
+    check("ikkalasi marraga yetdi: tezrog'i yutdi", g["state"] == "tugadi" and g["winner"] == "a" and g["why"] == "oyin" and g["ms"][1] == 24800)
+    with sqlite3.connect(os.environ["HP_DB_PATH"]) as _c:
+        _c.row_factory = sqlite3.Row
+        m3 = hpcup._chat_one(_c, msg["id"], 1)
+    check("chat kartasi: tugadi, g'olib va vaqtlar", m3["poyga"]["status"] == "finished" and m3["poyga"]["winner"] == 1 and m3["poyga"]["score"][1] == 24800)
+    check("do'stona poygada ball yo'q", ball(1) == ball0)
+    # bittasi marraga yetdi, ikkinchisi DOST_KUT ichida yetmadi
+    g = (await ask(2, dost=1))["dost"]
+    await ask(3, dqabul=g["id"])
+    ilgari(8 + 20)
+    await ask(2, doyin=g["id"], dpos=20)
+    await ask(3, doyin=g["id"], dpos=10)
+    ilgari(10)
+    await ask(2, doyin=g["id"], dfin=29000)
+    ilgari(P.DOST_KUT + 1)
+    await P.tick()
+    d = await ask(3, doyin=g["id"])
+    check("ikkinchisi vaqtida yetmadi: marraga yetgan yutdi (fon aylanasi yakunladi)", d["dost"]["state"] == "tugadi" and d["dost"]["winner"] == "a")
+    # raqib umuman uchmadi
+    g = (await ask(4, dost=1))["dost"]
+    await ask(5, dqabul=g["id"])
+    ilgari(8 + 5)
+    await ask(4, doyin=g["id"], dpos=6)
+    ilgari(P.DOST_KELMADI)
+    d = await ask(4, doyin=g["id"])
+    check("raqib uchmadi - kelmadi, uchgani yutdi", d["dost"]["state"] == "tugadi" and d["dost"]["winner"] == "a" and d["dost"]["why"] == "kelmadi")
+    # taslim va bekor
+    g = (await ask(6, dost=1))["dost"]
+    await ask(7, dqabul=g["id"])
+    ilgari(10)
+    d = await ask(7, doyin=g["id"], dtashla=1)
+    check("taslim bo'lgan yutqazadi", d["dost"]["state"] == "tugadi" and d["dost"]["winner"] == "a" and d["dost"]["why"] == "tashladi")
+    g = (await ask(8, dost=1))["dost"]
+    d = await ask(8, dbekor=g["id"])
+    check("taklifni bekor qilish", d.get("bekor_ok") and (await ask(9, dqabul=g["id"])).get("error") == "muddat")
+    g = (await ask(8, dost=1))["dost"]
+    ilgari(P.DOST_MUDDAT + 1)
+    await P.tick()
+    check("muddati o'tgan taklifni qabul qilib bo'lmaydi", (await ask(9, dqabul=g["id"])).get("error") == "muddat")
+
     print("Poyga: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
 

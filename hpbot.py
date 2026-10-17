@@ -25,6 +25,7 @@ import hpchess
 import hpduel
 import hptosh
 import hpmjang
+import hppoyga
 import hppochta
 
 # main.py tomonidan to'ldiriladi
@@ -898,9 +899,9 @@ def register(dp, bot, app, cfg):
                     return cors(web.json_response({"error": "invalid id"}, status=400))
                 await hpcup.dm_block(uid, who, action == "block")
                 return cors(web.json_response({"ok": True, "settings": await hpcup.dm_settings(uid)}))
-            if target.startswith("dm:") and action in ("send", "edit", "react", "typing", "chess", "duel", "tosh", "mjang"):
+            if target.startswith("dm:") and action in ("send", "edit", "react", "typing", "chess", "duel", "tosh", "mjang", "poyga"):
                 dm_peer = hpcup._dm_peer(target, uid)
-                if action in ("send", "chess", "duel", "tosh", "mjang") and not await hpcup.chat_user(dm_peer):
+                if action in ("send", "chess", "duel", "tosh", "mjang", "poyga") and not await hpcup.chat_user(dm_peer):
                     return cors(web.json_response({"error": "no_user"}, status=404))
                 state = await hpcup.dm_state(uid, dm_peer, target)
                 if state != "ok":
@@ -948,7 +949,7 @@ def register(dp, bot, app, cfg):
                     return cors(web.json_response({"error": "not_found"}, status=404))
                 info["ok"] = True
                 return cors(web.json_response(info))
-            if banned is not False and action in ("send", "edit", "react", "chess", "duel", "tosh", "mjang"):
+            if banned is not False and action in ("send", "edit", "react", "chess", "duel", "tosh", "mjang", "poyga"):
                 return cors(web.json_response({"error": "banned", "until": banned}, status=403))
             if action in ("edit", "delete", "react"):
                 msg_id = chat_int(body.get("id"))
@@ -1017,16 +1018,17 @@ def register(dp, bot, app, cfg):
                     hppochta.shaxsiy(dm_peer, uid, user.get("first_name"), text, target, message["id"])
                 return cors(web.json_response({"ok": True, "message": message, "duel_id": mid}))
 
-            if action in ("tosh", "mjang"):
+            if action in ("tosh", "mjang", "poyga"):
                 # Toshchalar / Maxluqlar jangiga chaqirish (o'quvchilar taklifi, 2026-10-15): duel qolipida - ochiq taklif
                 # + chatda karta (holati jonli); do'stona, ball yo'q. Birinchi «Qabul qilish» bosgan raqib bo'ladi.
                 retry = chat_slow(chat_sent, uid, CHAT_LIMIT)
                 if retry:
                     return cors(web.json_response({"error": "slow", "retry": retry}, status=429))
-                modul = hptosh if action == "tosh" else hpmjang
+                modul = {"tosh": hptosh, "mjang": hpmjang, "poyga": hppoyga}[action]
                 mid = await modul.dost_yarat(uid)
                 # eski ilova kartani bilmaydi - unga oddiy matn ko'rinadi
-                text = "🔮 Toshchalar o'yiniga chaqiraman!" if action == "tosh" else "🐉 Maxluqlar jangiga chaqiraman!"
+                text = {"tosh": "🔮 Toshchalar o'yiniga chaqiraman!", "mjang": "🐉 Maxluqlar jangiga chaqiraman!",
+                        "poyga": "🧹 Supurgi poygasiga chaqiraman!"}[action]
                 message = await hpcup.post_chat_message(target, uid, text, None, **{action: mid})
                 await hpcup.mark_chat_read(target, uid, message["id"])
                 chat_wake(target)
@@ -1094,6 +1096,7 @@ def register(dp, bot, app, cfg):
         return fn
     hptosh._cfg["dost_ozgardi"] = oyin_changed("tosh")
     hpmjang._cfg["dost_ozgardi"] = oyin_changed("mjang")
+    hppoyga._cfg["dost_ozgardi"] = oyin_changed("poyga")
     hpchess.register(app, _cfg)
 
     logging.info("Xogvarts kubogi 3.0 ulandi (e'lon: %s)",

@@ -2067,14 +2067,24 @@ TAKLIF_T = {
         "en": {"title": "Creature Battle", "call": "<b>%s</b> challenges you to a Creature Battle!", "how": "Each round you play one creature card — the stronger one takes the round. First to 3 rounds wins.",
                "free": "A friendly battle — no creatures yet? You get school cards", "tap": "Tap the button below — the battle opens right away.", "btn": "Join the battle",
                "desc": "Challenge your friend to a Creature Battle"}},
+    "poyga": {
+        "uz": {"title": "Supurgi poygasi", "call": "<b>%s</b> sizni supurgi poygasiga chaqirmoqda!", "how": "Ikkalangiz bir vaqtda bir xil yo'ldan uchasiz: halqalarning o'rtasidan o'tsangiz tezlashasiz. Marraga birinchi yetgan yutadi.",
+               "free": "Do'stona poyga — ball yo'q", "tap": "Pastdagi tugmani bosing — poyga darhol ochiladi.", "btn": "Poygaga kirish",
+               "desc": "Do'stingizni supurgi poygasiga chaqiring"},
+        "ru": {"title": "Гонка на мётлах", "call": "<b>%s</b> вызывает вас на гонку на мётлах!", "how": "Вы летите одновременно по одной трассе: пролетая через центр колец, ускоряетесь. Кто первым долетит до финиша, тот победил.",
+               "free": "Дружеская гонка — без очков", "tap": "Нажмите кнопку ниже — гонка откроется сразу.", "btn": "На старт",
+               "desc": "Вызовите друга на гонку на мётлах"},
+        "en": {"title": "Broom race", "call": "<b>%s</b> challenges you to a broom race!", "how": "You both fly the same course at the same time: fly through the centre of the hoops to speed up. First to the finish wins.",
+               "free": "A friendly race — no points", "tap": "Tap the button below — the race opens right away.", "btn": "Join the race",
+               "desc": "Challenge your friend to a broom race"}},
 }
-TAKLIF_QUERY = re.compile(r"^(duel|tosh|mjang)_(\d{1,10})$")
-TAKLIF_EMOJI = {"duel": "⚡", "tosh": "🔮", "mjang": "🐉"}
+TAKLIF_QUERY = re.compile(r"^(duel|tosh|mjang|poyga)_(\d{1,10})$")
+TAKLIF_EMOJI = {"duel": "⚡", "tosh": "🔮", "mjang": "🐉", "poyga": "🧹"}
 
 
 def taklif_info(tur, mid):
     try:
-        return {"duel": hpduel, "tosh": hptosh, "mjang": hpmjang}[tur].taklif_info(int(mid))
+        return {"duel": hpduel, "tosh": hptosh, "mjang": hpmjang, "poyga": hppoyga}[tur].taklif_info(int(mid))
     except Exception as e:
         logging.error("Taklif ma'lumoti olinmadi (%s %s): %s", tur, mid, e)
         return None
