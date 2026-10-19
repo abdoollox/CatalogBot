@@ -176,6 +176,7 @@ async def amain():
     TZ = hpcup.TASHKENT
     soat = [datetime(2026, 10, 17, 12, 0, tzinfo=TZ)]          # shanba, turnir - yakshanba 18-oktabr 21:00
     hpduel._now = lambda: soat[0]
+    hpcup.now_tk = lambda: soat[0]               # chat kartasi holati ham shu soat bilan (aks holda sinov sanaga bog'liq bo'lib qoladi)
     hpdars._hafta = lambda: "2026-10-12"
     hpduel._cfg["admin_ids"] = {42}
     xatlar = []

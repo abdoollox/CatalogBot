@@ -83,6 +83,16 @@ async def amain():
     again = await hpcup.recount_season(season["id"])
     check("qayta hisoblansa ikki marta berilmaydi", gal(1) == 39 and again["galleons"] == {})
 
+    # Kubok marosimi (2026-10-19): o'quvchining yopilgan haftadagi hissasi va g'olib rasmi
+    men = hpcup.kubok_men(1)
+    check("kubok marosimi: hafta bali va galleoni", men.get(str(season["id"])) == {"ball": 120, "gal": 39})
+    check("saralanmagan: ball bor, galleon yo'q", hpcup.kubok_men(5).get(str(season["id"])) == {"ball": 200, "gal": 0})
+    os.environ["HP_KUBOK_DIR"] = os.path.join(TMP, "kubok")
+    import importlib, hpkubok
+    importlib.reload(hpkubok)
+    tok = hpkubok.ensure(1, "Garri", "uz", "gryffindor", season["id"], 3, 2470, 120)
+    check("kubok g'olibi rasmi yasaldi (1080x1920)", os.path.getsize(hpkubok.path_of(tok)) > 50000)
+
     # Kubok xatida galleon qatori
     hppochta._cfg.update({"admin_ids": {42}})
     n = hppochta._kubok_yoz(season["id"])

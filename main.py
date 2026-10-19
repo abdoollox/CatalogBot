@@ -61,9 +61,11 @@ import threading
 try:
     import hpxat            # xat rasmi (Pillow kerak)
     import hpuy             # fakultet rasmi (ulashish uchun)
+    import hpkubok          # kubok g'olibi rasmi (ulashish uchun)
 except Exception as _xat_error:   # kutubxona yo'q bo'lsa bot baribir ishlasin
     hpxat = None
     hpuy = None
+    hpkubok = None
     logging.error("Xat rasmi moduli yuklanmadi: %s", _xat_error)
 from datetime import datetime
 from dotenv import load_dotenv
@@ -2488,6 +2490,72 @@ async def api_uy(request):
     return _cors(web.json_response({"ok": True, "url": url, "share_id": share_id, "house": house}))
 
 
+KUBOK_MATN = {"uz": "%s fakulteti Xogvarts kubogini qo'lga kiritdi! 🏆",
+              "ru": "Факультет %s завоевал Кубок Хогвартса! 🏆",
+              "en": "%s has won the Hogwarts House Cup! 🏆"}
+
+
+async def api_kubok(request):
+    """Kubok marosimidagi «Ulashish»: g'olib fakultet o'quvchisiga 9:16 rasm. Hafta va fakultet bazadan tekshiriladi."""
+    if request.method == "OPTIONS":
+        return _cors(web.Response(status=204))
+    if request.method != "POST":
+        return _cors(web.json_response({"ok": False, "error": "method"}, status=405))
+    if not hpkubok:
+        return _cors(web.json_response({"ok": False, "error": "yoq"}, status=503))
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    user = verify_init_data(request.headers.get("X-Telegram-Init-Data", "") or str(body.get("initData", "")))
+    if not user:
+        return _cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
+    uid = int(user["id"])
+    hozir = time.time()
+    if hozir - _xat_vaqt.get(("kubok", uid), 0) < 3:
+        return _cors(web.json_response({"ok": False, "error": "tez"}, status=429))
+    _xat_vaqt[("kubok", uid)] = hozir
+    lang = str(body.get("lang", "uz"))
+    lang = lang if lang in catalog.LANGS else "uz"
+    try:
+        sid = int(body.get("season"))
+    except (TypeError, ValueError):
+        return _cors(web.json_response({"ok": False, "error": "season"}, status=400))
+    try:
+        house = await hpcup.get_house(uid)
+        tarix = await hpcup.cup_history()
+        s = next((x for x in tarix["seasons"] if x.get("id") == sid and x.get("status") == "closed"), None)
+    except Exception as e:
+        logging.error("Kubok rasmi: tarix olinmadi: %s", e)
+        return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
+    if not s or not house or s.get("winner") != house:
+        return _cors(web.json_response({"ok": False, "error": "not_winner"}))
+    jami = next((x.get("total_points") or 0 for x in s.get("houses") or [] if x.get("house") == house), 0)
+    mine = (await asyncio.to_thread(hpcup.kubok_men, uid)).get(str(sid), {}).get("ball", 0)
+    try:
+        token = await asyncio.to_thread(hpkubok.ensure, uid, user.get("first_name"), lang, house, sid, s.get("number"), jami, mine)
+    except Exception as e:
+        logging.error("Kubok rasmini yasashda xato: %s", e)
+        return _cors(web.json_response({"ok": False, "error": "server"}, status=500))
+    url = "%s/api/kubok/%s.jpg" % (PUBLIC_BASE, token)
+    share_id = None
+    if uid > 0:
+        share_id = await prepare_xat_share(uid, lang, url, KUBOK_MATN[lang] % hpuy.HOUSES[house][lang], UY_TUGMA[lang])
+    return _cors(web.json_response({"ok": True, "url": url, "share_id": share_id}))
+
+
+async def api_kubok_file(request):
+    if not hpkubok:
+        return web.Response(status=404, text="yoq")
+    token = request.match_info.get("token", "")
+    if not re.fullmatch(r"[0-9a-f]{20}", token):
+        return web.Response(status=404, text="yoq")
+    yol = hpkubok.path_of(token)
+    if not os.path.exists(yol):
+        return web.Response(status=404, text="yoq")
+    return web.FileResponse(yol, headers={"Cache-Control": "public, max-age=604800", "Access-Control-Allow-Origin": "*"})
+
+
 async def api_uy_file(request):
     if not hpuy:
         return web.Response(status=404, text="yoq")
@@ -2652,6 +2720,8 @@ async def main():
     app.router.add_route('*', '/api/xat', api_xat)
     app.router.add_route('*', '/api/uy', api_uy)
     app.router.add_get('/api/uy/{token}.jpg', api_uy_file)
+    app.router.add_route('*', '/api/kubok', api_kubok)
+    app.router.add_get('/api/kubok/{token}.jpg', api_kubok_file)
     app.router.add_route('*', '/api/wallet', api_wallet)
     app.router.add_get('/api/xat/{token}.jpg', api_xat_file)
 

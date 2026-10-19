@@ -437,6 +437,10 @@ async def api_cup_history(request):
 
     history = await hpcup.cup_history()
     history["ok"] = True
+    try:                                         # kubok marosimi: o'quvchining shu haftalardagi hissasi (egasi, 2026-10-19)
+        history["me"] = await asyncio.to_thread(hpcup.kubok_men, int(user["id"]))
+    except Exception as e:
+        logging.error("Kubok hissasi olinmadi: %s", e)
     return cors(web.json_response(history))
 
 

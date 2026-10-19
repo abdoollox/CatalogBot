@@ -1331,6 +1331,21 @@ def _cup_history():
         conn.close()
 
 
+def kubok_men(uid):
+    """Kubok marosimi uchun: o'quvchining har yopilgan haftadagi bali va galleon mukofoti {season_id: {ball, gal}}."""
+    conn = _connect()
+    try:
+        out = {}
+        for r in conn.execute("SELECT p.season_id, SUM(p.points) AS pts FROM points p JOIN seasons s ON s.id = p.season_id "
+                              "WHERE p.user_id=? AND s.status='closed' GROUP BY p.season_id", (int(uid),)):
+            out[str(r["season_id"])] = {"ball": r["pts"] or 0, "gal": 0}
+        for r in conn.execute("SELECT season_id, jami FROM galleon_mukofot WHERE user_id=?", (int(uid),)):
+            out.setdefault(str(r["season_id"]), {"ball": 0, "gal": 0})["gal"] = r["jami"] or 0
+        return out
+    finally:
+        conn.close()
+
+
 async def cup_history():
     """Barcha haftalar: g'olib, yakuniy ballar, haftaning sehrgari + kuboklar soni."""
     return await asyncio.to_thread(_cup_history)
