@@ -27,6 +27,17 @@ sys.modules["sheets"] = sheets
 
 import hpcup, hppochta   # noqa: E402
 
+
+# Qayta topshirish muddati (19-oktabr) o'tib ketgan - sinov sanaga bog'lanmasin: hpcup ichida "hozir" 15-oktabr
+class _Soat(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        t = datetime(2026, 10, 15, 12, 0, tzinfo=timezone.utc)
+        return t.astimezone(tz) if tz else t.replace(tzinfo=None)
+
+
+hpcup.datetime = _Soat
+
 ok = fail = 0
 def check(name, cond):
     global ok, fail

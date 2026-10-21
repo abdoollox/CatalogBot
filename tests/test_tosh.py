@@ -236,6 +236,64 @@ async def amain():
     await P.tick()
     check("muddati o'tgan taklif yopiladi", P.taklif_info(t3) is None and (await ask(4, qabul=t3)).get("error") == "muddat")
 
+    # ---- IKKI RAUNDLI QOIDA (2026-10-21): hozircha faqat admin o'yinlarida
+    m = {"raund": 0, "rz": 0}
+    yur = []
+    toshlar = P.boshlangich(2)
+    for i in range(6):
+        t, r, z, nav, tug, g = P._q2_keyin(m, toshlar, 1, 1)
+        yur.append(nav); m = {"raund": r, "rz": z}
+    check("1-raund: a, b navbat bilan 3 tadan; keyin 2-raundni b boshlaydi", yur == ["b", "a", "b", "a", "b", "b"] and m == {"raund": 1, "rz": 0} and len(t) == 6)
+    yur = []
+    for i in range(6):
+        t, r, z, nav, tug, g = P._q2_keyin(m, toshlar, 3, 3)
+        yur.append(nav); m = {"raund": r, "rz": z}
+    check("2-raund: b, a navbat bilan; teng - penaltini a boshlaydi", yur == ["a", "b", "a", "b", "a", "a"] and m == {"raund": 2, "rz": 0} and not tug)
+    t, r, z, nav, tug, g = P._q2_keyin(m, [], 4, 3)
+    check("penalti: a otgach b ham to'liq taxtaga otadi", nav == "b" and len(t) == 6 and not tug)
+    t, r, z, nav, tug, g = P._q2_keyin({"raund": 2, "rz": 1}, [], 4, 3)
+    check("penalti juftligidan keyin farq bor - o'yin tugaydi", tug and g == "a")
+    t, r, z, nav, tug, g = P._q2_keyin({"raund": 0, "rz": 2}, [], 2, 1)
+    check("toshchalar tugasa raund erta tugaydi, yangi 6 toshcha", r == 1 and z == 0 and nav == "b" and len(t) == 6 and not tug)
+    t, r, z, nav, tug, g = P._q2_keyin({"raund": 1, "rz": 5}, [[0, 0]], 7, 5)
+    check("2-raund oxirida farq bor - o'yin tugaydi", tug and g == "a")
+    t, r, z, nav, tug, g = P._q2_keyin({"raund": 2, "rz": 5}, [], 6, 6)
+    check("3 juft penaltidan keyin ham teng - durang (turnirda to'r o'rni)", tug and g is None)
+
+    d = await ask(1, mashq=2)
+    check("oddiy o'quvchi - eski qoida (9 toshcha)", d["game"]["rule"] == 1 and len(d["game"]["stones"]) == 9 and (await ask(1))["rules"]["v2"] is False)
+    d0 = await ask(42)
+    check("adminga yangi qoida haqida belgi", d0["rules"]["v2"] is True and d0["rules"]["rshots"] == 3 and d0["rules"]["rstones"] == 6)
+    d = await ask(42, mashq=2)
+    g = d["game"]
+    check("admin mashqi - ikki raund, 6 toshcha, 3 tadan zarba", g["rule"] == 2 and len(g["stones"]) == 6 and g["per"] == 3 and g["round"] == 0 and g["taken"] == [0, 0])
+    gid, kim_otdi, raundlar = g["id"], [], []
+    for _ in range(80):
+        g = (await ask(42, oyin=gid))["game"]
+        if g["state"] != "ketmoqda":
+            break
+        ilgari(max(0.1, g["turn_in"]) + 0.05)
+        g = (await ask(42, oyin=gid))["game"]
+        if g["state"] != "ketmoqda":
+            break
+        if g["turn"] == "a" and g["turn_in"] <= 0.5:
+            kim_otdi.append((g["round"], "a")); raundlar.append(g["round"])
+            await ask(42, oyin=gid, shot={"s": -90, "a": 90, "p": 0.9})
+        elif g["turn"] == "b":
+            kim_otdi.append((g["round"], "b"))
+    check("admin mashqi oxirigacha o'ynaldi", g["state"] == "tugadi")
+    r1 = [k for r, k in kim_otdi if r == 1]
+    check("ikkala raund ham o'ynaldi (2-raundda zarbalar bor)", len(r1) >= 2 and r1.count("a") >= 1)
+    check("2-raundning birinchi zarbasini kompyuter (b) beradi", (not r1) or r1[0] == "b")
+    check("zarbalar soni: 2 raund x 6 dan oshmaydi (+ penalti)", g["shots"] <= 12 + P.QOSHIMCHA * 2)
+    db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (5,'U5','slytherin','2026-10-01T00:00:00Z')")
+    d = await ask(42, dost=1)
+    d = await ask(5, qabul=d["game"]["id"])
+    check("admin bilan do'stona o'yin - yangi qoida", d["game"]["rule"] == 2 and len(d["game"]["stones"]) == 6)
+    d = await ask(5, dost=1)
+    d = await ask(6, qabul=d["game"]["id"])
+    check("adminsiz do'stona o'yin - eski qoida", d["game"]["rule"] == 1 and len(d["game"]["stones"]) == 9)
+
     print("Toshchalar: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
 

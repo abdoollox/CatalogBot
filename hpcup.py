@@ -2361,6 +2361,7 @@ TOSH_MATCH_DDL = ("CREATE TABLE IF NOT EXISTS tosh_match ("
                      " holat TEXT NOT NULL DEFAULT 'kutmoqda', golib INTEGER, sabab TEXT,"
                      " toshlar TEXT, navbat TEXT, zarba INTEGER NOT NULL DEFAULT 0, a_ball INTEGER NOT NULL DEFAULT 0, b_ball INTEGER NOT NULL DEFAULT 0,"
                      " a_skip INTEGER NOT NULL DEFAULT 0, b_skip INTEGER NOT NULL DEFAULT 0, navbat_bosh REAL, oxirgi TEXT,"
+                     " qoida INTEGER NOT NULL DEFAULT 1, raund INTEGER NOT NULL DEFAULT 0, rz INTEGER NOT NULL DEFAULT 0,"
                      " a_seen REAL, b_seen REAL, vaqt TEXT)")
 MJ_MATCH_DDL = ("CREATE TABLE IF NOT EXISTS mj_match ("
                      " id INTEGER PRIMARY KEY AUTOINCREMENT, tur TEXT NOT NULL, hafta TEXT, bosqich INTEGER, joy INTEGER,"

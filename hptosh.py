@@ -14,6 +14,13 @@ TURNIR: seshanba 22:00 (shaxmat/duel turnirlari qolipida): «Qatnashaman» bosga
 darajasiga to'ldiriladi (mashqda ko'p yutganlar birinchi bosqichni o'tkazib yuboradi); ball: g'alaba uchun 1/8 +5, chorak +10, yarim final +20,
 final +30. Keyingi bosqich o'yini ikkala raqib aniqlangach ORALIQ soniyadan keyin. Adminga «Sinov o'yini» (kompyuter bilan, turnir oqimi).
 
+IKKI RAUNDLI QOIDA (qoida=2; egasi, 2026-10-21 - o'quvchilar so'rovi: «birinchi boshlagan odamda yutish imkoniyati katta»;
+bazada ikki odam o'yinlarining 81% ini birinchi otgan yutgan - toshchalar tugashi bilan o'yin tugab, u bitta ortiq zarba olardi):
+ikki raund, har raundda o'rtada RAUND_TOSH ta YANGI toshcha (2x3), har kimga RAUND_ZARBA tadan zarba (toshcha tugasa raund erta tugaydi);
+1-raundni a, 2-raundni b boshlaydi; ballar qo'shiladi; teng bo'lsa - PENALTI: navbat bilan har kim to'liq yangi taxtaga bitta zarba,
+juftlik oxirida farq bo'lsa tugaydi (QOSHIMCHA juftgacha). O'lchov (kompyuter o'yinchilar): birinchi otgan 70% -> 49%.
+Hozircha SINOV: YANGI_QOIDA = "admin" - faqat admin (yoki uning sinov o'quvchisi) qatnashgan mashq/sinov/do'stona o'yinlarda; "hamma" - hamma o'yinlarda.
+
 So'rovlar - POST /api/tosh: {} holat, {join: 1|0}, {mashq: 1|2|3}, {oyin: id, seen: n} o'yin holati (seen - oxirgi ko'rilgan zarba raqami),
 {oyin: id, shot: {s, a, p}} zarba (s - doiradagi joy burchagi, a - yo'nalish burchagi, p - kuch 0..1), {sinov: 1}.
 """
@@ -62,6 +69,9 @@ KADR = 3                      # har shuncha qadamda bitta kadr (40 kadr/s)
 MAX_T = 7.0
 JOY_MIN, JOY_MAX = -150.0, -30.0   # otuvchi tosh joyi: pastki yoy (gradus; 0 - o'ngda, -90 - pastda)
 TOSH_SONI = 9
+YANGI_QOIDA = "admin"         # ikki raundli qoida: "admin" - faqat admin o'yinlarida (sinov), "hamma" - hamma o'yinlarda
+RAUND_TOSH = 6
+RAUND_ZARBA = 3               # har raundda har kimga
 
 DOST_MUDDAT = 1800            # do'stga taklif (Telegram yoki ilova) shuncha soniya kutadi
 BOT_UID0 = -9300              # kompyuter raqiblar: BOT_UID0 - daraja
@@ -85,6 +95,10 @@ def _init():
     conn = hpcup._connect()
     try:
         conn.execute(hpcup.TOSH_MATCH_DDL)          # DDL hpcup da - chat kartasi so'rovi shu jadvalga ulanadi
+        ust = [r[1] for r in conn.execute("PRAGMA table_info(tosh_match)")]
+        for nom in ("qoida INTEGER NOT NULL DEFAULT 1", "raund INTEGER NOT NULL DEFAULT 0", "rz INTEGER NOT NULL DEFAULT 0"):
+            if nom.split()[0] not in ust:
+                conn.execute("ALTER TABLE tosh_match ADD COLUMN " + nom)
         conn.execute("CREATE INDEX IF NOT EXISTS tosh_match_hafta ON tosh_match (hafta, bosqich, joy)")
         conn.execute("CREATE TABLE IF NOT EXISTS tosh_turnir (hafta TEXT PRIMARY KEY, hajm INTEGER NOT NULL DEFAULT 0, vaqt TEXT)")
         conn.execute("CREATE TABLE IF NOT EXISTS tosh_qatnash (hafta TEXT NOT NULL, user_id INTEGER NOT NULL, vaqt TEXT NOT NULL, PRIMARY KEY (hafta, user_id))")
@@ -96,9 +110,11 @@ def _init():
 
 # =====================================================================  FIZIKA
 
-def boshlangich():
-    """O'yin boshidagi toshchalar: 3x3 to'r, o'rtada."""
+def boshlangich(qoida=1):
+    """O'yin boshidagi toshchalar: 3x3 to'r, o'rtada (ikki raundli qoidada - 2x3, RAUND_TOSH ta)."""
     q = 0.165
+    if qoida == 2:
+        return [[round(x * q, 4), round(y * q, 4)] for y in (0.5, -0.5) for x in (-1, 0, 1)]
     return [[round(x * q, 4), round(y * q, 4)] for y in (1, 0, -1) for x in (-1, 0, 1)]
 
 
@@ -211,11 +227,25 @@ def _bot(uid):
     return uid is not None and uid < 0
 
 
+def _admin(uid):
+    return uid is not None and not _bot(uid) and abs(int(uid)) in (_cfg.get("admin_ids") or ())      # admin yoki uning sinov o'quvchisi
+
+
+def _qoida(tur, a, b):
+    """Yangi o'yin qaysi qoidada: 2 - ikki raund. Sinov paytida faqat admin o'yinlarida, turnirda - hamma uchun ochilgandan keyin."""
+    if YANGI_QOIDA == "hamma":
+        return 2
+    if tur == "turnir":
+        return 1
+    return 2 if (_admin(a) or _admin(b)) else 1
+
+
 def _yangi_oyin(conn, tur, a, b, bosh, **qosh):
-    cur = conn.execute("INSERT INTO tosh_match (tur, a, b, bosh, holat, toshlar, navbat, navbat_bosh, vaqt, hafta, bosqich, joy, a_seed, b_seed, daraja) "
-                       "VALUES (?,?,?,?,'ketmoqda',?,'a',?,?,?,?,?,?,?,?)",
-                       (tur, a, b, bosh, json.dumps(boshlangich()), bosh, hpcup._utc_iso(_now()), qosh.get("hafta"), qosh.get("bosqich"),
-                        qosh.get("joy"), qosh.get("a_seed"), qosh.get("b_seed"), qosh.get("daraja")))
+    q = _qoida(tur, a, b)
+    cur = conn.execute("INSERT INTO tosh_match (tur, a, b, bosh, holat, toshlar, navbat, navbat_bosh, vaqt, hafta, bosqich, joy, a_seed, b_seed, daraja, qoida) "
+                       "VALUES (?,?,?,?,'ketmoqda',?,'a',?,?,?,?,?,?,?,?,?)",
+                       (tur, a, b, bosh, json.dumps(boshlangich(q)), bosh, hpcup._utc_iso(_now()), qosh.get("hafta"), qosh.get("bosqich"),
+                        qosh.get("joy"), qosh.get("a_seed"), qosh.get("b_seed"), qosh.get("daraja"), q))
     return cur.lastrowid
 
 
@@ -233,6 +263,28 @@ def _tugashi_kerakmi(m, toshlar, zarba, ab, bb):
     if zarba >= asosiy + QOSHIMCHA * 2:
         return True, None
     return False, None
+
+
+def _q2_keyin(m, qoldi, ab, bb):
+    """Ikki raundli qoidada zarbadan keyingi holat: (toshlar, raund, rz, navbat, tugadimi, g'olib yoni).
+    raund 0/1 - raundlar (1-raundni a, 2-raundni b boshlaydi), 2 - penalti; rz - shu bosqichdagi zarbalar soni."""
+    raund, rz = m["raund"], m["rz"] + 1
+    if raund < 2:
+        if qoldi and rz < RAUND_ZARBA * 2:
+            return qoldi, raund, rz, "a" if (rz + raund) % 2 == 0 else "b", False, None
+        raund += 1
+        if raund == 1:
+            return boshlangich(2), 1, 0, "b", False, None
+        if ab != bb:
+            return qoldi, 2, 0, None, True, ("a" if ab > bb else "b")
+        return boshlangich(2), 2, 0, "a", False, None            # teng - penalti
+    if rz % 2:                                                    # penalti: a otdi, endi b - yana to'liq taxta
+        return boshlangich(2), 2, rz, "b", False, None
+    if ab != bb:
+        return qoldi, 2, rz, None, True, ("a" if ab > bb else "b")
+    if rz >= QOSHIMCHA * 2:
+        return qoldi, 2, rz, None, True, None
+    return boshlangich(2), 2, rz, "a", False, None
 
 
 def _yakunla(conn, m, golib_yon, sabab, berish, now):
@@ -271,9 +323,14 @@ def _zarba_ber(conn, m, yon, shot, berish, now):
     ab = m["a_ball"] + (ball if yon == "a" else 0)
     bb = m["b_ball"] + (ball if yon == "b" else 0)
     keyingi = "b" if yon == "a" else "a"
+    if m["qoida"] == 2:
+        qoldi, raund, rz, keyingi, tugadi, golib_yon = _q2_keyin(m, qoldi, ab, bb)
+        oxirgi["round"] = m["raund"]
+        conn.execute("UPDATE tosh_match SET raund=?, rz=? WHERE id=?", (raund, rz, m["id"]))
+    else:
+        tugadi, golib_yon = _tugashi_kerakmi(m, qoldi, n, ab, bb)
     conn.execute("UPDATE tosh_match SET toshlar=?, zarba=?, a_ball=?, b_ball=?, oxirgi=?, navbat=?, navbat_bosh=? WHERE id=?",
-                 (json.dumps(qoldi), n, ab, bb, json.dumps(oxirgi, separators=(",", ":")), keyingi, now + davom + PAUZA, m["id"]))
-    tugadi, golib_yon = _tugashi_kerakmi(m, qoldi, n, ab, bb)
+                 (json.dumps(qoldi), n, ab, bb, json.dumps(oxirgi, separators=(",", ":")), keyingi or yon, now + davom + PAUZA, m["id"]))
     if tugadi:
         conn.execute("UPDATE tosh_match SET navbat_bosh=? WHERE id=?", (now + davom + PAUZA, m["id"]))
         m2 = conn.execute("SELECT * FROM tosh_match WHERE id=?", (m["id"],)).fetchone()
@@ -382,8 +439,9 @@ def _turnir_boshla(conn, now):
     """Vaqti kelgan turnir uchrashuvlarini boshlaydi (ikkala raqib aniq)."""
     for m in conn.execute("SELECT * FROM tosh_match WHERE tur='turnir' AND holat='kutmoqda' AND a IS NOT NULL AND b IS NOT NULL "
                           "AND bosh IS NOT NULL AND bosh<=?", (now,)).fetchall():
-        conn.execute("UPDATE tosh_match SET holat='ketmoqda', toshlar=?, navbat='a', navbat_bosh=?, zarba=0, a_ball=0, b_ball=0 WHERE id=?",
-                     (json.dumps(boshlangich()), max(now, m["bosh"]) + 3, m["id"]))
+        q = _qoida("turnir", m["a"], m["b"])
+        conn.execute("UPDATE tosh_match SET holat='ketmoqda', toshlar=?, navbat='a', navbat_bosh=?, zarba=0, a_ball=0, b_ball=0, qoida=?, raund=0, rz=0 WHERE id=?",
+                     (json.dumps(boshlangich(q)), max(now, m["bosh"]) + 3, q, m["id"]))
 
 
 def _eslatmalar(conn, hafta, xabarlar):
@@ -521,7 +579,15 @@ def _oyin_holat(conn, m, uid, seen, now):
              "turn_in": max(0, round((m["navbat_bosh"] or 0) - now, 2)), "turn_left": max(0, round((m["navbat_bosh"] or 0) + NAVBAT_T - now, 2)),
              "winner": ("a" if m["golib"] == m["a"] else "b") if m["golib"] is not None else None, "why": m["sabab"], "stage": m["bosqich"],
              "starts_in": max(0, round((m["bosh"] or 0) - now, 1)) if m["holat"] == "kutmoqda" and m["tur"] != "dost" else 0,
-             "expires_in": max(0, round((m["bosh"] or 0) - now)) if m["holat"] == "kutmoqda" and m["tur"] == "dost" else None}
+             "expires_in": max(0, round((m["bosh"] or 0) - now)) if m["holat"] == "kutmoqda" and m["tur"] == "dost" else None,
+             "rule": m["qoida"] or 1}
+    if javob["rule"] == 2:
+        r, z = m["raund"], m["rz"]
+        if r < 2:
+            ta = sum(1 for k in range(z) if (k + r) % 2 == 0)
+            javob.update(round=r, per=RAUND_ZARBA, taken=[ta, z - ta])
+        else:
+            javob.update(round=2, per=1, taken=[z % 2, 0], pen=z // 2)
     if m["oxirgi"]:
         ox = json.loads(m["oxirgi"])
         javob["last_n"] = ox.get("n")
@@ -551,6 +617,7 @@ def _holat(uid, oyin=None, seen=None):
                  "tour": {"ts": T0, "now": now, "open": now < T0 - YOPILISH, "joined": any(r["user_id"] == uid for r in qat), "n": len(qat), "close": YOPILISH,
                           "players": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "me": r["user_id"] == uid} for r in qat]},
                  "rules": {"shots": ZARBA, "extra": QOSHIMCHA, "turn": NAVBAT_T, "stones": TOSH_SONI, "gap": ORALIQ,
+                           "v2": _qoida("mashq", uid, None) == 2, "rshots": RAUND_ZARBA, "rstones": RAUND_TOSH,
                            "points": {str(k): v for k, v in BOSQICH_BALL.items()}, "bots": {str(k): v[0] for k, v in BOTLAR.items()}},
                  "champs": hpgolib.tor(conn, "tosh_match", hafta, "tosh", uid, "SELECT COUNT(*) FROM tosh_qatnash WHERE hafta=?", _turnir_vaqti),
                  "admin": uid in (_cfg.get("admin_ids") or ()),
@@ -632,8 +699,9 @@ def _qabul(uid, mid):
             return None, "band"
         if m["holat"] != "kutmoqda" or now >= (m["bosh"] or 0):
             return None, "muddat"
-        cur = conn.execute("UPDATE tosh_match SET b=?, holat='ketmoqda', bosh=?, toshlar=?, navbat='a', navbat_bosh=?, zarba=0, a_ball=0, b_ball=0, b_seen=? "
-                           "WHERE id=? AND b IS NULL AND holat='kutmoqda'", (uid, now, json.dumps(boshlangich()), now + 4, now, m["id"]))
+        q = _qoida("dost", m["a"], uid)
+        cur = conn.execute("UPDATE tosh_match SET b=?, holat='ketmoqda', bosh=?, toshlar=?, navbat='a', navbat_bosh=?, zarba=0, a_ball=0, b_ball=0, b_seen=?, "
+                           "qoida=?, raund=0, rz=0 WHERE id=? AND b IS NULL AND holat='kutmoqda'", (uid, now, json.dumps(boshlangich(q)), now + 4, now, q, m["id"]))
         conn.commit()
         if cur.rowcount:
             _ozgargan.add(m["id"])
