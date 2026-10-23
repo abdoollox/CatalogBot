@@ -22,6 +22,7 @@ import time
 from aiohttp import web
 
 DB_PATH = os.getenv("HP_DB_PATH", "/data/hp.db")
+BEXATO_KUN = 5          # «Bexato hafta»: bir haftada shuncha kun tarix bellashuvi xatosiz
 _cfg = {}
 
 # Tartib ilovadagi ko'rinish tartibi. (kod, guruh)
@@ -64,6 +65,18 @@ def _init():
         conn.commit()
     finally:
         conn.close()
+
+
+def YASHIRIN():
+    """Hali ochilmagan bo'lim nishonlari - olinmagan bo'lsa ro'yxatda ko'rinmaydi (2026-10-24: o'quvchilar
+    «Birinchi qism» nishonini tushunmagan - serial 25-dekabrda chiqadi)."""
+    try:
+        import hpserial
+        if hpserial._data.get("ochiq"):
+            return set()
+    except Exception:
+        pass
+    return {"serial_1"}
 
 
 def _one(conn, sql, args=()):
@@ -152,6 +165,20 @@ def hisob(conn, uid):
         uzun = max(uzun, joriy)
         oldingi = d
 
+    # «Bexato hafta» (2026-10-24, kunlik savol olib tashlangach): bir hafta (du-ya) ichida Sehrgarlik tarixi
+    # bellashuvini 5 kun xatosiz yakunlash. Eski qoidada olinganlar (badges) saqlanadi.
+    hafta = {}
+    for (k,) in _all(conn, "SELECT kun FROM dars_bellashuv WHERE user_id=? AND dars='tarix' "
+                           "AND ms IS NOT NULL AND xato=0", (uid,)):
+        try:
+            iso = _dt.date(*(int(x) for x in k.split("-"))).isocalendar()
+        except ValueError:
+            continue
+        hafta[(iso[0], iso[1])] = hafta.get((iso[0], iso[1]), 0) + 1
+    bexato = max(hafta.values()) if hafta else 0
+    if "perfect_week" in eski:
+        bexato = BEXATO_KUN
+
     mx = [int(r[0]) for r in _all(conn, "SELECT boqildi FROM qoriq WHERE user_id=?", (uid,))]
     # Issiqxona: o'simliklar va ularning sug'orilgani. Hosil - yetilgan (10) o'simlik har 3-sug'orishda beradi,
     # zaxira sarflanib nolga tushishi mumkin, shuning uchun «bergan» ekani sug'orishlar sonidan bilinadi.
@@ -183,7 +210,7 @@ def hisob(conn, uid):
         "patronus": (1 if patronus else 0, 1),
         "ball_1": (1 if ball else 0, 1),
         "streak_7": (min(kun, 7), 7),
-        "perfect_week": (1 if "perfect_week" in eski else 0, 1),
+        "perfect_week": (min(bexato, BEXATO_KUN), BEXATO_KUN),
         "kubok_golib": (1 if golib else 0, 1),
         "top_3": (1 if _top3(conn, uid) else 0, 1),
         "sandiq_1": (min(len(kunlar), 1), 1),
@@ -221,6 +248,8 @@ def _royxat(uid, seen=False):
         for kod, guruh in NISHONLAR:
             b, k = h[kod]
             got = kod in bor
+            if kod in YASHIRIN() and not got:
+                continue
             lst.append({"code": kod, "group": guruh, "got": got, "at": bor[kod]["vaqt"] if got else None,
                         "have": k if got else min(b, k), "need": k})
         return {"ok": True, "list": lst, "new": [] if seen else yangi,
@@ -249,7 +278,7 @@ def _boshqa(uid):
         if yozildi:
             conn.commit()
         lst = [{"code": k, "group": g, "got": True, "at": bor[k]} for k, g in NISHONLAR if k in bor]
-        return {"ok": True, "list": lst, "count": len(lst), "total": len(KODLAR)}
+        return {"ok": True, "list": lst, "count": len(lst), "total": len(KODLAR) - len(YASHIRIN() - set(bor))}
     finally:
         conn.close()
 

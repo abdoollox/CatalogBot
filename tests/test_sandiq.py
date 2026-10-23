@@ -168,6 +168,9 @@ async def amain():
             m._init()
         except Exception:
             pass
+    check("25-oktabrdan «rekordni yangilang» qiyin vazifalarda yo'q, 24-oktabr o'zgarmadi",
+          all("rek_yangi" not in hpsandiq.kun_topshiriqlari("2026-%s" % k) for k in ("10-25", "10-26", "10-27", "10-28", "10-29", "11-01", "11-07"))
+          and hpsandiq.kun_topshiriqlari("2026-10-24")[-1] == "rek_yangi")
     tur = lambda k: [1 if x in hpsandiq.OSON else 3 if x in hpsandiq.QIYIN else 2 for x in hpsandiq.kun_topshiriqlari(k)]
     check("yangi ro'yxat: har kuni 2 yengil, 3 o'rtacha, 1 qiyin; takrorsiz", all(tur("2026-10-%02d" % d_) == [1, 1, 2, 2, 2, 3]
           and len(set(hpsandiq.kun_topshiriqlari("2026-10-%02d" % d_))) == 6 for d_ in range(12, 32)))

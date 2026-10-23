@@ -79,8 +79,24 @@ async def amain():
     await hpcup.touch_user(1, "Garri")
     await hpcup.touch_user(2, "Ron")
     d = await ask(1)
-    check("yangi odamda nishon yo'q, 19 ta ro'yxatda", d["ok"] and d["count"] == 0 and d["total"] == 30
-          and len(d["list"]) == 30 and d["new"] == [])
+    check("yangi odamda nishon yo'q; serial ochilmaguncha uning nishoni ro'yxatda yo'q", d["ok"] and d["count"] == 0
+          and d["total"] == 29 and len(d["list"]) == 29 and d["new"] == [] and "serial_1" not in [x["code"] for x in d["list"]])
+
+    # «Bexato hafta» (2026-10-24): bir haftada 5 kun tarix bellashuvi xatosiz
+    sql("CREATE TABLE IF NOT EXISTS dars_bellashuv (kun TEXT, dars TEXT, user_id INTEGER, ms INTEGER, xato INTEGER DEFAULT 0,"
+        " urinish INTEGER DEFAULT 0, boshladi REAL, vaqt TEXT, PRIMARY KEY (kun, dars, user_id))")
+    for kun, xato in (("2026-10-19", 0), ("2026-10-20", 0), ("2026-10-21", 1), ("2026-10-22", 0), ("2026-10-26", 0)):
+        sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, xato) VALUES (?, 'tarix', 7, 9000, ?)", (kun, xato))
+    await hpcup.touch_user(7, "Nevill")
+    bx = next(x for x in (await ask(7))["list"] if x["code"] == "perfect_week")
+    check("bexato hafta: 3 / 5 (xatoli kun va boshqa hafta sanalmaydi)", not bx["got"] and bx["have"] == 3 and bx["need"] == 5)
+    for kun in ("2026-10-23", "2026-10-25"):
+        sql("INSERT INTO dars_bellashuv (kun, dars, user_id, ms, xato) VALUES (?, 'tarix', 7, 9000, 0)", (kun,))
+    check("bexato hafta: 5 kun - olindi", "perfect_week" in got(await ask(7)))
+    import hpserial
+    hpserial._data["ochiq"] = True
+    check("serial ochilgach nishoni ko'rinadi", (await ask(1))["total"] == 30)
+    hpserial._data["ochiq"] = False
 
     # Filmlar: botdan, ilovadan (web_ va sifat bilan), 3 tilda
     for p in ("hp1_uz", "web_hp2_uz@hd", "hp3_ru", "hp4_en", "hp1_uz", "fb1_uz", "start", "share_hp1"):

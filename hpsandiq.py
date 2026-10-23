@@ -92,6 +92,10 @@ YANGI_DAN = "2026-10-12"            # shu kundan yangi ro'yxat (oldingi kunlar e
 OSON = ("parvarish", "chat", "share")
 ORTA = ("dars", "bell3", "duel", "chess", "rek", "kitob")
 QIYIN = ("duel_yut", "bell_top", "alo", "rek_yangi")
+# «O'z rekordingizni yangilang» juda qiyin - o'quvchilar so'radi (chat, 2026-10-23); shu kundan qiyin vazifalar
+# havzasida yo'q (oldingi kunlar o'zgarmasin - bugungi ro'yxat hammaga allaqachon chiqqan)
+REK_YOQ_DAN = "2026-10-25"
+QIYIN2 = tuple(x for x in QIYIN if x != "rek_yangi")
 # Bularni SERVER o'zi ko'radi (ilova aytgani bilan sanalmaydi); qolganlarini ilova xabar qiladi
 SERVERDA = ("parvarish", "bell3", "bell_top", "duel", "duel_yut")
 BELL_SONI = 3                       # «bell3»: nechta fanda bellashuvda qatnashish kerak
@@ -108,7 +112,7 @@ def kun_topshiriqlari(kun):
         r = random.Random("sandiq:" + kun)
         return ["daily"] + sorted(r.sample(HAVZA, 5), key=HAVZA.index)
     r = random.Random("qurbaqa2:" + kun)
-    return r.sample(OSON, 2) + r.sample(ORTA, 3) + r.sample(QIYIN, 1)
+    return r.sample(OSON, 2) + r.sample(ORTA, 3) + r.sample(QIYIN if kun < REK_YOQ_DAN else QIYIN2, 1)
 
 
 def _bor(conn, sql, args):
