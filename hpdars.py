@@ -103,6 +103,11 @@ ENG_KAM_MS = 1500              # bundan tez natija bo'lmaydi (soxta so'rovdan hi
 ENG_KOP_MS = 5 * 60 * 1000     # bundan uzoq urinish hisobga olinmaydi
 SOVRIN = (15, 10, 7)           # 1-3 o'rinlar
 SOVRIN_10 = 3                  # 4-10 o'rinlar
+# Tarix bellashuvida xato jarimasi kattaroq (chat tahlili, 2026-10-23: «to'g'ri javob muhim emas, tez bosish muhim —
+# hammasini noto'g'ri bossa ham 24 soniya» - 3 s jarima tavakkal bosishni foydali qilib qo'ygan edi). Bugungi bellashuv
+# boshlangan qoidada tugashi uchun - shu kundan. Do'kondagi eslatgich jarimani shu nisbatda kamaytiradi.
+TARIX_XATO_MS = 10000
+TARIX_XATO_DAN = "2026-10-24"
 TOP_N = 10
 
 
@@ -362,6 +367,7 @@ def _bellashuv(conn, uid, kun, dars):
         "item": kun_mavzusi(dars, kun), "top": top, "n": len(rows), "place": orin,
         "ms": m["ms"] if m else None, "tries": int(m["urinish"]) if m else 0, "max": URINISH,
         "prizes": {"top": list(SOVRIN), "ten": SOVRIN_10},
+        "penalty": _jarima(conn, uid, dars, kun),
         "yesterday": {
             "top": [{"uid": r["user_id"], "name": _ism(r["name"]), "house": r["house"], "ms": r["ms"]}
                     for r in krows[:3]],
@@ -703,6 +709,14 @@ def _boshla(uid, dars, kun):
         conn.close()
 
 
+def _jarima(conn, uid, dars, kun):
+    """Bellashuvda bitta xato necha ms (fan jihozi kamaytiradi; tarixda TARIX_XATO_DAN dan kattaroq)."""
+    j = hpdokon.jarima_ms(conn, uid, dars)
+    if dars == "tarix" and kun >= TARIX_XATO_DAN:
+        j = int(round(j * TARIX_XATO_MS / hpdokon.JARIMA_MS))
+    return j
+
+
 def _tugat(uid, dars, kun, xato):
     """Urinishni yopadi. (ms, eng_yaxshi_ms) yoki None (boshlanmagan / juda uzoq)."""
     conn = hpcup._connect()
@@ -719,7 +733,7 @@ def _tugat(uid, dars, kun, xato):
         xato = max(0, min(int(xato), 50))
         # Do'kon: «diqqat» damlamasi birinchi xatoni kechiradi; fan jihozi har xato jarimasini kamaytiradi (hpdokon)
         kechirildi = xato > 0 and hpdokon.damlama_ishlat(conn, uid, "diqqat")
-        jarima = hpdokon.jarima_ms(conn, uid, dars)
+        jarima = _jarima(conn, uid, dars, kun)
         ms = max(ENG_KAM_MS, sof) + (xato - (1 if kechirildi else 0)) * jarima
         _tugat.oxirgi = {"penalty": jarima, "forgiven": bool(kechirildi)}
         if r["ms"] is None or ms < r["ms"]:

@@ -247,7 +247,14 @@ async def amain():
         return out
     birinchi = [q["q"] for q in d["questions"]]
     st, d = await ask(2, finish="tarix", answers=javoblar(d["questions"], "ru", 2))
-    check("tarix: 2 xato = +6 soniya", d["ok"] and d["wrong"] == 2 and d["ms"] == hpdars.ENG_KAM_MS + 6000)
+    jx = hpdars.TARIX_XATO_MS if kun >= hpdars.TARIX_XATO_DAN else 3000      # 2026-10-24 dan tarixda xato 10 s
+    check("tarix: 2 xato = 2 x jarima", d["ok"] and d["wrong"] == 2 and d["ms"] == hpdars.ENG_KAM_MS + 2 * jx)
+    check("tarix: jarima holatda ko'rinadi", d["lessons"]["tarix"]["contest"]["penalty"] == jx
+          and d["lessons"]["afsun"]["contest"]["penalty"] == 3000)
+    c_ = hpcup._connect()
+    check("tarix: 24-oktabrdan xato 10 s, undan oldin 3 s", hpdars._jarima(c_, 2, "tarix", "2026-10-24") == 10000
+          and hpdars._jarima(c_, 2, "tarix", "2026-10-23") == 3000 and hpdars._jarima(c_, 2, "afsun", "2026-10-30") == 3000)
+    c_.close()
     st, d = await ask(2, start="tarix")
     ikkinchi = [B_[i]["ru"]["q"] for q in d["questions"] for i in idx if B_[i]["uz"]["q"] == q["q"]]
     check("tarix: qayta urinishda savollar tartibi boshqa", sorted(ikkinchi) == sorted(birinchi) and ikkinchi != birinchi)
