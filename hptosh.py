@@ -19,7 +19,7 @@ bazada ikki odam o'yinlarining 81% ini birinchi otgan yutgan - toshchalar tugash
 ikki raund, har raundda o'rtada RAUND_TOSH ta YANGI toshcha (2x3), har kimga RAUND_ZARBA tadan zarba (toshcha tugasa raund erta tugaydi);
 1-raundni a, 2-raundni b boshlaydi; ballar qo'shiladi; teng bo'lsa - PENALTI: navbat bilan har kim to'liq yangi taxtaga bitta zarba,
 juftlik oxirida farq bo'lsa tugaydi (QOSHIMCHA juftgacha). O'lchov (kompyuter o'yinchilar): birinchi otgan 70% -> 49%.
-Hozircha SINOV: YANGI_QOIDA = "admin" - faqat admin (yoki uning sinov o'quvchisi) qatnashgan mashq/sinov/do'stona o'yinlarda; "hamma" - hamma o'yinlarda.
+YANGI_QOIDA = "hamma" (2026-10-23 dan) - hamma o'yinlarda, turnirda ham; "admin" - faqat admin (yoki uning sinov o'quvchisi) o'yinlarida (sinov uchun).
 
 So'rovlar - POST /api/tosh: {} holat, {join: 1|0}, {mashq: 1|2|3}, {oyin: id, seen: n} o'yin holati (seen - oxirgi ko'rilgan zarba raqami),
 {oyin: id, shot: {s, a, p}} zarba (s - doiradagi joy burchagi, a - yo'nalish burchagi, p - kuch 0..1), {sinov: 1}.
@@ -69,7 +69,7 @@ KADR = 3                      # har shuncha qadamda bitta kadr (40 kadr/s)
 MAX_T = 7.0
 JOY_MIN, JOY_MAX = -150.0, -30.0   # otuvchi tosh joyi: pastki yoy (gradus; 0 - o'ngda, -90 - pastda)
 TOSH_SONI = 9
-YANGI_QOIDA = "admin"         # ikki raundli qoida: "admin" - faqat admin o'yinlarida (sinov), "hamma" - hamma o'yinlarda
+YANGI_QOIDA = "hamma"         # ikki raundli qoida: "admin" - faqat admin o'yinlarida (sinov), "hamma" - hamma o'yinlarda (egasi sinab ko'rib ochdi, 2026-10-23)
 RAUND_TOSH = 6
 RAUND_ZARBA = 3               # har raundda har kimga
 

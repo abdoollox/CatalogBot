@@ -30,6 +30,10 @@ sys.modules["sheets"] = sheets
 import random
 import hpcup, hpdars, hptosh as P   # noqa: E402
 
+# Eski (bitta raundli) qoida sinovlari oddiy o'quvchilar uchun "admin" rejimida qoladi; kodda rejim - KOD_REJIM
+KOD_REJIM = P.YANGI_QOIDA
+P.YANGI_QOIDA = "admin"
+
 TZ = timezone(timedelta(hours=5))
 ok = fail = 0
 def check(name, cond):
@@ -236,7 +240,9 @@ async def amain():
     await P.tick()
     check("muddati o'tgan taklif yopiladi", P.taklif_info(t3) is None and (await ask(4, qabul=t3)).get("error") == "muddat")
 
-    # ---- IKKI RAUNDLI QOIDA (2026-10-21): hozircha faqat admin o'yinlarida
+    # ---- IKKI RAUNDLI QOIDA (2026-10-21; 2026-10-23 dan hammaga): avval sinov rejimi ("admin"), keyin "hamma"
+    eski_rejim = P.YANGI_QOIDA
+    P.YANGI_QOIDA = "admin"
     m = {"raund": 0, "rz": 0}
     yur = []
     toshlar = P.boshlangich(2)
@@ -293,6 +299,13 @@ async def amain():
     d = await ask(5, dost=1)
     d = await ask(6, qabul=d["game"]["id"])
     check("adminsiz do'stona o'yin - eski qoida", d["game"]["rule"] == 1 and len(d["game"]["stones"]) == 9)
+
+    P.YANGI_QOIDA = "hamma"
+    d = await ask(1, mashq=2)
+    check("hammaga ochilgan: oddiy o'quvchi mashqi ham ikki raundli", d["game"]["rule"] == 2 and len(d["game"]["stones"]) == 6 and (await ask(1))["rules"]["v2"] is True)
+    check("hammaga ochilgan: turnir o'yini ham yangi qoidada", P._qoida("turnir", 1, 2) == 2)
+    P.YANGI_QOIDA = eski_rejim
+    check("kodda rejim hammaga ochiq", KOD_REJIM == "hamma")
 
     print("Toshchalar: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
