@@ -3270,9 +3270,11 @@ def ism(raw):
 
 def direktor_qil(user_id):
     """Hisobni Xogvarts direktori qiladi (ism «Albus Dambldor», fakultet DIREKTOR).
+    Avval yopilgan haftalar tarixi muhrlanadi (o'tgan haftalar raqami o'zgarmasin).
     Avvalgi fakultet saqlanmaydi - qaytarish kerak bo'lsa qo'lda yoziladi."""
     conn = _connect()
     try:
+        _muhrla(conn)
         conn.execute("UPDATE users SET house=?, first_name=? WHERE user_id=?",
                      (DIREKTOR, DIREKTOR_ISM, int(user_id)))
         conn.commit()
