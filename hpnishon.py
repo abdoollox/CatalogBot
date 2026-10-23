@@ -89,7 +89,7 @@ def _top3(conn, uid):
                         "WHERE p.user_id=? AND s.status='closed'", (uid,)):
         ilk = _all(conn,
                    "SELECT p.user_id FROM points p JOIN users u ON u.user_id=p.user_id "
-                   "WHERE p.season_id=? AND u.house IS NOT NULL AND p.user_id>0 "
+                   "WHERE p.season_id=? AND u.house IN ('gryffindor','slytherin','ravenclaw','hufflepuff') AND p.user_id>0 "
                    "GROUP BY p.user_id ORDER BY SUM(p.points) DESC, MAX(p.created_at) LIMIT 3", (s[0],))
         if any(r[0] == uid for r in ilk):
             return True

@@ -348,6 +348,8 @@ def yakunla(bugun):
 def _ism(raw):
     """Jadval uchun ism: birinchi so'z. Ichida harf ham, raqam ham bo'lmasa ("." kabi) - "Sehrgar"."""
     raw = (raw or "").strip()
+    if raw == hpcup.DIREKTOR_ISM:
+        return raw
     soz = raw.split()[0][:20] if raw else ""
     return soz if any(ch.isalnum() for ch in soz) else "Sehrgar"
 

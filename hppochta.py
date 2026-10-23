@@ -718,7 +718,7 @@ def _kubok_yoz(season_id):
         gal = {r[0]: r for r in conn.execute(
             "SELECT user_id, jami, ball, asos, golib, top FROM galleon_mukofot WHERE season_id=?", (season_id,))}
         v, n = _hozir(), 0
-        for uid, uy in conn.execute("SELECT user_id, house FROM users WHERE house IS NOT NULL AND user_id > 0"):
+        for uid, uy in conn.execute("SELECT user_id, house FROM users WHERE house IN " + hpcup._UY_SQL + " AND user_id > 0"):
             o, ub = orin.get(uy, (None, 0))
             d = {"s": season_id, "g": g, "uy": uy, "orin": o, "uy_ball": ub,
                  "ball": int(ball.get(uid) or 0), "nish": nish.get(uid, []), "gal": 0}

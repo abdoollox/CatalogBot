@@ -743,6 +743,8 @@ def register(dp, bot, app, cfg):
             if not peer or peer == uid:
                 return None
             return "dm:%d:%d" % (min(uid, peer), max(uid, peer))
+        if house == hpcup.DIREKTOR:
+            return "global"
         return house
 
     async def chat_banned(uid):
@@ -792,7 +794,7 @@ def register(dp, bot, app, cfg):
             hpcup.presence_mark(uid, house)
             if request.query.get("counts"):
                 rooms = {"global": "global"}
-                if house:
+                if house and house != hpcup.DIREKTOR:
                     rooms["house"] = house
                 if admin:
                     for h in hpcup.HOUSES:

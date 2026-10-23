@@ -94,6 +94,13 @@ SOURCE_CAPS = {
 }
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")
+# Egasi (2026-10-24): admin hisobi - Xogvarts direktori «Albus Dambldor». Uning users.house = DIREKTOR:
+# hamma joyda qatnashadi, lekin bali hech bir fakultetga qo'shilmaydi (kubok, uchlik, galleon - faqat HOUSES).
+# Ism Telegram ismi bilan almashtirilmaydi (_touch_user). Belgilash: direktor_qil(uid).
+DIREKTOR = "direktor"
+DIREKTOR_ISM = "Albus Dambldor"
+UYLAR = HOUSES + (DIREKTOR,)
+_UY_SQL = "(%s)" % ",".join("'%s'" % h for h in HOUSES)     # SQL: faqat to'rt fakultet
 BADGE_CODES = ("all_films", "flawless_exam", "perfect_week", "streak_7")
 
 SCHEMA = """
@@ -791,9 +798,10 @@ def _touch_user(conn, user_id, first_name=None, username=None):
             "INSERT INTO users (user_id, first_name, username, house, sorted_at, created_at) "
             "VALUES (?,?,?,NULL,NULL,?) "
             "ON CONFLICT(user_id) DO UPDATE SET "
-            "first_name=COALESCE(excluded.first_name, users.first_name), "
+            "first_name=CASE WHEN users.house=? THEN users.first_name "
+            "ELSE COALESCE(excluded.first_name, users.first_name) END, "
             "username=COALESCE(excluded.username, users.username)",
-            (int(user_id), clean_name, clean_uname, stamp))
+            (int(user_id), clean_name, clean_uname, stamp, DIREKTOR))
     else:
         conn.execute(
             "INSERT OR IGNORE INTO users (user_id, first_name, username, house, sorted_at, created_at) "
@@ -1281,7 +1289,7 @@ def _season_entry(conn, row, number):
         "SELECT p.user_id, COALESCE(u.first_name, 'Sehrgar') AS name, u.house, "
         "SUM(p.points) AS pts, MIN(p.id) AS first_id "
         "FROM points p JOIN users u ON u.user_id = p.user_id "
-        "WHERE p.season_id = ? AND u.house IS NOT NULL AND p.user_id > 0 "
+        "WHERE p.season_id = ? AND u.house IN " + _UY_SQL + " AND p.user_id > 0 "
         "GROUP BY p.user_id ORDER BY pts DESC, first_id ASC LIMIT 3",
         (row["id"],)).fetchall()
     # Eng yaxshi uchlik (egasi, 2026-10-05); "best" - birinchisi, eski ilova nusxalari uchun qoldi
@@ -1471,7 +1479,7 @@ WITH active AS (
     SELECT p.user_id, u.house, SUM(p.points) AS pts
     FROM points p
     JOIN users u ON u.user_id = p.user_id
-    WHERE p.season_id = ? AND u.house IS NOT NULL AND p.user_id > 0
+    WHERE p.season_id = ? AND u.house IN %s AND p.user_id > 0
     GROUP BY p.user_id, u.house
     HAVING SUM(p.points) >= ?
 )
@@ -1482,7 +1490,7 @@ SELECT house,
 FROM active
 GROUP BY house
 ORDER BY total_points DESC
-"""
+""" % _UY_SQL
 
 
 def _empty_by():
@@ -1512,7 +1520,7 @@ def _leaderboard(season_id):
         # a'zolar ballari, shunda qismlar yig'indisi jami ballga teng bo'ladi.
         by_house = _by_source(
             conn, season_id, "u.house",
-            "u.house IS NOT NULL AND p.user_id > 0 AND p.user_id IN ("
+            "u.house IN " + _UY_SQL + " AND p.user_id > 0 AND p.user_id IN ("
             "  SELECT user_id FROM points WHERE season_id = ? "
             "  GROUP BY user_id HAVING SUM(points) >= ?)",
             (season_id, ACTIVE_MIN_POINTS))
@@ -1803,7 +1811,7 @@ def _feed(conn, limit=50):
         else:
             ago_min = 60
         raw_name = (r["name"] or "Sehrgar").strip()
-        first_word = raw_name.split()[0] if raw_name else "Sehrgar"
+        first_word = ism(raw_name)
         feed_list.append({
             "uid": r["user_id"],             # ilovada ism bosilganda profil ochiladi
             "name": first_word[:20],
@@ -2106,7 +2114,7 @@ def _galleon_mukofot(conn, season_id, winner, stamp):
     rows = [(r["user_id"], r["house"], r["pts"]) for r in conn.execute(
         "SELECT p.user_id, u.house, SUM(p.points) AS pts, MAX(p.created_at) AS oxir "
         "FROM points p JOIN users u ON u.user_id = p.user_id "
-        "WHERE p.season_id = ? AND p.user_id > 0 AND u.house IS NOT NULL "
+        "WHERE p.season_id = ? AND p.user_id > 0 AND u.house IN " + _UY_SQL + " "
         "GROUP BY p.user_id HAVING pts > 0 ORDER BY pts DESC, oxir ASC, p.user_id ASC", (season_id,))]
     berildi = {}
     for uid, pts, asos, golib, top, jami in _galleon_hisob(rows, winner):
@@ -2692,7 +2700,7 @@ async def chat_members(house, season_id, viewer=0):
     def _do():
         conn = _connect()
         try:
-            where, args = "u.house IN (%s)" % ",".join("?" * len(HOUSES)), list(HOUSES)
+            where, args = "u.house IN (%s)" % ",".join("?" * len(UYLAR)), list(UYLAR)
             if house:
                 where, args = "u.house=?", [house]
             rows = conn.execute(
@@ -3248,3 +3256,26 @@ async def give_ticket(user_id):
         finally:
             conn.close()
     return await asyncio.to_thread(_do)
+
+
+# ---------------------------------------------------------------- direktor (egasi, 2026-10-24)
+
+def ism(raw):
+    """Ro'yxatlar uchun qisqa ism - birinchi so'z; direktor ismi to'liq qoladi."""
+    raw = (raw or "").strip()
+    if raw == DIREKTOR_ISM:
+        return raw
+    return raw.split()[0] if raw else "Sehrgar"
+
+
+def direktor_qil(user_id):
+    """Hisobni Xogvarts direktori qiladi (ism «Albus Dambldor», fakultet DIREKTOR).
+    Avvalgi fakultet saqlanmaydi - qaytarish kerak bo'lsa qo'lda yoziladi."""
+    conn = _connect()
+    try:
+        conn.execute("UPDATE users SET house=?, first_name=? WHERE user_id=?",
+                     (DIREKTOR, DIREKTOR_ISM, int(user_id)))
+        conn.commit()
+        return conn.execute("SELECT changes()").fetchone()[0]
+    finally:
+        conn.close()
