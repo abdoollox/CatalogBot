@@ -58,6 +58,21 @@ def kun_kartasi(kun):
     return tartib[n % len(KARTALAR)]
 
 
+def row_karta(conn, uid, kun):
+    r = conn.execute("SELECT karta FROM sandiq WHERE user_id=? AND kun=?", (uid, kun)).fetchone()
+    return r[0] if r else None
+
+
+def shaxsiy_karta(conn, uid, kun):
+    """O'quvchining shu kungi kartochkasi (chat tahlili 2026-10-23: «kartochka hammada bir xil - har kimga har xil bo'lsa
+    qiziqroq»; 2026-10-26 dan): o'zida HALI YO'Q kartochkalardan tasodifiy bittasi; hammasi yig'ilgan bo'lsa - istalgani.
+    Tanlov SIR (urug'da bot tokeni) va odam + kun bo'yicha doimiy."""
+    bor = {r[0] for r in conn.execute("SELECT card FROM qurbaqa WHERE user_id=?", (uid,))}
+    yoq = [k for k in KARTALAR if k not in bor] or list(KARTALAR)
+    sir = hashlib.sha256(("qurbaqa-shaxsiy|%s|%s|%s" % (os.getenv("BOT_TOKEN", ""), uid, kun)).encode()).hexdigest()
+    return yoq[int(sir[:12], 16) % len(yoq)]
+
+
 HAVZA = ("chat", "music", "chess", "owl", "cup", "share", "house")   # "daily" har doim bor
 BOSQICH = ()                        # oraliq mukofot yo'q (ilgari: 2 va 4 topshiriqda +5 ball)
 SANDIQ_BALL = 10
@@ -76,6 +91,8 @@ def _init():
             " bosqich INTEGER NOT NULL DEFAULT 0,"    # nechta oraliq mukofot berilgan (0..2)
             " ochildi TEXT,"                          # sandiq ochilgan vaqt (UTC ISO)
             " PRIMARY KEY (user_id, kun))")
+        if "karta" not in [r[1] for r in conn.execute("PRAGMA table_info(sandiq)")]:
+            conn.execute("ALTER TABLE sandiq ADD COLUMN karta TEXT")       # shu kuni tushgan kartochka (2026-10-26 dan shaxsiy)
         conn.execute(
             "CREATE TABLE IF NOT EXISTS qurbaqa ("
             " user_id INTEGER NOT NULL, card TEXT NOT NULL, soni INTEGER NOT NULL DEFAULT 1,"
@@ -253,7 +270,7 @@ def _holat(conn, uid, kun, mukofot=None):
         "prizes": {"steps": [list(b) for b in BOSQICH], "ball": SANDIQ_BALL, "gal": SANDIQ_GALLEON,
                    "big_every": KATTA_HAR, "big_gal": KATTA_GALLEON},
         # Bugungi kartochka SIR: faqat quti ochilgandan keyin aytiladi
-        "card": kun_kartasi(kun) if ochildi else None,
+        "card": ((row_karta(conn, uid, kun) or kun_kartasi(kun)) if ochildi else None),
         "cards": {r[0]: r[1] for r in conn.execute("SELECT card, soni FROM qurbaqa WHERE user_id=?", (uid,))},
         "cards_total": len(KARTALAR),
         "reward": mukofot,
@@ -302,7 +319,8 @@ def _ish(uid, task=None, ochish=False):
                 gal = SANDIQ_GALLEON + (KATTA_GALLEON if streak % KATTA_HAR == 0 else 0)
                 conn.execute("UPDATE users SET galleons = galleons + ? WHERE user_id=?", (gal, uid))
                 ball.append((kun + ":sandiq", SANDIQ_BALL))
-                karta = kun_kartasi(kun)
+                karta = shaxsiy_karta(conn, uid, kun)
+                conn.execute("UPDATE sandiq SET karta=? WHERE user_id=? AND kun=?", (karta, uid, kun))
                 yangi = not conn.execute("SELECT 1 FROM qurbaqa WHERE user_id=? AND card=?", (uid, karta)).fetchone()
                 if yangi:
                     conn.execute("INSERT INTO qurbaqa (user_id, card, soni, vaqt) VALUES (?,?,1,?)",

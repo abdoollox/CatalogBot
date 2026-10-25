@@ -124,8 +124,26 @@ async def amain():
     check("sandiq ochildi: +10 ball, +1 galleon, ketma-ketlik 1",
           d["opened"] and d["reward"]["ball"] == 10 and d["reward"]["gal"] == 1 and d["streak"] == 1
           and ball(1) == 10 and gal1 - gal0 == 1)
-    check("kartochka berildi: bugungisi, yangi", d["reward"]["card"] == hpsandiq.kun_kartasi(kun) and d["reward"]["card_new"] is True
-          and d["cards"] == {hpsandiq.kun_kartasi(kun): 1} and d["cards_total"] == 24 and d["card"] == hpsandiq.kun_kartasi(kun))
+    k1 = d["reward"]["card"]
+    check("kartochka berildi: shaxsiy, yangi, holatda ham o'sha", k1 in hpsandiq.KARTALAR and d["reward"]["card_new"] is True
+          and d["cards"] == {k1: 1} and d["cards_total"] == 24 and d["card"] == k1
+          and sql("SELECT karta FROM sandiq WHERE user_id=1 AND kun=?", (kun,))[0][0] == k1)
+    d = await ask(1)
+    check("qayta so'ralganda ham o'sha kartochka ko'rinadi", d["card"] == k1)
+    # Shaxsiy tanlov: o'zida yo'q kartochkalardan; 24 ochishda hammasi yig'iladi, keyin - istalgani (2026-10-26)
+    c = hpcup._connect()
+    try:
+        yig = set()
+        for i in range(24):
+            kk = hpsandiq.shaxsiy_karta(c, 777, "2026-11-%02d" % (i + 1))
+            yig.add(kk)
+            c.execute("INSERT OR IGNORE INTO qurbaqa (user_id, card, soni, vaqt) VALUES (777,?,1,'x')", (kk,))
+        check("24 ochishda 24 xil kartochka (takrorsiz)", len(yig) == 24)
+        check("hammasi yig'ilgach ham kartochka beriladi", hpsandiq.shaxsiy_karta(c, 777, "2026-12-01") in hpsandiq.KARTALAR)
+        har = {hpsandiq.shaxsiy_karta(c, u, "2026-11-01") for u in range(1000, 1040)}
+        check("bir kunda turli o'quvchilarga turli kartochka", len(har) >= 10)
+    finally:
+        c.close()
     d = await ask(1, open=True)
     check("ikkinchi marta ochilmaydi", ball(1) == 10 and sql("SELECT galleons FROM users WHERE user_id=1")[0][0] == gal1)
     check("kubokda 'chest' manbasi", (await hpcup.user_stats(1, season["id"]))["by"].get("chest") == 10)
