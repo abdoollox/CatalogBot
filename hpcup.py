@@ -1656,6 +1656,7 @@ def _hall(conn, house, user_id, season_id):
             "name": first_word[:20],
             "points": r["pts"],
             "me": (r["user_id"] == int(user_id)),
+            "sardor": sardormi(r["user_id"]),
             "active": r["pts"] >= ACTIVE_MIN_POINTS,
             "by": by_user.get(r["user_id"], _empty_by()),
         })
@@ -2443,6 +2444,8 @@ def _chat_row(r):
         "time": r["created_at"],
         "rev": r["rev"],
     }
+    if sardormi(r["user_id"]):
+        m["sardor"] = True
     if r["edited_at"]:
         m["edited"] = True
     if r["kind"]:
@@ -2711,7 +2714,7 @@ async def chat_members(house, season_id, viewer=0):
                 "GROUP BY u.user_id ORDER BY pts DESC, u.user_id ASC",
                 [season_id] + args + [int(viewer or 0)]).fetchall()
             return [{"uid": r["user_id"], "name": (r["name"] or "Sehrgar").strip()[:40],
-                     "house": r["house"], "points": r["pts"],
+                     "house": r["house"], "points": r["pts"], "sardor": sardormi(r["user_id"]),
                      "seen": presence_seen(r["user_id"], r["last_seen_at"])} for r in rows]
         finally:
             conn.close()
@@ -3281,3 +3284,67 @@ def direktor_qil(user_id):
         return conn.execute("SELECT changes()").fetchone()[0]
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------- hafta sardori (egasi, 2026-10-25)
+# O'quvchi taklifi (chat, 22-okt): «har fakultetga sardor, natijaga qarab, haftalik». Egasi qarorlari: tanlov avtomatik (ovoz
+# berish yo'q), takrorlanishi mumkin, nomi «Hafta sardori» (yo'riqnomadagi Persi Uizli kabi sardorlar bilan chalkashmasin).
+# Har hafta yopilgach har fakultetda o'sha hafta eng ko'p ball to'plagan o'quvchi keyingi haftaga sardor. Faqat obro': belgi
+# (chat, profil, a'zolar ro'yxati), kubok sahifasidagi «Hafta sardorlari», «Sardor» nishoni, kubok xatida. Ball/galleon yo'q.
+SARDOR_DDL = ("CREATE TABLE IF NOT EXISTS sardor (season_id INTEGER NOT NULL, house TEXT NOT NULL, user_id INTEGER NOT NULL, "
+              "ball INTEGER NOT NULL, PRIMARY KEY (season_id, house))")
+SARDOR_KESH = 60
+SARDOR_DAN = "2026-10-25"     # birinchi sardorlar - 25-oktabrda yopilgan haftadan (oldingi haftalar uchun sardor/nishon yo'q)
+_sardor_kesh = {"t": 0.0, "d": {}}
+
+
+def _sardor_hafta(conn, season_id):
+    """Yopilgan hafta sardorlari {fakultet: (uid, ball)}; birinchi so'ralganda hisoblanib yoziladi (keyin o'zgarmaydi).
+    Teng ballda - balni oldinroq to'plagan (haftaning eng yaxshi uchligidagi tartib)."""
+    conn.execute(SARDOR_DDL)
+    rows = conn.execute("SELECT house, user_id, ball FROM sardor WHERE season_id=?", (season_id,)).fetchall()
+    if not rows:
+        st = conn.execute("SELECT status, ends_at FROM seasons WHERE id=?", (season_id,)).fetchone()
+        if not st or st["status"] != "closed" or str(st["ends_at"])[:10] < SARDOR_DAN:
+            return {}
+        for r in conn.execute(
+                "SELECT p.user_id, u.house, SUM(p.points) AS pts, MIN(p.id) AS f FROM points p JOIN users u ON u.user_id = p.user_id "
+                "WHERE p.season_id = ? AND p.user_id > 0 AND u.house IN " + _UY_SQL + " "
+                "GROUP BY p.user_id HAVING pts > 0 ORDER BY pts DESC, f ASC", (season_id,)).fetchall():
+            conn.execute("INSERT OR IGNORE INTO sardor (season_id, house, user_id, ball) VALUES (?,?,?,?)",
+                         (season_id, r["house"], r["user_id"], r["pts"]))
+        conn.commit()
+        rows = conn.execute("SELECT house, user_id, ball FROM sardor WHERE season_id=?", (season_id,)).fetchall()
+    return {r["house"]: (r["user_id"], r["ball"]) for r in rows}
+
+
+def _sardorlar(conn):
+    """Hozirgi hafta sardorlari - oxirgi yopilgan haftadan: {fakultet: {uid, name, ball}}."""
+    s = conn.execute("SELECT id FROM seasons WHERE status='closed' ORDER BY starts_at DESC, id DESC LIMIT 1").fetchone()
+    if not s:
+        return {}
+    out = {}
+    for h, (uid, ball) in _sardor_hafta(conn, s["id"]).items():
+        r = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name FROM users WHERE user_id=?", (uid,)).fetchone()
+        out[h] = {"uid": uid, "name": ism(r["name"] if r else "Sehrgar")[:20], "ball": ball}
+    return out
+
+
+def sardorlar():
+    """Keshlangan (daqiqada bir hisoblanadi) - chat har xabarda so'raydi."""
+    hozir = time.time()
+    if hozir - _sardor_kesh["t"] > SARDOR_KESH:
+        conn = _connect()
+        try:
+            _sardor_kesh["d"] = _sardorlar(conn)
+        finally:
+            conn.close()
+        _sardor_kesh["t"] = hozir
+    return _sardor_kesh["d"]
+
+
+def sardormi(uid):
+    try:
+        return any(x["uid"] == int(uid) for x in sardorlar().values())
+    except Exception:
+        return False

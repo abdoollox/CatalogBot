@@ -26,6 +26,7 @@ sheets.read_csv = _none
 sys.modules["sheets"] = sheets
 
 import hpcup, hpevents, hpnishon, hppatronus   # noqa: E402
+hpcup.SARDOR_DAN = "2000-01-01"          # sinov haftalari bugungi sanada yopiladi
 
 ok = fail = 0
 def check(name, cond):
@@ -80,7 +81,7 @@ async def amain():
     await hpcup.touch_user(2, "Ron")
     d = await ask(1)
     check("yangi odamda nishon yo'q; serial ochilmaguncha uning nishoni ro'yxatda yo'q", d["ok"] and d["count"] == 0
-          and d["total"] == 29 and len(d["list"]) == 29 and d["new"] == [] and "serial_1" not in [x["code"] for x in d["list"]])
+          and d["total"] == 30 and len(d["list"]) == 30 and d["new"] == [] and "serial_1" not in [x["code"] for x in d["list"]])
 
     # «Bexato hafta» (2026-10-24): bir haftada 5 kun tarix bellashuvi xatosiz
     sql("CREATE TABLE IF NOT EXISTS dars_bellashuv (kun TEXT, dars TEXT, user_id INTEGER, ms INTEGER, xato INTEGER DEFAULT 0,"
@@ -95,7 +96,7 @@ async def amain():
     check("bexato hafta: 5 kun - olindi", "perfect_week" in got(await ask(7)))
     import hpserial
     hpserial._data["ochiq"] = True
-    check("serial ochilgach nishoni ko'rinadi", (await ask(1))["total"] == 30)
+    check("serial ochilgach nishoni ko'rinadi", (await ask(1))["total"] == 31)
     hpserial._data["ochiq"] = False
 
     # Filmlar: botdan, ilovadan (web_ va sifat bilan), 3 tilda
@@ -158,7 +159,7 @@ async def amain():
     check("o'quvchi, tayoqcha, ball, hafta, do'stlar, shaxmat, albom",
           set(got(d)) == set(hpnishon.KODLAR) - {"kubok_golib", "top_3", "sandiq_1", "sandiq_7", "maxluq_1", "maxluq_katta", "maxluq_12",
                                                 "issiq_1", "issiq_yetilgan", "issiq_hosil", "issiq_12", "kitob_1", "kitob_7",
-                                                "duel_golib", "rekord_top"})
+                                                "duel_golib", "rekord_top", "sardor"})
 
     # Kunlik sandiq: 7 kun ketma-ket
     sql("CREATE TABLE IF NOT EXISTS sandiq (user_id INTEGER, kun TEXT, done TEXT, bosqich INTEGER, ochildi TEXT)")
@@ -227,7 +228,7 @@ async def amain():
 
     # Boshqa odam ko'radi: faqat olinganlari
     d = await ask(2, uid=1)
-    check("boshqaga faqat olinganlar ko'rinadi", d["count"] == 25 and all(x["got"] for x in d["list"]) and "new" not in d)
+    check("boshqaga faqat olinganlar ko'rinadi (yopilgan haftada fakultetida birinchi - sardor nishoni ham)", d["count"] == 26 and any(x["code"] == "sardor" for x in d["list"]) and all(x["got"] for x in d["list"]) and "new" not in d)
     d = await ask(1, uid=2)
     check("nishoni yo'q odam - bo'sh ro'yxat", d["list"] == [] and d["count"] == 0)
     check("yo'q odam - bo'sh ro'yxat", (await ask(1, uid=999))["list"] == [])

@@ -350,6 +350,7 @@ async def api_leaderboard(request):
         "resort_until": until,
         "qayta": bool(allowed and until == hpcup.QAYTA_GACHA),     # testni qayta topshirish (19-sentabrgacha saralanganlar)
         "exam_pending": exam_pending,
+        "sardor": hpcup.sardormi(user["id"]),
     }
     if gap:
         me["gap"] = gap
@@ -359,6 +360,7 @@ async def api_leaderboard(request):
                    "prev_winner": await hpcup.last_winner()},
         "houses": table,
         "me": me,
+        "sardors": await asyncio.to_thread(hpcup.sardorlar),
     }
     if hall:
         resp["hall"] = hall
@@ -492,6 +494,7 @@ async def profile_extra(user_id):
         "resort_until": until,
         "qayta": bool(allowed and until == hpcup.QAYTA_GACHA),     # testni qayta topshirish (19-sentabrgacha saralanganlar)
         "exam_pending": exam_pending,
+        "sardor": hpcup.sardormi(user_id),
     }
 
 

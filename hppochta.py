@@ -80,6 +80,8 @@ MATN = {
         "cupLost": "🏆 Hafta g'olibi — %s", "cupPlace": "%s %d-o'rinda: %s ball.",
         "cupNone": "🏆 Hafta yakunlandi", "cupNoneB": "Bu hafta g'olib aniqlanmadi.",
         "cupMe": "Siz %s ball qo'shdingiz.", "cupZero": "Siz bu hafta ball to'plamadingiz — yangi haftada fakultetingizga yordam bering.",
+        "sarMen": "🛡 Siz fakultetingizning hafta sardorisiz! Belgingiz bir hafta chatda va profilingizda turadi.",
+        "sarU": "🛡 Fakultetingizning hafta sardori: %s.",
         "cupBadge": "Yangi nishon: %s", "cupGo": "🏆 Kubokni ko'rish",
         "cupGal": "Mukofot: +%s galleon hamyoningizga tushdi.",
         "galB": "%s ball → %s galleon", "galW": "fakultet yutdi, ikki baravar → %s", "galT": "eng yaxshi uchlik +%s",
@@ -106,6 +108,8 @@ MATN = {
         "cupLost": "🏆 Победитель недели — %s", "cupPlace": "%s на %d-м месте: %s очков.",
         "cupNone": "🏆 Неделя завершена", "cupNoneB": "На этой неделе победитель не определён.",
         "cupMe": "Вы принесли %s очков.", "cupZero": "На этой неделе у вас нет очков — помогите факультету в новой неделе.",
+        "sarMen": "🛡 Вы — старшина недели своего факультета! Значок неделю будет в чате и в профиле.",
+        "sarU": "🛡 Старшина недели вашего факультета: %s.",
         "cupBadge": "Новый значок: %s", "cupGo": "🏆 Открыть кубок",
         "cupGal": "Награда: +%s галлеонов в ваш кошелёк.",
         "galB": "%s очков → %s галл.", "galW": "факультет победил, вдвое → %s", "galT": "тройка лучших +%s",
@@ -132,6 +136,8 @@ MATN = {
         "cupLost": "🏆 House of the week — %s", "cupPlace": "%s is in place %d: %s points.",
         "cupNone": "🏆 The week is over", "cupNoneB": "No winner this week.",
         "cupMe": "You earned %s points.", "cupZero": "You earned no points this week — help your house in the new one.",
+        "sarMen": "🛡 You are your house's prefect of the week! The badge stays in the chat and on your profile for a week.",
+        "sarU": "🛡 Your house's prefect of the week: %s.",
         "cupBadge": "New badge: %s", "cupGo": "🏆 Open the Cup",
         "cupGal": "Reward: +%s Galleons added to your wallet.",
         "galB": "%s points → %s Galleons", "galW": "your house won, doubled → %s", "galT": "top three +%s",
@@ -671,6 +677,10 @@ def kubok_matni(lang, d):
         qator.append("🎖 " + t["cupBadge"] % t["badges"].get(b, b))
     if d.get("gal"):
         qator.append("🪙 " + _gal_qator(t, d))
+    if d.get("sar_men"):
+        qator.append(t["sarMen"])
+    elif d.get("sar"):
+        qator.append(t["sarU"] % d["sar"])
     return sar, "\n".join(qator)
 
 
@@ -718,10 +728,22 @@ def _kubok_yoz(season_id):
         gal = {r[0]: r for r in conn.execute(
             "SELECT user_id, jami, ball, asos, golib, top FROM galleon_mukofot WHERE season_id=?", (season_id,))}
         v, n = _hozir(), 0
+        # Hafta sardorlari (2026-10-25): xatda o'z fakultetining sardori
+        sard = {}
+        try:
+            for h, (suid, _b) in hpcup._sardor_hafta(conn, season_id).items():
+                r = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') FROM users WHERE user_id=?", (suid,)).fetchone()
+                sard[h] = (suid, hpcup.ism(r[0] if r else "Sehrgar"))
+        except Exception as e:
+            logging.warning("Kubok xati: sardorlar olinmadi: %s", e)
         for uid, uy in conn.execute("SELECT user_id, house FROM users WHERE house IN " + hpcup._UY_SQL + " AND user_id > 0"):
             o, ub = orin.get(uy, (None, 0))
             d = {"s": season_id, "g": g, "uy": uy, "orin": o, "uy_ball": ub,
                  "ball": int(ball.get(uid) or 0), "nish": nish.get(uid, []), "gal": 0}
+            if uy in sard:
+                d["sar"] = sard[uy][1]
+                if sard[uy][0] == uid:
+                    d["sar_men"] = 1
             gr = gal.get(uid)
             if gr:
                 d.update({"gal": int(gr[1] or 0), "gbl": int(gr[2] or 0), "gb": int(gr[3] or 0),

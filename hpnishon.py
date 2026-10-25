@@ -30,7 +30,7 @@ NISHONLAR = (
     ("film_1", "kino"), ("film_8", "kino"), ("fb_3", "kino"), ("poliglot", "kino"),
     ("oquvchi", "yol"), ("tayoqcha", "yol"), ("patronus", "yol"),
     ("ball_1", "kubok"), ("streak_7", "kubok"), ("perfect_week", "kubok"),
-    ("kubok_golib", "kubok"), ("top_3", "kubok"), ("sandiq_1", "kubok"), ("sandiq_7", "kubok"),
+    ("kubok_golib", "kubok"), ("top_3", "kubok"), ("sardor", "kubok"), ("sandiq_1", "kubok"), ("sandiq_7", "kubok"),
     ("dost_1", "dostlik"), ("dost_5", "dostlik"), ("shaxmat", "dostlik"),
     ("albom", "kolleksiya"), ("serial_1", "kolleksiya"),
     # Qo'riqxona (hpqoriq, 2026-10-08): birinchi maxluq, birinchi katta maxluq, o'n ikkitasining hammasi
@@ -213,6 +213,8 @@ def hisob(conn, uid):
         "perfect_week": (min(bexato, BEXATO_KUN), BEXATO_KUN),
         "kubok_golib": (1 if golib else 0, 1),
         "top_3": (1 if _top3(conn, uid) else 0, 1),
+        # Hafta sardori (2026-10-25): biror hafta fakultetida eng ko'p ball to'plagan (hpcup.sardor jadvali)
+        "sardor": (1 if _one(conn, "SELECT 1 FROM sardor WHERE user_id=? LIMIT 1", (uid,)) else 0, 1),
         "sandiq_1": (min(len(kunlar), 1), 1),
         "sandiq_7": (min(uzun, 7), 7),
         "dost_1": (min(refs, 1), 1),
