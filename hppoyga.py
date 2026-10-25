@@ -46,7 +46,9 @@ import hpgolib
 BOSH_HAFTA = "2026-10-12"     # birinchi poyga shu haftada (dushanba 12-oktabr; egasi 19-oktabrdan shu kunga ko'chirdi)
 TURNIR_KUN = 0                # dushanba
 SOAT = 22
-ZAL = 120                     # boshlanishidan shuncha soniya oldin «zal» ochiladi (kelganlar sanaladi)
+ZAL = 300                     # boshlanishidan shuncha soniya oldin «zal» ochiladi (kelganlar sanaladi)
+                              # 2026-10-26: 120 dan 300 ga - 19-okt poygasida 23 yozilgandan faqat 5 tasi 2 daqiqada ulgurgan (chat tahlili, 9)
+ZAL_ESL = 3                   # boshlanishiga shuncha daqiqa qolganda zalga hali kirmagan yozilganlarga yana eslatma
 SANOQ = 6                     # poyga ochilgach uchishgacha sanoq
 HALQA = 10                    # har shuncha halqada bitta uchuvchi chiqadi
 MUHLAT_T = 1.5                # oxiridan oldingi uchuvchi nazoratdan o'tgach shuncha kutiladi
@@ -370,7 +372,8 @@ def _eslatmalar(conn, hafta, xabarlar):
     if hozir.timestamp() >= T0 or datetime.fromtimestamp(T0, hozir.tzinfo).date() != hozir.date():
         return
     daq = hozir.hour * 60 + hozir.minute
-    tur = "on" if SOAT * 60 - 10 <= daq < SOAT * 60 else "ertalab" if 600 <= daq < SOAT * 60 - 10 else None
+    tur = ("zal" if SOAT * 60 - ZAL_ESL <= daq < SOAT * 60 else "on" if SOAT * 60 - 10 <= daq < SOAT * 60 - ZAL_ESL
+           else "ertalab" if 600 <= daq < SOAT * 60 - 10 else None)
     if not tur:
         return
     if conn.execute("INSERT OR IGNORE INTO pg_eslatma (hafta, tur) VALUES (?,?)", (hafta, tur)).rowcount < 1:
@@ -378,7 +381,10 @@ def _eslatmalar(conn, hafta, xabarlar):
     if tur == "ertalab" and hafta == BOSH_HAFTA:
         xabarlar.append((0, "elon"))             # birinchi poyga: hamma saralanganlarga e'lon
         return
-    for r in conn.execute("SELECT user_id FROM pg_qatnash WHERE hafta=?", (hafta,)).fetchall():
+    sql = "SELECT user_id FROM pg_qatnash WHERE hafta=?"
+    if tur == "zal":                             # zalga kirib bo'lganlarga kerak emas
+        sql += " AND user_id NOT IN (SELECT user_id FROM pg_oyinchi WHERE hafta=?)"
+    for r in conn.execute(sql, (hafta,) * (2 if tur == "zal" else 1)).fetchall():
         xabarlar.append((r["user_id"], tur))
 
 
@@ -416,12 +422,16 @@ def xat_matni(tur):
                 "ru": ("Сегодня в 22:00 первая гонка на мётлах!", "Все летят одновременно по одной трассе: кто точнее проходит кольца — тот быстрее. Каждые 10 колец последний пилот выбывает — побеждает тот, кто останется. В 22:00 будьте в приложении: Хогвартс → Гонка. Победителю +30 очков. Потренироваться можно уже сейчас."),
                 "en": ("The first broom race is today at 22:00!", "Everyone flies the same course at once: pass the hoops dead centre to go faster. Every 10 hoops the last flyer drops out — the last one left wins. Be in the app at 22:00: Hogwarts → Race. +30 points for the winner. You can practise right now.")}
     if tur == "ertalab":
-        return {"uz": ("Bugun 22:00 da supurgi poygasi", "Poyga bugun soat 22:00 da. Ilovaga kiring: Xogvarts → Poyga. Kechikkanlar faqat tomosha qiladi. Hozircha mashq qilib oling."),
-                "ru": ("Сегодня в 22:00 гонка на мётлах", "Гонка сегодня в 22:00. Зайдите: Хогвартс → Гонка. Опоздавшие только смотрят. А пока — потренируйтесь."),
-                "en": ("The broom race is today at 22:00", "The race is today at 22:00. Come in: Hogwarts → Race. Latecomers can only watch. Meanwhile, practise.")}
-    return {"uz": ("Poygaga 10 daqiqa qoldi!", "Supurgi poygasi 22:00 da boshlanadi. Hoziroq ilovaga kiring: Xogvarts → Poyga."),
-            "ru": ("До гонки 10 минут!", "Гонка на мётлах начнётся в 22:00. Зайдите прямо сейчас: Хогвартс → Гонка."),
-            "en": ("10 minutes to the race!", "The broom race starts at 22:00. Come in now: Hogwarts → Race.")}
+        return {"uz": ("Bugun 22:00 da supurgi poygasi", "Start chizig'i 21:55 da ochiladi — 22:00 gacha ilovada Xogvarts → Poyga sahifasiga kiring. Kechikkanlar faqat tomosha qiladi. Hozircha mashq qilib oling."),
+                "ru": ("Сегодня в 22:00 гонка на мётлах", "Стартовая линия открывается в 21:55 — до 22:00 зайдите: Хогвартс → Гонка. Опоздавшие только смотрят. А пока — потренируйтесь."),
+                "en": ("The broom race is today at 22:00", "The start line opens at 21:55 — be in Hogwarts → Race before 22:00. Latecomers can only watch. Meanwhile, practise.")}
+    if tur == "zal":
+        return {"uz": ("Start chizig'i ochiq — 3 daqiqa qoldi!", "Supurgi poygasi 22:00 da boshlanadi. Hoziroq Xogvarts → Poyga sahifasiga kiring — 22:00 dan keyin kirganlar qatnasha olmaydi."),
+                "ru": ("Стартовая линия открыта — осталось 3 минуты!", "Гонка на мётлах начнётся в 22:00. Зайдите прямо сейчас: Хогвартс → Гонка — после 22:00 присоединиться нельзя."),
+                "en": ("The start line is open — 3 minutes left!", "The broom race starts at 22:00. Come in now: Hogwarts → Race — after 22:00 you can no longer join.")}
+    return {"uz": ("Poygaga 10 daqiqa qoldi!", "Start chizig'i 21:55 da ochiladi, poyga 22:00 da. Xogvarts → Poyga sahifasiga 22:00 gacha kiring — keyin kirganlar faqat tomosha qiladi."),
+            "ru": ("До гонки 10 минут!", "Стартовая линия откроется в 21:55, гонка — в 22:00. Зайдите в Хогвартс → Гонка до 22:00 — опоздавшие только смотрят."),
+            "en": ("10 minutes to the race!", "The start line opens at 21:55, the race at 22:00. Be in Hogwarts → Race before 22:00 — latecomers can only watch.")}
 
 
 async def _elon_yubor():

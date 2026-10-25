@@ -107,6 +107,23 @@ async def amain():
     await P.tick()
     check("birinchi poyga: ertalab hammaga e'lon, 20:50 da yozilganlarga eslatma", len(elonlar) == 1 and xatlar == [(1, "Poygaga 10 daqiqa qoldi!")])
 
+    # start chizig'i 5 daqiqa oldin ochiladi; 3 daqiqa qolganda zalga kirmagan yozilganlarga yana eslatma (2026-10-26)
+    await ask(2, join=1)
+    vaqt(19, 20, 54, 30)
+    d = await ask(3)
+    check("20:54:30 - start chizig'i hali yopiq", d["phase"] == "kutish")
+    vaqt(19, 20, 55, 30)
+    await ask(1)
+    d = await ask(3)
+    check("20:55:30 - start chizig'i ochiq (5 daqiqa oldin)", d["phase"] == "zal" and d["me"]["in"])
+    vaqt(19, 20, 57, 30)
+    n0 = len(xatlar)
+    await P.tick(); await asyncio.sleep(0.05)
+    yangi = xatlar[n0:]
+    check("3 daqiqa qolganda: faqat zalga kirmagan yozilganga eslatma", yangi == [(2, "Start chizig'i ochiq — 3 daqiqa qoldi!")])
+    await P.tick(); await asyncio.sleep(0.05)
+    check("zal eslatmasi bir marta", len(xatlar) == n0 + 1)
+
     # ---------- 5 kishi: uzluksiz poyga, har 10 halqada oxirgi chiqadi ----------
     vaqt(19, 20, 58, 30)
     for u in range(1, 6):
