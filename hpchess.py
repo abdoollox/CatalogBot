@@ -30,11 +30,15 @@ import secrets
 import sqlite3
 import time
 from collections import deque
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import chess
 
 import hpcup
+
+# Ilova taxtada yurish qabul qilinmaganda sababini aytadi ({diag}) - faqat shu ro'yxatdagilar yoziladi
+DIAG_SABAB = ("busy", "status", "you", "turn", "cover", "stuck")
+_diag = set()
 
 FIRST_MOVE = 60             # birinchi yurish uchun soniya
 WAIT_TTL = 24 * 3600        # do'st kutilayotgan o'yin shuncha yashaydi
@@ -1112,6 +1116,23 @@ def register(app, cfg):
             return reply({"ok": False, "error": "not_found"}, 404)
         seen(gid, uid)
 
+        if what == "diag":
+            # Taxta bosilganda yurish qabul qilinmadi - sababini jurnalga yozamiz (chat tahlili 2026-10-23:
+            # «donalarim yurmayapti»; o'quvchining telefonida nima bo'lganini keyin ko'rish uchun).
+            # Har o'yin, odam va sabab uchun bir marta.
+            why = str(body.get("why") or "")
+            if why in DIAG_SABAB and (gid, uid, why) not in _diag:
+                if len(_diag) > 5000:
+                    _diag.clear()
+                _diag.add((gid, uid, why))
+                try:
+                    import hpevents
+                    await hpevents.log(uid, name, None, "chess_blok_%s" % why,
+                                       datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+                except Exception as e:
+                    logging.warning("Shaxmat diag yozilmadi: %s", e)
+            return reply({"ok": True})
+
         if what == "share":
             share_id = await share_card(uid, gid, body.get("lang"))
             return reply({"ok": bool(share_id), "id": share_id})
@@ -1170,6 +1191,6 @@ def register(app, cfg):
 
     migrate()
     _hooks["changed"] = cfg.get("chess_changed")
-    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine|share|seek|profile|top|botresult)}", handler)
+    app.router.add_route("*", "/api/chess/{what:(create|join|state|move|action|finish|mine|share|diag|seek|profile|top|botresult)}", handler)
     asyncio.ensure_future(_watcher())
     logging.info("Sehrgar shaxmati: server hakam ulandi")
