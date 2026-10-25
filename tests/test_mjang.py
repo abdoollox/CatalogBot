@@ -369,7 +369,7 @@ async def amain():
     finally:
         _c.close()
     P.YANGI_QOIDA = KOD_REJIM
-    check("kodda hozircha faqat admin rejimi (egasi sinab ko'radi)", KOD_REJIM == "admin")
+    check("kodda yangi qoida hammaga ochiq (egasi, 2026-10-25)", KOD_REJIM == "hamma")
 
     print("Maxluqlar jangi: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
