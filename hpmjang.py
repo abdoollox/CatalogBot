@@ -24,6 +24,14 @@ TURNIR: shanba 22:00 (toshchalar/shaxmat qolipida), ball: g'alaba uchun 1/8 +5, 
 
 So'rovlar - POST /api/mjang: {} holat, {join: 1|0}, {mashq: 1|2|3}, {oyin: id} o'yin holati,
 {oyin: id, hujum: {i, s}} hujum, {oyin: id, javob: j} javob, {sinov: 1} (admin), {dost: 1}, {qabul: id}, {bekor: id}.
+
+2-QOIDA - «NAVBATLI HUJUM» (2026-10-25, chat tahlili: odamlar o'yinida birinchi hujum qilgan 22 tadan 16 tasida yutgan).
+Sabab: hujum qilgan raundlarning 64 % ini yutadi (odamlar javobni yaxshi tanlamaydi), 5 raundda birinchi boshlagan bitta ortiqcha
+hujum oladi, «yutgan hujum qiladi» esa ustunlikni yanada oshiradi. Yangi qoida: har kimga 6 tadan karta (12 kartaning hammasi),
+hujum navbati QAT'IY: A-B-B-A-A-B (har kim 3 marta hujum qiladi, hech kim ketma-ket ikki marta «birinchi» bo'lmaydi), 4 raund yutgan
+g'olib; 6 raunddan keyin teng - kuchlar yig'indisi. O'lchov (kompyuter o'yinchilar, har xil uslub): birinchi boshlagan 48-52 %
+(hozirgi qoidada odamga o'xshash o'yinchilarda 57-62 %); kuchli o'yinchi kuchsizini 63 % yutadi (hozir 72 %) - mahorat hal qiladi.
+Yangi qoidadagi o'yin qo'ldagi kartalar sonidan taniladi (6 ta) - bazaga ustun qo'shilmagan. Qaysi o'yin yangi qoidada: `_qoida`.
 """
 
 import asyncio
@@ -57,6 +65,9 @@ KELMADI_SKIP = 2
 KORINDI_T = 45
 DOST_MUDDAT = 1800
 USTUN_BONUS = 2
+YANGI_QOIDA = "admin"         # 2-qoida: "admin" - faqat admin (yoki uning sinov o'quvchisi) o'yinlarida (sinov), "hamma" - hamma o'yinlarda
+QOL2, YUTISH2 = 6, 4
+TARTIB2 = (0, 1, 1, 0, 0, 1)  # 2-qoidada raund bo'yicha hujumchi: 0 - birinchi boshlagan, 1 - raqibi
 OSIRISH = {0: 0, 1: 0.5, 2: 1}  # Qo'riqxonadagi bosqich (bola / o'smir / katta) -> eng kuchli tomoniga qo'shimcha
 KUCHLAR = ("k", "h", "c")
 
@@ -107,6 +118,43 @@ def _init():
         conn.close()
 
 
+# =====================================================================  QOIDA
+
+def _admin(uid):
+    return uid is not None and abs(int(uid)) in (_cfg.get("admin_ids") or ())
+
+
+def _qoida(tur, a, b):
+    """Yangi o'yin qaysi qoidada: 2 - navbatli hujum. Sinov paytida faqat admin o'yinlarida; turnirda - hammaga ochilgach."""
+    if YANGI_QOIDA == "hamma":
+        return 2
+    if tur == "turnir":
+        return 1
+    return 2 if (_admin(a) or _admin(b)) else 1
+
+
+def qoidasi(qol):
+    """O'yin qoidasi qo'ldagi kartalar sonidan: 6 ta - 2-qoida."""
+    return 2 if len(qol or ()) >= QOL2 else 1
+
+
+def _yut(q):
+    return YUTISH2 if q == 2 else YUTISH
+
+
+def _raund_soni(q):
+    return QOL2 if q == 2 else QOL
+
+
+def _keyin(q, nav, w, r, birinchi):
+    """r-raund (0 dan) tugadi: keyingi raundda kim hujum qiladi. 1-qoida: yutgan (teng - raqib); 2-qoida: qat'iy A-B-B-A-A-B."""
+    if q == 2:
+        if r + 1 >= len(TARTIB2):
+            return nav
+        return birinchi if TARTIB2[r + 1] == 0 else ("b" if birinchi == "a" else "a")
+    return w if w else ("b" if nav == "a" else "a")
+
+
 # =====================================================================  KARTALAR
 
 def eng_kuchli(kod):
@@ -136,11 +184,11 @@ def _bosqichlar(conn, uid):
     return {r["kod"]: hpqoriq.bosqich(r["boqildi"]) for r in conn.execute("SELECT kod, boqildi FROM qoriq WHERE user_id=?", (uid,))}
 
 
-def tarqat(conn, a, b, rnd=random):
-    """10 ta tasodifiy karta, 5 tadan. Har karta: {k, o (o'stirish qo'shimchasi), st (Qo'riqxonadagi bosqich yoki -1)}."""
-    kod = rnd.sample(list(KARTALAR), QOL * 2)
+def tarqat(conn, a, b, rnd=random, n=QOL):
+    """n*2 ta tasodifiy karta, n tadan. Har karta: {k, o (o'stirish qo'shimchasi), st (Qo'riqxonadagi bosqich yoki -1)}."""
+    kod = rnd.sample(list(KARTALAR), n * 2)
     out = []
-    for uid, qism in ((a, kod[:QOL]), (b, kod[QOL:])):
+    for uid, qism in ((a, kod[:n]), (b, kod[n:])):
         bq = _bosqichlar(conn, uid)
         out.append([{"k": k, "o": OSIRISH.get(bq.get(k, 0), 0) if k in bq else 0, "st": bq.get(k, -1)} for k in qism])
     return out
@@ -148,18 +196,17 @@ def tarqat(conn, a, b, rnd=random):
 
 # =====================================================================  HISOB (kompyuter uchun)
 
-def _keyingi(nav, lw, rw):
-    """Raundni yutgan keyingi raundda hujum qiladi; teng bo'lsa - navbat raqibga."""
-    return nav if lw else ("b" if nav == "a" else "a")
+def _yechim(A, B, birinchi="a"):
+    """Ochiq o'yin: V(ra, rb, wa, wb, nav) - 'a' uchun kutilgan natija (1 g'alaba, 0 mag'lubiyat, 0,5 durang), ikkalasi aqlli o'ynasa.
+    birinchi - 2-qoidada birinchi hujum qilgan (navbat tartibi undan)."""
+    q, n0 = qoidasi(A), len(A)
+    yut = _yut(q)
 
-
-def _yechim(A, B):
-    """Ochiq o'yin: V(ra, rb, wa, wb, nav) - 'a' uchun kutilgan natija (1 g'alaba, 0 mag'lubiyat, 0,5 durang), ikkalasi aqlli o'ynasa."""
     @lru_cache(None)
     def V(ra, rb, wa, wb, nav):
-        if wa >= YUTISH:
+        if wa >= yut:
             return 1.0
-        if wb >= YUTISH:
+        if wb >= yut:
             return 0.0
         if not ra or not rb:
             return 1.0 if wa > wb else 0.0 if wb > wa else 0.5
@@ -172,7 +219,8 @@ def _yechim(A, B):
                 for j in R:
                     vl, vr = kuch(LD[i], s, RD[j]), kuch(RD[j], s, LD[i])
                     lw, rw = vl > vr, vr > vl
-                    nl = _keyingi(nav, lw, rw) if lw or rw else ("b" if nav == "a" else "a")
+                    w = (nav if lw else ("b" if nav == "a" else "a")) if lw or rw else None
+                    nl = _keyin(q, nav, w, n0 - len(ra), birinchi)
                     if nav == "a":
                         v = V(ra - {i}, rb - {j}, wa + lw, wb + rw, nl)
                         yomon = v if yomon is None else min(yomon, v)
@@ -198,7 +246,8 @@ def kompyuter_hujum(A, B, tarix, yon, wa, wb, d, rnd=random):
         return i, rnd.choice(KUCHLAR)
     if d == 2 or rnd.random() < BOT_XATO:
         return max(((i, s) for i in bor for s in KUCHLAR), key=lambda p: (kuch(men[p[0]], p[1]), rnd.random()))
-    V = _yechim(A, B)
+    q = qoidasi(A)
+    V = _yechim(A, B, tarix[0].get("by", yon) if tarix else yon)
     ra, rb = _qolgan(A, tarix, "a"), _qolgan(B, tarix, "b")
     raq = rb if yon == "a" else ra
     eng, tan = None, None
@@ -208,7 +257,7 @@ def kompyuter_hujum(A, B, tarix, yon, wa, wb, d, rnd=random):
             for j in raq:
                 vl, vr = kuch(men[i], s, u[j]), kuch(u[j], s, men[i])
                 lw, rw = vl > vr, vr > vl
-                nl = yon if lw else ("b" if yon == "a" else "a")
+                nl = _keyin(q, yon, (yon if lw else ("b" if yon == "a" else "a")) if lw or rw else None, len(tarix), tarix[0].get("by", yon) if tarix else yon)
                 if yon == "a":
                     v = V(ra - {i}, rb - {j}, wa + lw, wb + rw, nl)
                 else:
@@ -232,14 +281,16 @@ def kompyuter_javob(A, B, tarix, yon, wa, wb, hujum, d, rnd=random):
         if yutadi:
             return min(yutadi, key=lambda j: (kuch(men[j], s, hk), rnd.random()))
         return min(bor, key=lambda j: (max(KARTALAR[men[j]["k"]][1:]), rnd.random()))
-    V = _yechim(A, B)
-    ra, rb = _qolgan(A, tarix, "a"), _qolgan(B, tarix, "b")
+    q = qoidasi(A)
     hy = "b" if yon == "a" else "a"
+    bir = tarix[0].get("by", hy) if tarix else hy
+    V = _yechim(A, B, bir)
+    ra, rb = _qolgan(A, tarix, "a"), _qolgan(B, tarix, "b")
     eng, tan = None, bor[0]
     for j in bor:
         vl, vr = kuch(hk, s, men[j]), kuch(men[j], s, hk)
         lw, rw = vl > vr, vr > vl
-        nl = hy if lw else yon
+        nl = _keyin(q, hy, (hy if lw else yon) if lw or rw else None, len(tarix), bir)
         if yon == "b":
             v = 1 - V(ra - {hujum["i"]}, rb - {j}, wa + lw, wb + rw, nl)
         else:
@@ -256,8 +307,11 @@ def _bot(uid):
     return uid is not None and uid < 0
 
 
-def _boshlash(conn, mid, a, b, faza_bosh, rnd=random):
-    qa, qb = tarqat(conn, a, b, rnd)
+def _boshlash(conn, mid, a, b, faza_bosh, rnd=random, tur=None):
+    if tur is None:
+        r = conn.execute("SELECT tur FROM mj_match WHERE id=?", (mid,)).fetchone()
+        tur = r[0] if r else None
+    qa, qb = tarqat(conn, a, b, rnd, QOL2 if _qoida(tur, a, b) == 2 else QOL)
     conn.execute("UPDATE mj_match SET holat='ketmoqda', a_qol=?, b_qol=?, navbat=?, hujum=NULL, faza_bosh=?, tarix='[]', a_win=0, b_win=0, "
                  "a_skip=0, b_skip=0 WHERE id=?", (json.dumps(qa), json.dumps(qb), rnd.choice("ab"), faza_bosh, mid))
 
@@ -267,7 +321,7 @@ def _yangi_oyin(conn, tur, a, b, bosh, rnd=random, **qosh):
                        "VALUES (?,?,?,?,'kutmoqda',?,?,?,?,?,?,?)",
                        (tur, a, b, bosh, hpcup._utc_iso(_now()), qosh.get("hafta"), qosh.get("bosqich"), qosh.get("joy"),
                         qosh.get("a_seed"), qosh.get("b_seed"), qosh.get("daraja")))
-    _boshlash(conn, cur.lastrowid, a, b, bosh + BOSH_KUT, rnd)
+    _boshlash(conn, cur.lastrowid, a, b, bosh + BOSH_KUT, rnd, tur)
     return cur.lastrowid
 
 
@@ -302,10 +356,11 @@ def _javob_qoy(conn, m, j, berish, now):
                   "a": {"i": ia, "k": ka["k"], "v": va, "u": USTUN[KARTALAR[ka["k"]][0]] == KARTALAR[kb["k"]][0]},
                   "b": {"i": ib, "k": kb["k"], "v": vb, "u": USTUN[KARTALAR[kb["k"]][0]] == KARTALAR[ka["k"]][0]}})
     aw, bw = m["a_win"] + (w == "a"), m["b_win"] + (w == "b")
-    keyingi = w if w else ("b" if nav == "a" else "a")
+    q = qoidasi(A)
+    keyingi = _keyin(q, nav, w, len(tarix) - 1, tarix[0]["by"])
     conn.execute("UPDATE mj_match SET tarix=?, a_win=?, b_win=?, navbat=?, hujum=NULL, faza_bosh=? WHERE id=?",
                  (json.dumps(tarix, separators=(",", ":")), aw, bw, keyingi, now + PAUZA, m["id"]))
-    if aw >= YUTISH or bw >= YUTISH or len(tarix) >= QOL:
+    if aw >= _yut(q) or bw >= _yut(q) or len(tarix) >= _raund_soni(q):
         if aw != bw:
             gy = "a" if aw > bw else "b"
         else:
@@ -327,7 +382,7 @@ def _ulgurmadi(conn, m, yon, berish, now):
 
 def _oyin_yur(conn, m, berish, now, rnd=random):
     """O'yinni hozirgi vaqtga keltiradi: kompyuter yurishi, vaqt tugashi, kelmaganlar."""
-    for _ in range(QOL * 2 + 2):
+    for _ in range(QOL2 * 2 + 2):
         if m["holat"] != "ketmoqda" or now < (m["faza_bosh"] or 0):
             return m
         tarix = json.loads(m["tarix"] or "[]")
@@ -578,7 +633,8 @@ def _oyin_holat(conn, m, uid, now):
             "a": _ism(conn, m["a"]) if m["a"] is not None else None, "b": _ism(conn, m["b"]) if m["b"] is not None else None,
             "hand": {"a": json.loads(m["a_qol"] or "[]"), "b": json.loads(m["b_qol"] or "[]")},
             "turn": m["navbat"], "attack": json.loads(m["hujum"]) if m["hujum"] else None, "phase": faza, "hist": tarix,
-            "wins": [m["a_win"], m["b_win"]], "in": max(0, round((m["faza_bosh"] or 0) - now, 2)), "turn_t": RAUND_T,
+            "wins": [m["a_win"], m["b_win"]], "rule": qoidasi(json.loads(m["a_qol"] or "[]")),
+            "need": _yut(qoidasi(json.loads(m["a_qol"] or "[]"))), "rounds": _raund_soni(qoidasi(json.loads(m["a_qol"] or "[]"))), "in": max(0, round((m["faza_bosh"] or 0) - now, 2)), "turn_t": RAUND_T,
             "left": max(0, round((m["faza_bosh"] or 0) + RAUND_T - now, 2)),
             "winner": ("a" if m["golib"] == m["a"] else "b") if m["golib"] is not None else None, "why": m["sabab"], "stage": m["bosqich"],
             "starts_in": max(0, round((m["bosh"] or 0) - now, 1)) if m["holat"] == "kutmoqda" and m["tur"] != "dost" else 0,
@@ -614,7 +670,8 @@ def _holat(uid, oyin=None):
         javob = {"ok": True, "now": now,
                  "tour": {"ts": T0, "now": now, "open": now < T0 - YOPILISH, "joined": any(r["user_id"] == uid for r in qat), "n": len(qat), "close": YOPILISH,
                           "players": [{"uid": r["user_id"], "name": hpdars._ism(r["name"]), "house": r["house"], "me": r["user_id"] == uid} for r in qat]},
-                 "rules": {"hand": QOL, "win": YUTISH, "turn": RAUND_T, "edge": USTUN_BONUS, "gap": ORALIQ,
+                 "rules": {"hand": QOL, "win": YUTISH, "turn": RAUND_T,
+                           "v2": YANGI_QOIDA == "hamma" or _admin(uid), "hand2": QOL2, "win2": YUTISH2, "edge": USTUN_BONUS, "gap": ORALIQ,
                            "grow": {str(k): v for k, v in OSIRISH.items()},
                            "points": {str(k): v for k, v in BOSQICH_BALL.items()}, "bots": {str(k): v[0] for k, v in BOTLAR.items()}},
                  "cards": _kartalar(conn, uid),

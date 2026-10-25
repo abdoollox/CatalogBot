@@ -29,6 +29,8 @@ sheets.read_csv = _none
 sys.modules["sheets"] = sheets
 
 import hpcup, hpdars, hpqoriq, hpmjang as P   # noqa: E402
+KOD_REJIM = P.YANGI_QOIDA
+P.YANGI_QOIDA = "admin"         # eski qoida sinovlari - oddiy o'yinchilar 5 karta bilan
 
 TZ = timezone(timedelta(hours=5))
 ok = fail = 0
@@ -319,6 +321,55 @@ async def amain():
     ilgari(P.DOST_MUDDAT + 5)
     await P.tick()
     check("muddati o'tgan taklif yopiladi", P.taklif_info(t3) is None and (await ask(4, qabul=t3)).get("error") == "muddat")
+
+    # 2-qoida - navbatli hujum (2026-10-25): hozircha faqat admin o'yinlarida
+    import random as _r
+    db("INSERT OR IGNORE INTO users (user_id, first_name, house, created_at) VALUES (42,'Admin','ravenclaw','2026-10-01T00:00:00Z')")
+    _c = hpcup._connect()
+    try:
+        now = P._ep()
+        m1 = P._yangi_oyin(_c, "dost", 1, 2, now - 100, _r.Random(3))
+        m2 = P._yangi_oyin(_c, "dost", 42, 2, now - 100, _r.Random(3))
+        m3 = P._yangi_oyin(_c, "turnir", 42, 2, now - 100, _r.Random(3), a_seed=1, b_seed=2)
+        hand = lambda mid: len(json.loads(_c.execute("SELECT a_qol FROM mj_match WHERE id=?", (mid,)).fetchone()[0]))
+        check("2-qoida faqat admin o'yinida (6 karta); oddiy va turnir - 5", hand(m1) == 5 and hand(m2) == 6 and hand(m3) == 5)
+        for _ in range(12):                      # 6 raundgacha qo'lda o'ynaymiz
+            m = _c.execute("SELECT * FROM mj_match WHERE id=?", (m2,)).fetchone()
+            if m["holat"] != "ketmoqda":
+                break
+            nav = m["navbat"]
+            if m["hujum"] is None:
+                qol = json.loads(m[nav + "_qol"])
+                P._hujum_qoy(_c, m, min(P._qolgan(qol, json.loads(m["tarix"]), nav)), "k", now)
+            else:
+                jy = "b" if nav == "a" else "a"
+                qol = json.loads(m[jy + "_qol"])
+                P._javob_qoy(_c, m, max(P._qolgan(qol, json.loads(m["tarix"]), jy)), [], now)
+        m = _c.execute("SELECT * FROM mj_match WHERE id=?", (m2,)).fetchone()
+        tr = json.loads(m["tarix"])
+        f = tr[0]["by"]; o = "b" if f == "a" else "a"
+        kutilgan = [f, o, o, f, f, o][:len(tr)]
+        check("2-qoida: hujum navbati A-B-B-A-A-B, natijaga qaramay", [r["by"] for r in tr] == kutilgan)
+        check("2-qoida: 4 raund yutgan yoki 6 raunddan keyin tugaydi", m["holat"] == "tugadi"
+              and (max(m["a_win"], m["b_win"]) >= 4 or len(tr) == 6))
+        g = P._oyin_holat(_c, m, 42, now)
+        check("o'yin holatida qoida, kerakli g'alaba, raundlar", g["rule"] == 2 and g["need"] == 4 and g["rounds"] == 6)
+        # kompyuter 6 kartali o'yinda xatosiz yuradi
+        A, B = P.tarqat(_c, 42, 2, _r.Random(5), 6)
+        i, s_ = P.kompyuter_hujum(A, B, [], "a", 0, 0, 3, _r.Random(1))
+        j = P.kompyuter_javob(A, B, [], "b", 0, 0, {"i": i, "s": s_}, 3, _r.Random(1))
+        check("kompyuter 2-qoidada ham yuradi", 0 <= i < 6 and s_ in P.KUCHLAR and 0 <= j < 6)
+    finally:
+        _c.close()
+    P.YANGI_QOIDA = "hamma"
+    _c = hpcup._connect()
+    try:
+        m4 = P._yangi_oyin(_c, "turnir", 1, 2, P._ep(), _r.Random(3), a_seed=1, b_seed=2)
+        check("hammaga ochilganda turnir ham 2-qoidada", len(json.loads(_c.execute("SELECT a_qol FROM mj_match WHERE id=?", (m4,)).fetchone()[0])) == 6)
+    finally:
+        _c.close()
+    P.YANGI_QOIDA = KOD_REJIM
+    check("kodda hozircha faqat admin rejimi (egasi sinab ko'radi)", KOD_REJIM == "admin")
 
     print("Maxluqlar jangi: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
     sys.exit(1 if fail else 0)
