@@ -1006,6 +1006,7 @@ def register(dp, bot, app, cfg):
                 text = "♟️ Sehrgar shaxmati: jangga chaqiraman! (%d daq) Kod: %s" % (
                     game["game"]["base"] // 60, gid)
                 message = await hpcup.post_chat_message(target, uid, text, None, chess=gid)
+                await hpcup.eski_takliflarni_ochir(target, uid, message["id"])
                 await hpcup.mark_chat_read(target, uid, message["id"])
                 chat_wake(target)
                 if target.startswith("dm:"):
@@ -1020,6 +1021,7 @@ def register(dp, bot, app, cfg):
                 mid = await hpduel.dost_yarat(uid)
                 text = "⚔️ Duelga chaqiraman!"       # eski ilova kartani bilmaydi - unga oddiy matn ko'rinadi
                 message = await hpcup.post_chat_message(target, uid, text, None, duel=mid)
+                await hpcup.eski_takliflarni_ochir(target, uid, message["id"])
                 await hpcup.mark_chat_read(target, uid, message["id"])
                 chat_wake(target)
                 await hpduel._dost_xabar()
@@ -1039,6 +1041,7 @@ def register(dp, bot, app, cfg):
                 text = {"tosh": "🔮 Toshchalar o'yiniga chaqiraman!", "mjang": "🐉 Maxluqlar jangiga chaqiraman!",
                         "poyga": "🧹 Supurgi poygasiga chaqiraman!"}[action]
                 message = await hpcup.post_chat_message(target, uid, text, None, **{action: mid})
+                await hpcup.eski_takliflarni_ochir(target, uid, message["id"])
                 await hpcup.mark_chat_read(target, uid, message["id"])
                 chat_wake(target)
                 if target.startswith("dm:"):

@@ -2869,6 +2869,40 @@ async def post_chat_message(house, user_id, message, reply_to=None, chess=None, 
     return await asyncio.to_thread(_do)
 
 
+def _qabulsiz_taklif(m):
+    """Chat kartasi - hech kim qabul qilmagan va endi ochiq emas (muddati o'tgan / bekor qilingan) o'yin taklifi."""
+    c = m.get("chess")
+    if c and c["status"] in ("aborted", "expired") and not (c.get("black") and c.get("white", {}).get("uid")):
+        return True
+    return any(m.get(k) and m[k]["status"] == "expired" for k in ("duel", "tosh", "mjang", "poyga"))
+
+
+async def eski_takliflarni_ochir(house, user_id, yangi_id):
+    """Yangi o'yin taklifi tashlanganda shu odamning shu xonadagi qabul qilinmay qolgan eski kartalari chatdan o'chadi
+    (chat tahlili 2026-10-23: «Katta zalda o'yin taklifi kartalari ketma-ket ko'p tashlanadi» - 16-oktabrda Katta zaldagi
+    71 xabardan 38 tasi taklif edi). O'ynalgan / ketayotgan o'yin kartalari qoladi. O'chirilganlar soni."""
+    def _do():
+        conn = _connect()
+        try:
+            rows = conn.execute(_CHAT_SELECT + "WHERE c.house=? AND c.user_id=? AND c.deleted=0 AND c.id<>? AND "
+                                "(c.chess IS NOT NULL OR c.duel IS NOT NULL OR c.tosh IS NOT NULL OR c.mjang IS NOT NULL OR c.poyga IS NOT NULL) "
+                                "ORDER BY c.id DESC LIMIT 60", (house, int(user_id), int(yangi_id))).fetchall()
+            n = 0
+            for r in rows:
+                if _qabulsiz_taklif(_chat_row(r)):
+                    conn.execute("UPDATE chat_messages SET message='', deleted=1, rev=" + _NEXT_REV + " WHERE id=?", (r["id"],))
+                    n += 1
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+    try:
+        return await asyncio.to_thread(_do)
+    except Exception as e:
+        logging.warning("Eski takliflar o'chirilmadi (%s): %s", user_id, e)
+        return 0
+
+
 JOIN_TEXT = "🎩 Saralash qalpog'i meni shu fakultetga yubordi!"
 
 
