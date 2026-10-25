@@ -101,6 +101,10 @@ URINISH = 3                    # bellashuvda kuniga nechta urinish
 XATO_MS = 3000                 # har xato uchun jarima
 ENG_KAM_MS = 1500              # bundan tez natija bo'lmaydi (soxta so'rovdan himoya)
 ENG_KOP_MS = 5 * 60 * 1000     # bundan uzoq urinish hisobga olinmaydi
+# Ilova o'z soati bilan o'lchagan vaqtni ham yuboradi (cms). Server vaqtiga internet kechikishi (boshlash javobi
+# kelguncha va natija yetib borguncha) qo'shiladi - sekin aloqada 1-3 s. Chat tahlili (2026-10-23): «eng yaxshi
+# urinishim tasdiqlanmadi». Endi ilova vaqti olinadi, lekin server o'lchaganidan ko'pi bilan shuncha kam bo'la oladi:
+KECHIKISH_MS = 2000
 SOVRIN = (15, 10, 7)           # 1-3 o'rinlar
 SOVRIN_10 = 3                  # 4-10 o'rinlar
 # Tarix bellashuvida xato jarimasi kattaroq (chat tahlili, 2026-10-23: «to'g'ri javob muhim emas, tez bosish muhim —
@@ -719,7 +723,7 @@ def _jarima(conn, uid, dars, kun):
     return j
 
 
-def _tugat(uid, dars, kun, xato):
+def _tugat(uid, dars, kun, xato, cms=None):
     """Urinishni yopadi. (ms, eng_yaxshi_ms) yoki None (boshlanmagan / juda uzoq)."""
     conn = hpcup._connect()
     try:
@@ -736,6 +740,12 @@ def _tugat(uid, dars, kun, xato):
         # Do'kon: «diqqat» damlamasi birinchi xatoni kechiradi; fan jihozi har xato jarimasini kamaytiradi (hpdokon)
         kechirildi = xato > 0 and hpdokon.damlama_ishlat(conn, uid, "diqqat")
         jarima = _jarima(conn, uid, dars, kun)
+        try:
+            cms = int(cms) if cms is not None else None
+        except (TypeError, ValueError):
+            cms = None
+        if cms is not None and 0 < cms < sof:
+            sof = max(cms, sof - KECHIKISH_MS)
         ms = max(ENG_KAM_MS, sof) + (xato - (1 if kechirildi else 0)) * jarima
         _tugat.oxirgi = {"penalty": jarima, "forgiven": bool(kechirildi)}
         if r["ms"] is None or ms < r["ms"]:
@@ -839,7 +849,7 @@ def _ish(uid, body):
                 xato = int(body.get("xato") or 0)
             except (TypeError, ValueError):
                 xato = 0
-        r = _tugat(uid, dars, kun, xato)
+        r = _tugat(uid, dars, kun, xato, body.get("cms"))
         if not r:
             javob.update(ok=False, error="not_started")
             return javob

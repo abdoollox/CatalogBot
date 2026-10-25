@@ -226,6 +226,25 @@ async def amain():
     check("urinishlar tugadi", d["ok"] is False and d["error"] == "no_tries")
     st, d = await ask(4, start="afsun"); st, d = await ask(4, finish="afsun")
     check("juda tez natija - eng kam vaqt", d["ms"] == hpdars.ENG_KAM_MS)
+    # Ilova o'z vaqtini (cms) yuboradi: internet kechikishi uchun KECHIKISH_MS gacha kamaytiriladi, undan ko'p emas
+    for uid in (5, 6, 7):
+        await hpcup.touch_user(uid, "Sinov%d" % uid)
+        await hpcup.set_house(uid, "ravenclaw")
+    def boshladi_h(uid, soniya):
+        c = sqlite3.connect(os.environ["HP_DB_PATH"])
+        c.execute("UPDATE dars_bellashuv SET boshladi = boshladi - ? WHERE user_id=? AND dars='himoya' AND kun=?", (soniya, uid, kun))
+        c.commit(); c.close()
+    st, d = await ask(5, start="himoya"); boshladi_h(5, 10); st, d = await ask(5, finish="himoya", cms=9000)
+    check("ilova vaqti kechikish chegarasida qabul qilinadi", 9000 <= d["ms"] < 9100)
+    st, d = await ask(6, start="himoya"); boshladi_h(6, 10); st, d = await ask(6, finish="himoya", cms=3000)
+    check("ilova vaqti juda kam bo'lsa - server vaqti minus chegara", 8000 <= d["ms"] < 8100)
+    st, d = await ask(7, start="himoya"); boshladi_h(7, 10); st, d = await ask(7, finish="himoya", cms=60000)
+    check("ilova vaqti server vaqtidan ko'p bo'lsa - server vaqti", 10000 <= d["ms"] < 10200)
+    st, d = await ask(7, finish="himoya", cms=60000)
+    check("ikkinchi marta yuborilgan natija - not_started (qayta yozilmaydi)", d["ok"] is False and d["error"] == "not_started")
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    c.execute("DELETE FROM dars_bellashuv WHERE dars='himoya'")
+    c.commit(); c.close()
 
     # Tarix bellashuvi: savollar javobsiz keladi, xatoni server sanaydi
     st, d = await ask(2, start="tarix", lang="ru")
