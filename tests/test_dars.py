@@ -135,14 +135,14 @@ async def amain():
     st, d = await ask(2, record="afsun", score=12)
     bosh(1)
     st, d = await ask(1, record="afsun", score=99999)
-    check("chegara: 999 dan oshmaydi", d["records"]["afsun"]["all"] == 999)
+    check("buzuq son yozilmaydi", d["records"]["afsun"]["all"] == hpdars.REKORD_MAX)
     st, d = await ask(2, records=1)
     check("hamma fan rekordlari: 2-o'rin, boshqa fanlar bo'sh", set(d["records"]) == set(hpdars.DARSLAR) and d["records"]["afsun"]["place"] == 2 and d["records"]["afsun"]["week"] == 12
           and d["records"]["afsun"]["n"] == 2 and d["records"]["trans"]["top"] == [] and d["records"]["trans"]["all"] == 0)
     c = sqlite3.connect(os.environ["HP_DB_PATH"])
     c.execute("UPDATE dars_rekord SET hafta='2000-01-03' WHERE user_id=1"); c.commit(); c.close()
     st, d = await ask(1, records=1)
-    check("jadval doimiy: eski hafta natijasi ham jadvalda", d["records"]["afsun"]["week"] == 0 and d["records"]["afsun"]["all"] == 999 and d["records"]["afsun"]["n"] == 2 and d["records"]["afsun"]["place"] == 1)
+    check("jadval doimiy: eski hafta natijasi ham jadvalda", d["records"]["afsun"]["week"] == 0 and d["records"]["afsun"]["all"] == hpdars.REKORD_MAX and d["records"]["afsun"]["n"] == 2 and d["records"]["afsun"]["place"] == 1)
     # Kunlik rekord sovg'asi: jadvaldagi birinchi uchlikka ball, bir kunda bir marta
     def ball(u):
         c = sqlite3.connect(os.environ["HP_DB_PATH"])
@@ -154,7 +154,28 @@ async def amain():
     check("rekord sovg'asi: 1-o'rin +5, 2-o'rin +3, takror berilmaydi", n1 == 2 and n2 == 0 and ball(1) == 5 and ball(2) == 3)
     c = sqlite3.connect(os.environ["HP_DB_PATH"]); c.execute("DELETE FROM points WHERE source_ref LIKE 'r:%'"); c.commit(); c.close()
     st, d = await ask(1, quiz_rek=1, lang="uz")
-    check("tarix rekordi: 60 ta tasodifiy savol, javobi bilan", len(d["questions"]) == 60 and "c" in d["questions"][0])
+    check("tarix rekordi: hamma savollar, javobi bilan", len(d["questions"]) == len(hpdars.bell_savollar()) and "c" in d["questions"][0])
+    # Natija teng bo'lsa oxirgi yetgan yuqorida (2026-11-01)
+    hpdars._rekord_yoz(1, "himoya", 30)
+    hpdars._rekord_yoz(2, "himoya", 30)
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    c.execute("UPDATE dars_rekord SET vaqt='2000-01-02T00:00:00Z' WHERE dars='himoya' AND user_id=1")
+    c.execute("UPDATE dars_rekord SET vaqt='2000-01-03T00:00:00Z' WHERE dars='himoya' AND user_id=2")
+    c.commit(); c.close()
+    def rek_tartib():
+        conn = hpcup._connect()
+        try:
+            return [r["user_id"] for r in hpdars._rek_top(conn, "himoya")]
+        finally:
+            conn.close()
+    check("teng natijada oxirgi yetgan yuqorida", rek_tartib() == [2, 1])
+    hpdars._rekord_yoz(1, "himoya", 30)
+    check("o'sha natijani qayta qilgan yana oxirgi yetgan", rek_tartib() == [1, 2])
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    c.execute("INSERT INTO dars_rekord (user_id, dars, hafta, ball, vaqt) VALUES (2, 'himoya', '2000-01-03', 10, '2030-01-01T00:00:00Z')")
+    c.commit(); c.close()
+    check("pastroq yangi natija o'rinni o'zgartirmaydi", rek_tartib() == [1, 2])
+    c = sqlite3.connect(os.environ["HP_DB_PATH"]); c.execute("DELETE FROM dars_rekord WHERE dars='himoya'"); c.commit(); c.close()
     st, d = await ask(1, record="runlar", score=5)
     check("noma'lum fanga rekord yo'q", d == {"ok": False, "error": "unknown"})
     q = {x["id"]: x["score"] for x in hpdars.qobiliyat(1)}

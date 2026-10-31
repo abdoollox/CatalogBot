@@ -560,8 +560,7 @@ def _baho_yoz(uid, juftlar):
         conn.close()
 
 
-REKORD_MAX = 999               # bitta urinishda bundan ko'p bo'lmaydi (ilova natijani o'zi aytadi - shunchaki chegara)
-REKORD_SAVOL = 60              # tarix rekordida bir yo'la beriladigan savollar
+REKORD_MAX = 99999             # o'yinda chegara yo'q (egasi, 2026-11-01); bu faqat buzuq son yozilmasligi uchun
 # Kunlik rekord sovg'asi (egasi, 2026-10-09): kun tugaganda har fanning DOIMIY rekord jadvalida 1-3-o'rinda
 # turganlarga ball ('dars' manbasi, ref r:<fan>:<kun>). Rekordchi o'rnini saqlab tursa - har kuni oladi.
 REK_SOVRIN = (5, 3, 2)
@@ -583,9 +582,11 @@ def _rek_sigadi(uid, dars, ball):
 
 def _rek_top(conn, dars, n=None):
     rows = conn.execute(
-        "SELECT r.user_id, MAX(r.ball) AS ball, r.vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM dars_rekord r "
+        # Natija teng bo'lsa oxirgi yetgan yuqorida (egasi, 2026-11-01): r.ball - odamning eng yaxshisi, vaqt - unga oxirgi yetgani
+        "SELECT r.user_id, r.ball, MAX(r.vaqt) AS vaqt, COALESCE(u.first_name, 'Sehrgar') AS name, u.house FROM dars_rekord r "
+        "JOIN (SELECT user_id, MAX(ball) AS eng FROM dars_rekord WHERE dars=? GROUP BY user_id) m ON m.user_id = r.user_id AND m.eng = r.ball "
         "JOIN users u ON u.user_id = r.user_id WHERE r.dars=? AND u.house IS NOT NULL AND r.user_id > 0 "
-        "GROUP BY r.user_id ORDER BY ball DESC, r.vaqt ASC", (dars,)).fetchall()
+        "GROUP BY r.user_id ORDER BY r.ball DESC, vaqt DESC", (dars, dars)).fetchall()
     return rows[:n] if n else rows
 
 
@@ -641,7 +642,7 @@ def _rekord_yoz(uid, dars, ball):
     conn = hpcup._connect()
     try:
         conn.execute("INSERT INTO dars_rekord (user_id, dars, hafta, ball, vaqt) VALUES (?,?,?,?,?) "
-                     "ON CONFLICT(user_id, dars, hafta) DO UPDATE SET vaqt = CASE WHEN excluded.ball > ball THEN excluded.vaqt ELSE vaqt END, "
+                     "ON CONFLICT(user_id, dars, hafta) DO UPDATE SET vaqt = CASE WHEN excluded.ball >= ball THEN excluded.vaqt ELSE vaqt END, "
                      "ball = MAX(ball, excluded.ball)", (uid, dars, _hafta(), ball, hpcup._utc_iso(hpcup.now_tk())))
         conn.commit()
     finally:
@@ -792,7 +793,7 @@ def _ish(uid, body):
     if body.get("quiz_rek"):
         # Tarix rekordi uchun tasodifiy savollar (to'g'ri javobi bilan - mashqdagi kabi)
         s_ = bell_savollar()
-        javob["questions"] = [_savol(s_[i], lang, True) for i in random.sample(range(len(s_)), min(REKORD_SAVOL, len(s_)))]
+        javob["questions"] = [_savol(s_[i], lang, True) for i in random.sample(range(len(s_)), len(s_))]
         return javob
     if isinstance(body.get("grades"), dict):
         # Qurilmada saqlangan eski baholarni bir marta ko'chirish: {fan: {dars raqami: baho}}
