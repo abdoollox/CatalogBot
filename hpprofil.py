@@ -79,7 +79,7 @@ def profil(uid, men):
             "name": (u[0] or "").strip()[:40], "house": u[1], "since": (u[2] or u[3] or "")[:10],
             # Oxirgi marta ilovada bo'lgan vaqti (chatdagi kabi); hozir ilovada bo'lsa online
             "online": hpcup.presence_online(uid), "seen": hpcup.presence_seen(uid, ls[0] if ls else None),
-            "wand": wand_of(conn, uid), "patronus": pt[0] if pt else None, "sardor": hpcup.sardormi(uid),
+            "wand": wand_of(conn, uid), "patronus": pt[0] if pt else None, "sardor": hpcup.sardormi(uid), "shogird": hpcup.shogird_fanlari(uid),
             "points": {"week": int(hafta[0]) if hafta else 0, "all": int(jami[0]) if jami else 0},
             "films": len(filmlar), "cards": int(karta[0]) if karta else 0, "cards_list": kartalar,
             "chess": {"rating": int(ch[0]), "games": int(ch[1]), "wins": int(ch[2])} if ch and ch[1] else None,

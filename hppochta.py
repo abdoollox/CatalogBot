@@ -82,6 +82,7 @@ MATN = {
         "cupMe": "Siz %s ball qo'shdingiz.", "cupZero": "Siz bu hafta ball to'plamadingiz — yangi haftada fakultetingizga yordam bering.",
         "sarMen": "🛡 Siz fakultetingizning hafta sardorisiz! Belgingiz bir hafta chatda va profilingizda turadi.",
         "sarU": "🛡 Fakultetingizning hafta sardori: %s.",
+        "shoMen": "🎓 Bellashuvlardagi natijangiz uchun siz bir haftaga shogird bo'ldingiz: %s.",
         "cupBadge": "Yangi nishon: %s", "cupGo": "🏆 Kubokni ko'rish",
         "cupGal": "Mukofot: +%s galleon hamyoningizga tushdi.",
         "galB": "%s ball → %s galleon", "galW": "fakultet yutdi, ikki baravar → %s", "galT": "eng yaxshi uchlik +%s",
@@ -110,6 +111,7 @@ MATN = {
         "cupMe": "Вы принесли %s очков.", "cupZero": "На этой неделе у вас нет очков — помогите факультету в новой неделе.",
         "sarMen": "🛡 Вы — старшина недели своего факультета! Значок неделю будет в чате и в профиле.",
         "sarU": "🛡 Старшина недели вашего факультета: %s.",
+        "shoMen": "🎓 За результаты в состязаниях вы на неделю стали: %s.",
         "cupBadge": "Новый значок: %s", "cupGo": "🏆 Открыть кубок",
         "cupGal": "Награда: +%s галлеонов в ваш кошелёк.",
         "galB": "%s очков → %s галл.", "galW": "факультет победил, вдвое → %s", "galT": "тройка лучших +%s",
@@ -138,6 +140,7 @@ MATN = {
         "cupMe": "You earned %s points.", "cupZero": "You earned no points this week — help your house in the new one.",
         "sarMen": "🛡 You are your house's prefect of the week! The badge stays in the chat and on your profile for a week.",
         "sarU": "🛡 Your house's prefect of the week: %s.",
+        "shoMen": "🎓 For your contest results you are, for a week: %s.",
         "cupBadge": "New badge: %s", "cupGo": "🏆 Open the Cup",
         "cupGal": "Reward: +%s Galleons added to your wallet.",
         "galB": "%s points → %s Galleons", "galW": "your house won, doubled → %s", "galT": "top three +%s",
@@ -661,6 +664,20 @@ def _son(n):
     return "{:,}".format(int(n)).replace(",", " ")
 
 
+# Professor shogirdi unvoni (ilova: SHG_TX, js/04-kubok-oyna.js bilan bir xil)
+SHOGIRD_NOM = {
+    "tarix": {"uz": "Binns shogirdi", "ru": "ученик Биннса", "en": "Binns's apprentice"},
+    "afsun": {"uz": "Flitvik shogirdi", "ru": "ученик Флитвика", "en": "Flitwick's apprentice"},
+    "iksir": {"uz": "Sneyp shogirdi", "ru": "ученик Снейпа", "en": "Snape's apprentice"},
+    "himoya": {"uz": "Lyupin shogirdi", "ru": "ученик Люпина", "en": "Lupin's apprentice"},
+    "uchish": {"uz": "Xuch shogirdi", "ru": "ученик мадам Трюк", "en": "Madam Hooch's apprentice"},
+    "maxluq": {"uz": "Xagrid shogirdi", "ru": "ученик Хагрида", "en": "Hagrid's apprentice"},
+    "astro": {"uz": "Sinistra shogirdi", "ru": "ученик Синистры", "en": "Sinistra's apprentice"},
+    "osimlik": {"uz": "Sprout shogirdi", "ru": "ученик Спраут", "en": "Sprout's apprentice"},
+    "trans": {"uz": "Makgonagall shogirdi", "ru": "ученик Макгонагалл", "en": "McGonagall's apprentice"},
+}
+
+
 def kubok_matni(lang, d):
     """d: {g: g'olib|None, uy, orin, uy_ball, ball, nish: [...]} -> (sarlavha, matn)."""
     t = MATN.get(lang) or MATN["uz"]
@@ -681,6 +698,8 @@ def kubok_matni(lang, d):
         qator.append(t["sarMen"])
     elif d.get("sar"):
         qator.append(t["sarU"] % d["sar"])
+    if d.get("sho"):
+        qator.append(t["shoMen"] % ", ".join(SHOGIRD_NOM.get(k, {}).get(lang) or k for k in d["sho"]))
     return sar, "\n".join(qator)
 
 
@@ -736,10 +755,18 @@ def _kubok_yoz(season_id):
                 sard[h] = (suid, hpcup.ism(r[0] if r else "Sehrgar"))
         except Exception as e:
             logging.warning("Kubok xati: sardorlar olinmadi: %s", e)
+        shog = {}
+        try:
+            for fan, (suid, _b) in hpcup._shogird_hafta(conn, season_id).items():
+                shog.setdefault(suid, []).append(fan)
+        except Exception as e:
+            logging.warning("Kubok xati: shogirdlar olinmadi: %s", e)
         for uid, uy in conn.execute("SELECT user_id, house FROM users WHERE house IN " + hpcup._UY_SQL + " AND user_id > 0"):
             o, ub = orin.get(uy, (None, 0))
             d = {"s": season_id, "g": g, "uy": uy, "orin": o, "uy_ball": ub,
                  "ball": int(ball.get(uid) or 0), "nish": nish.get(uid, []), "gal": 0}
+            if uid in shog:
+                d["sho"] = sorted(shog[uid])
             if uy in sard:
                 d["sar"] = sard[uy][1]
                 if sard[uy][0] == uid:

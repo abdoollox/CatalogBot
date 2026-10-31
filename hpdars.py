@@ -857,6 +857,7 @@ def _ish(uid, body):
         javob["ms"], javob["best"] = r
         javob["shop"] = getattr(_tugat, "oxirgi", None)       # jihoz/damlama ta'siri (ilova ko'rsatadi)
     javob["lessons"] = _holat(uid, kun)
+    javob["shogirds"] = hpcup.shogirdlar()
     try:
         javob["kurs"] = kurs(uid)
     except Exception as e:

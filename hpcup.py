@@ -1657,6 +1657,7 @@ def _hall(conn, house, user_id, season_id):
             "points": r["pts"],
             "me": (r["user_id"] == int(user_id)),
             "sardor": sardormi(r["user_id"]),
+            "shogird": shogird_fanlari(r["user_id"]),
             "active": r["pts"] >= ACTIVE_MIN_POINTS,
             "by": by_user.get(r["user_id"], _empty_by()),
         })
@@ -2446,6 +2447,9 @@ def _chat_row(r):
     }
     if sardormi(r["user_id"]):
         m["sardor"] = True
+    fanlar = shogird_fanlari(r["user_id"])
+    if fanlar:
+        m["shogird"] = fanlar
     if r["edited_at"]:
         m["edited"] = True
     if r["kind"]:
@@ -2715,6 +2719,7 @@ async def chat_members(house, season_id, viewer=0):
                 [season_id] + args + [int(viewer or 0)]).fetchall()
             return [{"uid": r["user_id"], "name": (r["name"] or "Sehrgar").strip()[:40],
                      "house": r["house"], "points": r["pts"], "sardor": sardormi(r["user_id"]),
+                     "shogird": shogird_fanlari(r["user_id"]),
                      "seen": presence_seen(r["user_id"], r["last_seen_at"])} for r in rows]
         finally:
             conn.close()
@@ -3382,3 +3387,69 @@ def sardormi(uid):
         return any(x["uid"] == int(uid) for x in sardorlar().values())
     except Exception:
         return False
+
+
+# PROFESSOR SHOGIRDI (o'quvchi taklifi, egasi 2026-10-31): har hafta yopilgach har fan bellashuvida o'sha hafta eng ko'p
+# ball olgan o'quvchi (ref m:<fan>:<kun>) keyingi haftaga shu fan professorining shogirdi. Faqat obro': belgi, nishon,
+# kubok xati. Ball/galleon yo'q. Takrorlanishi va bir odamda bir nechta fan bo'lishi mumkin.
+SHOGIRD_DDL = ("CREATE TABLE IF NOT EXISTS shogird (season_id INTEGER NOT NULL, dars TEXT NOT NULL, user_id INTEGER NOT NULL, "
+               "ball INTEGER NOT NULL, PRIMARY KEY (season_id, dars))")
+SHOGIRD_DAN = "2026-11-01"    # birinchi shogirdlar - 1-noyabrda yopiladigan haftadan
+_shogird_kesh = {"t": 0.0, "d": {}}
+
+
+def _shogird_hafta(conn, season_id):
+    """Yopilgan hafta shogirdlari {fan: (uid, ball)}; birinchi so'ralganda yoziladi. Teng ballda - oldinroq olgan."""
+    conn.execute(SHOGIRD_DDL)
+    rows = conn.execute("SELECT dars, user_id, ball FROM shogird WHERE season_id=?", (season_id,)).fetchall()
+    if not rows:
+        st = conn.execute("SELECT status, ends_at FROM seasons WHERE id=?", (season_id,)).fetchone()
+        if not st or st["status"] != "closed" or str(st["ends_at"])[:10] < SHOGIRD_DAN:
+            return {}
+        jami = {}
+        for r in conn.execute("SELECT p.id, p.user_id, p.source_ref, p.points FROM points p JOIN users u ON u.user_id = p.user_id "
+                              "WHERE p.season_id = ? AND p.source_ref LIKE 'm:%' AND p.user_id > 0 AND u.house IN " + _UY_SQL +
+                              " ORDER BY p.id", (season_id,)).fetchall():
+            q = str(r["source_ref"]).split(":")
+            if len(q) == 3:
+                o = jami.setdefault(q[1], {}).setdefault(r["user_id"], [0, r["id"]])
+                o[0] += r["points"]
+        for dars, odam in jami.items():
+            uid, (ball, _f) = min(odam.items(), key=lambda x: (-x[1][0], x[1][1]))
+            conn.execute("INSERT OR IGNORE INTO shogird (season_id, dars, user_id, ball) VALUES (?,?,?,?)", (season_id, dars, uid, ball))
+        conn.commit()
+        rows = conn.execute("SELECT dars, user_id, ball FROM shogird WHERE season_id=?", (season_id,)).fetchall()
+    return {r["dars"]: (r["user_id"], r["ball"]) for r in rows}
+
+
+def _shogirdlar(conn):
+    """Hozirgi shogirdlar - oxirgi yopilgan haftadan: {fan: {uid, name, house, ball}}."""
+    s = conn.execute("SELECT id FROM seasons WHERE status='closed' ORDER BY starts_at DESC, id DESC LIMIT 1").fetchone()
+    if not s:
+        return {}
+    out = {}
+    for dars, (uid, ball) in _shogird_hafta(conn, s["id"]).items():
+        r = conn.execute("SELECT COALESCE(first_name, 'Sehrgar') AS name, house FROM users WHERE user_id=?", (uid,)).fetchone()
+        out[dars] = {"uid": uid, "name": ism(r["name"] if r else "Sehrgar")[:20], "house": r["house"] if r else None, "ball": ball}
+    return out
+
+
+def shogirdlar():
+    """Keshlangan (daqiqada bir hisoblanadi) - chat har xabarda so'raydi."""
+    hozir = time.time()
+    if hozir - _shogird_kesh["t"] > SARDOR_KESH:
+        conn = _connect()
+        try:
+            _shogird_kesh["d"] = _shogirdlar(conn)
+        finally:
+            conn.close()
+        _shogird_kesh["t"] = hozir
+    return _shogird_kesh["d"]
+
+
+def shogird_fanlari(uid):
+    """Shu odam qaysi fanlarda shogird (saralangan ro'yxat)."""
+    try:
+        return sorted(k for k, x in shogirdlar().items() if x["uid"] == int(uid))
+    except Exception:
+        return []

@@ -351,6 +351,7 @@ async def api_leaderboard(request):
         "qayta": bool(allowed and until == hpcup.QAYTA_GACHA),     # testni qayta topshirish (19-sentabrgacha saralanganlar)
         "exam_pending": exam_pending,
         "sardor": hpcup.sardormi(user["id"]),
+        "shogird": hpcup.shogird_fanlari(user["id"]),
     }
     if gap:
         me["gap"] = gap
@@ -495,6 +496,7 @@ async def profile_extra(user_id):
         "qayta": bool(allowed and until == hpcup.QAYTA_GACHA),     # testni qayta topshirish (19-sentabrgacha saralanganlar)
         "exam_pending": exam_pending,
         "sardor": hpcup.sardormi(user_id),
+        "shogird": hpcup.shogird_fanlari(user_id),
     }
 
 

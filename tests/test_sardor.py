@@ -103,6 +103,38 @@ async def amain():
     check("kubok xatida: o'zi sardor", x1.get("sar_men") == 1 and "hafta sardorisiz" in hppochta.kubok_matni("uz", x1)[1])
     check("kubok xatida: fakultet sardori", x2.get("sar") == "Garri" and not x2.get("sar_men") and "Garri" in hppochta.kubok_matni("uz", x2)[1])
 
+    # Professor shogirdi: fan bellashuvi ballari (m:<fan>:<kun>) bo'yicha
+    conn = sqlite3.connect(os.environ["HP_DB_PATH"])
+    sid = season["id"]
+    def yoz(uid, ref, b):
+        conn.execute("INSERT INTO points (user_id, season_id, source_type, source_ref, points, created_at) VALUES (?,?,'dars',?,?,'2026-11-01T00:00:00Z')", (uid, sid, ref, b))
+    yoz(2, "m:himoya:2026-10-30", 7); yoz(1, "m:himoya:2026-10-31", 15); yoz(2, "m:himoya:2026-11-01", 10)   # 2 -> 17, 1 -> 15
+    yoz(1, "m:iksir:2026-10-30", 10); yoz(3, "m:iksir:2026-10-31", 10)                                       # teng: oldin olgan
+    yoz(7, "m:astro:2026-10-30", 15); yoz(1, "r:astro:2026-10-30", 5); yoz(1, "x:astro:2026-10-30", 5)       # direktor va boshqa ref sanalmaydi
+    conn.commit(); conn.close()
+    hpcup.SHOGIRD_DAN = "2000-01-01"
+    hpcup._shogird_kesh["t"] = 0
+    S = hpcup.shogirdlar()
+    check("eng ko'p ball olgan shogird, teng ballda oldin olgan, ball va nom bilan",
+          S["himoya"]["uid"] == 2 and S["himoya"]["ball"] == 17 and S["iksir"]["uid"] == 1 and S["himoya"]["house"] == "gryffindor" and S["himoya"]["name"])
+    check("direktor va boshqa ball sanalmaydi", "astro" not in S)
+    check("odamning fanlari", hpcup.shogird_fanlari(2) == ["himoya"] and hpcup.shogird_fanlari(1) == ["iksir"] and hpcup.shogird_fanlari(3) == [])
+    m3 = await hpcup.post_chat_message("gryffindor", 2, "Salom")
+    check("chat xabarida shogird", m3.get("shogird") == ["himoya"])
+    a = await hpcup.chat_members(None, season["id"] + 1, 1)
+    check("a'zolar ro'yxatida shogird", any(x["uid"] == 2 and x["shogird"] == ["himoya"] for x in a))
+    c = sqlite3.connect(os.environ["HP_DB_PATH"]); c.execute("DELETE FROM pochta WHERE tur='kubok'"); c.execute("DELETE FROM settings WHERE key LIKE '%kubok%'"); c.commit(); c.close()
+    d0 = {"g": "gryffindor", "uy": "gryffindor", "ball": 1, "sho": ["himoya", "iksir"]}
+    check("kubok xatida shogird", "Lyupin shogirdi, Sneyp shogirdi" in hppochta.kubok_matni("uz", d0)[1])
+    hpcup.SHOGIRD_DAN = "2999-01-01"
+    hpcup._shogird_kesh["t"] = 0
+    c = hpcup._connect()
+    try:
+        c.execute("DELETE FROM shogird")
+        check("SHOGIRD_DAN dan oldingi haftaga shogird yo'q", hpcup._shogirdlar(c) == {})
+    finally:
+        c.close()
+
     hpcup.SARDOR_DAN = "2999-01-01"
     c = hpcup._connect()
     try:
