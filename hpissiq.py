@@ -5,12 +5,14 @@ O'simlik QAYERDAN: «O'simlikshunoslik» darslaridan - har uch darsda bitta urug
 SUG'ORISH: BEPUL, har o'simlik kuniga bir marta. 3 marta sug'orilsa o'smir, 10 marta - yetilgan.
 Sug'orilmasa JAZO YO'Q (qurimaydi) - faqat o'smaydi.
 HOSIL: yetilgan o'simlik har 3-sug'orishda 1 ta hosil beradi. Hosil umumiy zaxiraga tushadi va Qo'riqxonada
-maxluqni boqishga ishlatiladi (yemishi tugagan maxluqqa 1 hosil = 1 boqish; hpqoriq {feed, hosil}).
-Kubok ballariga va galleonga ALOQASI YO'Q.
+maxluqni boqishga ishlatiladi (yemishi tugagan maxluqqa 1 hosil = 1 boqish; hpqoriq {feed, hosil})
+yoki galleonga almashtiriladi: HOSIL_NARX ta hosil = 1 galleon (egasi, 2026-10-31; yemish narxiga teng, chegara yo'q).
+Kubok ballariga aloqasi yo'q.
 
 POST /api/issiq  (initData)
   {}                 -> holat: {hosil, list:[{kod, got, need, watered, stage, next, today, crop}], prices}
   {water: "mandragora"} yoki {water: "all"} -> sug'orish; javobda watered:[kod], grew:{kod: bosqich}, crop: nechta hosil
+  {sell: 1}          -> butun beshliklarni galleonga; javobda sold: nechta galleon olindi, gal: hamyon
 Jadvallar: issiq (user_id, kod, olgan, sugorildi, oxirgi), issiq_hosil (user_id, hosil).
 """
 
@@ -27,6 +29,7 @@ OSIMLIKLAR = ("mandragora", "bubotuber", "puffapod", "geran", "mimbulus", "ditan
 HAR_DARS = 3
 OSMIR, KATTA = 3, 10
 HOSIL_HAR = 3                  # yetilgan o'simlik har nechanchi sug'orishda hosil beradi
+HOSIL_NARX = 5                 # shuncha hosil = 1 galleon (hpqoriq: 1 galleon = 5 porsiya yemish; ilova matni ham shu songa bog'liq)
 
 _cfg = {}
 
@@ -94,7 +97,8 @@ def _holat(uid):
                 "today": bool(r and r["oxirgi"] == kun),
                 "crop": (HOSIL_HAR - (b - KATTA) % HOSIL_HAR) if st == 2 else 0,
             })
-        return {"ok": True, "hosil": hosil_soni(conn, uid), "list": lst,
+        g = conn.execute("SELECT galleons FROM users WHERE user_id=?", (uid,)).fetchone()
+        return {"ok": True, "hosil": hosil_soni(conn, uid), "list": lst, "gal": int(g[0] or 0) if g else 0, "rate": HOSIL_NARX,
                 "prices": {"teen": OSMIR, "adult": KATTA, "crop_every": HOSIL_HAR}}
     finally:
         conn.close()
@@ -126,6 +130,25 @@ def _sugor(uid, kod):
                          "ON CONFLICT(user_id) DO UPDATE SET hosil = hosil + excluded.hosil", (uid, hosil))
         conn.commit()
         return qilindi, osdi, hosil
+    finally:
+        conn.close()
+
+
+def _sot(uid):
+    """Butun beshliklarni galleonga almashtiradi: nechta galleon berilgani (qoldiq hosil zaxirada qoladi)."""
+    uid = int(uid)
+    conn = hpcup._connect()
+    try:
+        gal = hosil_soni(conn, uid) // HOSIL_NARX
+        if gal < 1:
+            return 0
+        cur = conn.execute("UPDATE issiq_hosil SET hosil = hosil - ? WHERE user_id=? AND hosil >= ?",
+                           (gal * HOSIL_NARX, uid, gal * HOSIL_NARX))
+        if cur.rowcount < 1:
+            return 0
+        conn.execute("UPDATE users SET galleons = galleons + ? WHERE user_id=?", (gal, uid))
+        conn.commit()
+        return gal
     finally:
         conn.close()
 
@@ -164,6 +187,14 @@ async def api_issiq(request):
         if qilindi and _cfg.get("log"):
             try:
                 await _cfg["log"](user, "issiq_suv_" + (kod if kod != "all" else "hammasi"))
+            except Exception as e:
+                logging.error("Issiqxona: log yozilmadi: %s", e)
+    if body.get("sell"):
+        sotildi = await asyncio.to_thread(_sot, uid)
+        qosh = {"sold": sotildi}
+        if sotildi and _cfg.get("log"):
+            try:
+                await _cfg["log"](user, "issiq_sot_" + str(sotildi))
             except Exception as e:
                 logging.error("Issiqxona: log yozilmadi: %s", e)
     javob = await asyncio.to_thread(_holat, uid)
