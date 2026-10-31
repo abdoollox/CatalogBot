@@ -30,7 +30,7 @@ NISHONLAR = (
     ("film_1", "kino"), ("film_8", "kino"), ("fb_3", "kino"), ("poliglot", "kino"),
     ("oquvchi", "yol"), ("tayoqcha", "yol"), ("patronus", "yol"),
     ("ball_1", "kubok"), ("streak_7", "kubok"), ("perfect_week", "kubok"),
-    ("kubok_golib", "kubok"), ("top_3", "kubok"), ("sardor", "kubok"), ("sandiq_1", "kubok"), ("sandiq_7", "kubok"),
+    ("kubok_golib", "kubok"), ("top_3", "kubok"), ("sardor", "kubok"), ("shogird", "kubok"), ("sandiq_1", "kubok"), ("sandiq_7", "kubok"),
     ("dost_1", "dostlik"), ("dost_5", "dostlik"), ("shaxmat", "dostlik"),
     ("albom", "kolleksiya"), ("serial_1", "kolleksiya"),
     # Qo'riqxona (hpqoriq, 2026-10-08): birinchi maxluq, birinchi katta maxluq, o'n ikkitasining hammasi
@@ -41,6 +41,8 @@ NISHONLAR = (
     ("kitob_1", "kitob"), ("kitob_7", "kitob"),
     # Duel va rekord (2026-10-10): duelda birinchi g'alaba; biror fanning rekord jadvalida kun yakunida birinchi uchlikda bo'lish
     ("duel_golib", "maydon"), ("rekord_top", "maydon"),
+    # Yuqori kurslar (2026-10-31): hpdars.kurs
+    ("kurs_5", "kurs"), ("kurs_6", "kurs"), ("kurs_7", "kurs"),
 )
 KODLAR = tuple(k for k, _ in NISHONLAR)
 
@@ -77,6 +79,14 @@ def YASHIRIN():
     except Exception:
         pass
     return {"serial_1"}
+
+
+def _kurs_n(uid):
+    try:
+        import hpdars                # hpdars hpnishon'ga bog'liq emas, lekin ishga tushish tartibi muhim - shu yerda
+        return int(hpdars.kurs(uid)["n"])
+    except Exception:
+        return 0
 
 
 def _one(conn, sql, args=()):
@@ -215,6 +225,11 @@ def hisob(conn, uid):
         "top_3": (1 if _top3(conn, uid) else 0, 1),
         # Hafta sardori (2026-10-25): biror hafta fakultetida eng ko'p ball to'plagan (hpcup.sardor jadvali)
         "sardor": (1 if _one(conn, "SELECT 1 FROM sardor WHERE user_id=? LIMIT 1", (uid,)) else 0, 1),
+        # Professor shogirdi (2026-10-31): biror hafta fan bellashuvida eng ko'p ball olgan (hpcup.shogird jadvali)
+        "shogird": (1 if _one(conn, "SELECT 1 FROM shogird WHERE user_id=? LIMIT 1", (uid,)) else 0, 1),
+        "kurs_5": (1 if _kurs_n(uid) >= 5 else 0, 1),
+        "kurs_6": (1 if _kurs_n(uid) >= 6 else 0, 1),
+        "kurs_7": (1 if _kurs_n(uid) >= 7 else 0, 1),
         "sandiq_1": (min(len(kunlar), 1), 1),
         "sandiq_7": (min(uzun, 7), 7),
         "dost_1": (min(refs, 1), 1),

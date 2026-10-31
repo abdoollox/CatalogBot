@@ -404,6 +404,26 @@ async def amain():
     hpdars._kesh.clear() if hasattr(hpdars, "_kesh") and hasattr(hpdars._kesh, "clear") else None
     st, d = await ask(77)
     check("kurs holat javobida keladi", d.get("kurs", {}).get("n") == 4)
+    # 5-7-kurslar
+    c = sqlite3.connect(os.environ["HP_DB_PATH"])
+    def darajalar(n):
+        for f_ in hpdars.DARSLAR:
+            c.execute("INSERT OR REPLACE INTO dars_daraja (user_id, dars, daraja, kun) VALUES (77,?,?,NULL)", (f_, n if isinstance(n, int) else hpdars.dars_soni(f_)))
+        c.commit()
+    def ball_(ref, b):
+        sid_ = c.execute("SELECT MAX(id) FROM seasons").fetchone()[0]
+        c.execute("INSERT INTO points (user_id, season_id, source_type, source_ref, points, created_at) VALUES (77,?,'dars',?,?,'2026-10-31T00:00:00Z')", (sid_, ref, b)); c.commit()
+    darajalar(23)
+    check("kurs: 23 tadan dars - 4-kursda qoladi", hpdars.kurs(77)["n"] == 4 and hpdars.kurs(77)["fan5"] == 0)
+    darajalar(24)
+    check("kurs: 24 tadan dars - 5-kurs", hpdars.kurs(77)["n"] == 5 and hpdars.kurs(77)["fan5"] == 9)
+    ball_("duel:2026-10-05:8", 10); ball_("shaxmat:2026-10-05:2", 30); ball_("viktorina:2026-10-05", 20); ball_("poyga:2026-10-05", 10); ball_("duel:2026-10-05:k", 5); ball_("m:afsun:2026-10-05", 15)
+    check("kurs: 2 g'alaba - 5-kursda (2-o'rin, kirish bali, bellashuv sanalmaydi)", hpdars.kurs(77)["n"] == 5 and hpdars.kurs(77)["galaba"] == 2)
+    ball_("viktorina:2026-10-12", 30)
+    check("kurs: viktorinada 1-o'rin ham g'alaba - 6-kurs", hpdars.kurs(77)["n"] == 6 and hpdars.kurs(77)["galaba"] == 3)
+    darajalar("hammasi")
+    check("kurs: hamma darslar tugadi - 7-kurs", hpdars.kurs(77)["n"] == 7 and hpdars.kurs(77)["fan7"] == 9)
+    c.execute("DELETE FROM points WHERE user_id=77"); c.execute("DELETE FROM dars_daraja WHERE user_id=77"); c.commit(); c.close()
 
     # ---------- Yangi saralanganlarga eslatma ----------
     import datetime as _d

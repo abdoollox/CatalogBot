@@ -418,10 +418,21 @@ def _holat(uid, kun):
 KURS_2, KURS_3, KURS_4 = 3, 9, 15     # HAR FANDAN shuncha dars (egasi, 2026-10-11): 2-kursga 3, 3-kursga 9, 4-kursga 15 tadan
 KURS_3_QURB = 1                       # 3-kurs uchun kamida shuncha Shokolad qurbaqa kartasi (egasi, 2026-10-11: «faqat 9 ta dars kamlik qiladi»)
 KURS_ESKI = "2026-10-10T22:25:00Z"
+# 5-7-kurslar (egasi, 2026-10-31; o'quvchilar: «zeriktim», «uroven qo'ysa bo'larkan»): bo'lim ochmaydi - kurs nomi va nishon beradi.
+#   5-kurs: har fandan KURS_5 tadan dars; 6-kurs: haftalik turnirlarda KURS_6_G ta g'alaba; 7-kurs: hamma darslarni tugatish.
+#   G'alaba: to'rli turnirda ball berilgan har uchrashuv (dastlabki bosqich ballsiz), poyga va viktorinada 1-o'rin (+30).
+KURS_5, KURS_6_G = 24, 3
+
+
+def turnir_galabalari(conn, uid):
+    return int(conn.execute(
+        "SELECT COUNT(*) FROM points WHERE user_id=? AND points > 0 AND (((source_ref LIKE 'duel:%' OR source_ref LIKE 'shaxmat:%' "
+        "OR source_ref LIKE 'tosh:%' OR source_ref LIKE 'mjang:%') AND source_ref NOT LIKE '%:k') "
+        "OR ((source_ref LIKE 'poyga:%' OR source_ref LIKE 'viktorina:%') AND points >= 30))", (int(uid),)).fetchone()[0] or 0)
 
 
 def kurs(uid):
-    """{n: 1..4, lessons: jami darslar, fans: fanlar soni, fan2/fan3/fan4: shartni bajargan fanlar, bell, need2/need3/need4,
+    """{n: 1..7, lessons: jami darslar, fans: fanlar soni, fan2/fan3/fan4: shartni bajargan fanlar, bell, need2/need3/need4,
     qurb: ochilgan qurbaqa kartalari, needq: KURS_3_QURB, bellf: bellashuvida qatnashgan fanlar soni, bellar: o'sha fanlar ro'yxati}.
     2-kurs - har fandan KURS_2 tadan dars; 3-kurs - har fandan KURS_3 tadan dars + qurbaqa kartasi + to'qqiz fan bellashuvi;
     4-kurs - 3-kurs shartlari + har fandan KURS_4 tadan dars."""
@@ -435,6 +446,7 @@ def kurs(uid):
             qurb = int(conn.execute("SELECT COUNT(*) FROM qurbaqa WHERE user_id=?", (int(uid),)).fetchone()[0] or 0)
         except Exception:
             qurb = 0                              # qurbaqa jadvali hali yaratilmagan
+        galaba = turnir_galabalari(conn, uid)
     finally:
         conn.close()
     fanlar = list(DARSLAR)
@@ -445,9 +457,17 @@ def kurs(uid):
     else:
         uch = eng_kam >= KURS_3 and qurb >= KURS_3_QURB and len(bellar) >= len(fanlar)
         n = 4 if uch and eng_kam >= KURS_4 else 3 if uch else 2 if eng_kam >= KURS_2 else 1
+    tugatgan = sum(1 for f in fanlar if dar.get(f, 0) >= dars_soni(f))
+    if n == 4 and eng_kam >= KURS_5:
+        n = 5
+        if galaba >= KURS_6_G:
+            n = 6
+            if tugatgan >= len(fanlar):
+                n = 7
     return {"n": n, "lessons": sum(dar.values()), "fans": len(fanlar), "fan2": soni(KURS_2), "fan3": soni(KURS_3), "fan4": soni(KURS_4),
             "bell": bell, "need2": KURS_2, "need3": KURS_3, "need4": KURS_4,
-            "qurb": qurb, "needq": KURS_3_QURB, "bellf": len(bellar), "bellar": bellar}
+            "qurb": qurb, "needq": KURS_3_QURB, "bellf": len(bellar), "bellar": bellar,
+            "fan5": soni(KURS_5), "need5": KURS_5, "galaba": galaba, "need6": KURS_6_G, "fan7": tugatgan}
 
 
 # ---------- Yangi saralanganlarga eslatma (egasi, 2026-10-11; boyo'g'li pochtasi + bot) ----------
