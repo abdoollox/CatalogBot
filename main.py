@@ -49,6 +49,7 @@ import hpshturnir
 import hpviktorina
 import hppoyga
 import hpsorov
+import hpgazeta
 import hpdokon
 import hptosh
 import hpmjang
@@ -2889,6 +2890,7 @@ async def main():
         asyncio.create_task(hptosh.kuzatuvchi())
         hpdokon.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpsorov.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS})
+        hpgazeta.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpmjang.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
                                "elon": hppochta.saralanganlarga_tarqat, "admin_ids": ADMIN_IDS})
