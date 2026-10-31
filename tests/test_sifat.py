@@ -69,13 +69,13 @@ async def amain():
     check("hajm doim MB da", main.hajm_matni(3 * 1024 ** 3, "uz") == "3072 MB" and main.hajm_matni(1288490188, "en") == "1229 MB"
           and main.hajm_matni(0, "uz") == "")
     kb = main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard
-    check("tepada dublyaj qatori doim bor (ZO'R TV - tez orada)", [b.text for b in kb[0]] == ["● MY5 TV", "ZO'R TV · tez orada"])
+    check("tepada dublyaj qatori doim bor (ZO'R TV - tez orada)", [b.text for b in kb[0]] == ["● MY5 TV", "🔒 ZO'R TV", "🔒 Yoshlar TV"])
     kb = kb[1:]
     check("uch sifat tugmasi: ikkitasi bor, SD qulflangan", [b[0].text for b in kb][:2] == ["Full HD · 3072 MB", "HD · 1229 MB"]
           and len(kb) == 3 and kb[2][0].text.startswith("🔒 SD") and kb[2][0].callback_data == "sf:hp1:uz:sd:x"
           and kb[1][0].callback_data == "sf:hp1:uz:hd:b:my5")
     kz = main.sifat_tugmalari("hp1", "uz", "b", "zor").inline_keyboard
-    check("fayli yo'q dublyaj tanlansa - hamma sifat qulflangan", [b.text for b in kz[0]] == ["MY5 TV", "● ZO'R TV · tez orada"]
+    check("fayli yo'q dublyaj tanlansa - hamma sifat qulflangan", [b.text for b in kz[0]] == ["MY5 TV", "● 🔒 ZO'R TV", "🔒 Yoshlar TV"]
           and all(r[0].text.startswith("🔒") and r[0].callback_data.endswith(":x") for r in kz[1:]) and len(kz) == 4)
     kb = main.sifat_tugmalari("hp2", "uz", "w").inline_keyboard[1:]
     check("yo'q sifat qulflangan", kb[0][0].text.startswith("🔒 Full HD") and kb[0][0].callback_data.endswith(":x")
@@ -105,6 +105,7 @@ async def amain():
     d = hpfilms.dub_of
     check("dublyaj nomdan", d(V(1, "Garri Potter 1 (ZO'R TV)(720p).mp4", 1)) == "zor" and d(V(1, "GP 1 Zor TV.mp4", 1)) == "zor"
           and d(V(1, "Garri Potter 1 MY5 (1080p).mp4", 1)) == "my5" and d(V(1, "Garri Potter 1 (1080p).mp4", 1)) == "my5")
+    check("Yoshlar TV nomdan", d(V(1, "Garri Potter 1 (Yoshlar TV)(720p).mp4", 1)) == "yoshlar" and d(V(1, "film.mp4", 1, cap="YOSHLAR tv")) == "yoshlar")
     check("izohdan ham taniladi", d(V(1, "film.mp4", 1, cap="ZO‘R TV dublyaji")) == "zor")
     check("fayli bor dublyaj bitta; ruschada dublyaj qatori yo'q", hpfilms.dubs("hp1", "uz") == ["my5"] and hpfilms.dubs("hp1", "ru") == []
           and len(main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard) == 4
@@ -119,10 +120,10 @@ async def amain():
     check("ilova ro'yxatida ikkinchi dublyaj alohida kalitda", hpfilms.public_map()["hp1_uz~zor"] == {"fhd": 2 * 1024 ** 3, "sd": 400 * 1024 ** 2}
           and "fhd" in hpfilms.public_map()["hp1_uz"])
     kb = main.sifat_tugmalari("hp1", "uz", "b").inline_keyboard
-    check("tepada dublyaj tanlovi, asosiysi tanlangan", [b.text for b in kb[0]] == ["● MY5 TV", "ZO'R TV"]
+    check("tepada dublyaj tanlovi, asosiysi tanlangan", [b.text for b in kb[0]] == ["● MY5 TV", "ZO'R TV", "🔒 Yoshlar TV"]
           and kb[0][1].callback_data == "db:hp1:uz:zor:b" and kb[1][0].callback_data == "sf:hp1:uz:fhd:b:my5" and len(kb) == 4)
     kb = main.sifat_tugmalari("hp1", "uz", "w", "zor").inline_keyboard
-    check("ZO'R TV tanlansa - uning sifatlari, yo'g'i qulflangan", [b.text for b in kb[0]] == ["MY5 TV", "● ZO'R TV"]
+    check("ZO'R TV tanlansa - uning sifatlari, yo'g'i qulflangan", [b.text for b in kb[0]] == ["MY5 TV", "● ZO'R TV", "🔒 Yoshlar TV"]
           and kb[1][0].callback_data == "sf:hp1:uz:fhd:w:zor" and kb[2][0].text.startswith("🔒 HD") and kb[3][0].callback_data == "sf:hp1:uz:sd:w:zor")
     del sent[:]
     eski = main.bot

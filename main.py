@@ -670,7 +670,7 @@ def sifat_tugmalari(movie_key, lang, origin="b", dub=None):
     if len(dl) > 1:
         dub = dub if dub in dl else bor_dub[0]
         qator.append([InlineKeyboardButton(
-            text=("● " if d == dub else "") + hpfilms.DUB_LABEL[d] + ("" if d in bor_dub else " · " + SIFAT_TX[lang]["soon"]),
+            text=("● " if d == dub else "") + ("" if d in bor_dub else "🔒 ") + hpfilms.DUB_LABEL[d],      # uchtasi bir qatorda: «Tez orada» sig'maydi
             callback_data="db:%s:%s:%s:%s" % (movie_key, lang, d, origin)) for d in dl])
     else:
         dub = None
@@ -2265,7 +2265,7 @@ async def api_send(request):
 
     # Sifat: ilova "fhd" yoki "hd" yuboradi. Yubormasa (eski ilova) - eng yaxshisi.
     q = str(body.get("q", "")) or None
-    # Dublyaj (faqat o'zbekcha, ikki xili bor filmda): "my5" yoki "zor". Yuborilmasa - asosiysi.
+    # Dublyaj (faqat o'zbekcha): "my5", "zor" yoki "yoshlar". Yuborilmasa - asosiysi.
     dub = str(body.get("dub", "")) or None
     if dub not in hpfilms.dubs(movie_key, lang):
         dub = None

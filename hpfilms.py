@@ -113,21 +113,24 @@ def quality_of(it):
 
 
 # --- DUBLYAJ (egasi, 2026-10-07) ---
-# O'zbekcha filmlar ikki xil dublyajda: MY5 TV va ZO'R TV. Odam sifat oynasining tepasida tanlaydi.
-# Faqat o'zbek tilida. Fayl qaysi dublyaj ekani NOMIDAN (yoki izohidan) taniladi: "MY5" / "ZO'R TV".
+# O'zbekcha filmlar uch xil dublyajda: MY5 TV, ZO'R TV va Yoshlar TV (egasi, 2026-10-31). Odam sifat oynasining tepasida tanlaydi.
+# Faqat o'zbek tilida. Fayl qaysi dublyaj ekani NOMIDAN (yoki izohidan) taniladi: "MY5" / "ZO'R TV" / "Yoshlar".
 # Nomida hech biri yo'q fayl - ASOSIY_DUB (2026-10-07 gacha yuklangan fayllar). Jadval kaliti:
 # asosiy dublyaj - avvalgidek ("hp1_uz", "hp1_uz@hd"), boshqasi - "hp1_uz~zor", "hp1_uz~zor@hd".
-DUBS = ("my5", "zor")
-DUB_LABEL = {"my5": "MY5 TV", "zor": "ZO'R TV"}
+DUBS = ("my5", "zor", "yoshlar")
+DUB_LABEL = {"my5": "MY5 TV", "zor": "ZO'R TV", "yoshlar": "Yoshlar TV"}
 ASOSIY_DUB = "my5"
 _D_MY5 = re.compile(r"my\s*5", re.I)
 _D_ZOR = re.compile(r"zo['’ʻ`‘]?r\s*tv|\bzo['’ʻ`‘]r\b|\bzor\b", re.I)
-_D_TOZA = re.compile(r"my\s*5(\s*tv)?|zo['’ʻ`‘]?r(\s*tv)?", re.I)      # film nomini tanishdan oldin olib tashlanadi
+_D_YOSHLAR = re.compile(r"yoshlar", re.I)
+_D_TOZA = re.compile(r"my\s*5(\s*tv)?|zo['’ʻ`‘]?r(\s*tv)?|yoshlar(\s*tv)?", re.I)      # film nomini tanishdan oldin olib tashlanadi
 
 
 def dub_of(it):
     """Videoning dublyaji: nomi/izohidan; yozilmagan bo'lsa - asosiysi."""
     text = "%s\n%s" % (it.get("name") or "", it.get("cap") or "")
+    if _D_YOSHLAR.search(text):
+        return "yoshlar"
     if _D_ZOR.search(text):
         return "zor"
     if _D_MY5.search(text):
