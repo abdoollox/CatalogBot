@@ -76,5 +76,17 @@ check("dushanba: poyga", d["today"]["kind"] == "poyga")
 p = G._son("2026-10-30")                           # payshanbadan keyingi juma: viktorina, kecha turnir yo'q
 check("payshanba turnirsiz", p["tour"] is None and p["today"]["kind"] == "vik")
 
+c = hpcup._connect()
+for ref, p in [("duel:2026-10-26:2", 30), ("poyga:2026-10-26", 20), ("dars:2026-10-07", 5)]:
+    c.execute("INSERT INTO points (user_id, season_id, source_type, source_ref, points, created_at) VALUES (1,11,'dars',?,?,?)", (ref, p, "2026-10-31T10:00:00Z"))
+c.commit()
+b = hpcup._by_source(c, 11, "p.user_id", "p.user_id = ?", (1,))[1]
+c.close()
+check("kubok manbalari: bellashuv, turnir, eski dars alohida", b["bell"] == 45 and b["tur"] == 50 and b["lesson"] == 5 and b["rek"] == 0)
+c = hpcup._connect()
+b = hpcup._by_source(c, 11, "p.user_id", "p.user_id = ?", (2,))[2]
+c.close()
+check("kubok manbalari: rekord alohida", b["rek"] == 5 and b["bell"] == 10)
+
 print("Gazeta: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
 sys.exit(1 if fail else 0)

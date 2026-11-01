@@ -26,6 +26,8 @@ from aiohttp import web
 import hpcup
 import hpissiq
 
+BELL_YANGI_DAN = "2026-11-02"    # hpdars.SOVRIN_DAN: shu kundan bellashuv ballari 5, 3, 2, 1 (ilgari 1-3-o'rin 7 va undan ko'p edi)
+
 # Tartib - olinish tartibi (ilova: js/09-darslar.js QR_TARTIB bilan bir xil); oxirgisi noyob
 MAXLUQLAR = ("gippo", "boyogli", "niffler", "flobber", "testral", "qurbaqa",
              "kalmar", "boutrakl", "salamandra", "mushuk", "kalamush", "ajdar")
@@ -68,7 +70,7 @@ def _yangila(conn, uid):
     daraja = int(r[0]) if r else 0
     kodlar = list(DARSDAN[:daraja // HAR_DARS])
     if conn.execute("SELECT 1 FROM points WHERE user_id=? AND source_type='dars' AND source_ref LIKE 'm:maxluq:%' "
-                    "AND points >= 7 LIMIT 1", (uid,)).fetchone():
+                    "AND (points >= 7 OR (points >= 2 AND substr(source_ref, 10) >= ?)) LIMIT 1", (uid, BELL_YANGI_DAN)).fetchone():   # 1-3-o'rin
         kodlar.append(NOYOB)
     stamp = hpcup._utc_iso(hpcup.now_tk())
     for k in kodlar:

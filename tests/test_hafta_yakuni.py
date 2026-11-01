@@ -67,7 +67,7 @@ async def amain():
     check("rekord sovrini yopilgan haftaga", pts.get("r:himoya:%s" % oxirgi) == s["id"])
     check("g'olib shu ballar bilan aniqlandi", res["winner_house"] == "gryffindor")
     check("galleon ham shu ballardan", sql("SELECT ball FROM galleon_mukofot WHERE user_id=1 AND season_id=?", (s["id"],))
-          == [(hpdars.SOVRIN[0] + hpdars.REK_SOVRIN[0],)])
+          == [(hpdars.sovrin(1, oxirgi) + hpdars.REK_SOVRIN[0],)])
     # Ertasiga (yangi haftada) qayta yakunlash - takror ball yo'q, yangi haftaga hech narsa tushmaydi
     ertasi = (hpcup._parse_iso(s["ends_at"]) + timedelta(minutes=1)).astimezone(hpcup.TASHKENT).strftime("%Y-%m-%d")
     hpdars.yakunla(ertasi)

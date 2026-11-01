@@ -142,6 +142,12 @@ async def amain():
     hpcup._award(1, "dars", "m:maxluq:2026-10-09", 3)
     st, d = await ask(1)
     check("4-10-o'rin (3 ball) ajdar bermaydi", not {x["kod"]: x for x in d["list"]}["ajdar"]["got"])
+    hpcup._award(9, "dars", "m:maxluq:2026-11-02", 1)
+    st, d = await ask(9)
+    check("yangi ballarda 4-10-o'rin (1 ball) ajdar bermaydi", not {x["kod"]: x for x in d["list"]}["ajdar"]["got"])
+    hpcup._award(9, "dars", "m:maxluq:2026-11-03", 2)
+    st, d = await ask(9)
+    check("yangi ballarda 3-o'rin (2 ball) ajdar beradi", {x["kod"]: x for x in d["list"]}["ajdar"]["got"])
 
     check("profilda: olinish tartibida, bosqichi bilan", hpqoriq.korinish(1) == [{"kod": "gippo", "stage": 2}, {"kod": "boyogli", "stage": 2}]
           and hpqoriq.korinish(999) == [])

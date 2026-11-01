@@ -76,7 +76,8 @@ async def amain():
           and all(len(q[l]["a"]) == 4 and q[l]["q"] and 0 <= q["correct"] < 4 for q in B for l in ("uz", "ru", "en"))
           and len({q["key"] for q in B}) == len(B) and max(hpdars.tarix_bell("2026-10-20")) < len(B)
           and max(hpdars.tarix_bell("2026-10-08")) < 96)
-    check("sovrinlar", [hpdars.sovrin(i) for i in (1, 2, 3, 4, 10, 11)] == [15, 10, 7, 3, 3, 0])
+    check("sovrinlar", [hpdars.sovrin(i, "2026-11-01") for i in (1, 2, 3, 4, 10, 11)] == [15, 10, 7, 3, 3, 0]
+          and [hpdars.sovrin(i, "2026-11-02") for i in (1, 2, 3, 4, 10, 11)] == [5, 3, 2, 1, 1, 0])
     d1, d2, d46 = hpdars.tarix_dars(1, "uz"), hpdars.tarix_dars(2, "uz"), hpdars.tarix_dars(46, "uz")
     birinchi6 = {q["uz"]["q"] for q in hpdars.bell_savollar()[:6]}
     check("tarix darslari: 46 ta; 1-darsda 6 savol, keyin 6 yangi + 2 takror", hpdars.dars_soni("tarix") == 46
@@ -335,7 +336,7 @@ async def amain():
     season = await hpcup.current_season()
     stats = await hpcup.user_stats(1, season["id"])
     # 2-o'rin uchun +10 ikki marta: sinovda bitta natija ikki xil sanaga ko'chirilgan (ikki kun yakunlandi)
-    check("kubokda bellashuv bali 'lesson' manbasida", stats["by"].get("lesson") == 20)
+    check("kubokda bellashuv bali 'bell' manbasida", stats["by"].get("bell") == 20)
     # Holat keshi: ketma-ket so'rovlar bazani qayta hisoblamaydi
     hpdars._kesh.clear()
     sanoq = {"n": 0}

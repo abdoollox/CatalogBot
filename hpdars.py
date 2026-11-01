@@ -13,8 +13,8 @@ Faqat SARALANGANLARGA. Ikki qism (egasi, 2026-10-07 kechqurun: mashq - ballsiz v
 2) BELLASHUV (musobaqa) - kuniga bitta topshiriq HAMMAGA BIR XIL (sana bo'yicha), kim tezroq va xatosiz.
      Vaqtni SERVER o'lchaydi ({start} -> {finish}); har xato +3 soniya. Kuniga 3 urinish, eng yaxshisi hisob.
      tarix bellashuvi - 10 ta savol: javoblarni SERVER tekshiradi (to'g'ri javob ilovaga yuborilmaydi).
-     Kun tugagach (keyingi kun birinchi so'rovda) eng yaxshilarga ball: 1-o'rin +15, 2-o'rin +10, 3-o'rin +7,
-     4-10-o'rinlar +3. Ball kubokka 'dars' manbasi bo'lib yoziladi (ref "m:afsun:2026-10-08").
+     Kun tugagach (keyingi kun birinchi so'rovda) eng yaxshilarga ball: 1-o'rin +5, 2-o'rin +3, 3-o'rin +2,
+     4-10-o'rinlar +1 (2026-11-01 gacha +15, +10, +7, +3). Ball kubokka 'dars' manbasi bo'lib yoziladi (ref "m:afsun:2026-10-08").
 
 Kunlik savol ilovadan OLIB TASHLANDI (egasi, 2026-10-07): Shokolad qurbaqaning birinchi topshirig'i endi
 tarix bellashuvida qatnashish (hpsandiq._daily_bajarildi). Server tomonda kunlik savol kodi turibdi (eski nusxalar uchun).
@@ -105,8 +105,12 @@ ENG_KOP_MS = 5 * 60 * 1000     # bundan uzoq urinish hisobga olinmaydi
 # kelguncha va natija yetib borguncha) qo'shiladi - sekin aloqada 1-3 s. Chat tahlili (2026-10-23): «eng yaxshi
 # urinishim tasdiqlanmadi». Endi ilova vaqti olinadi, lekin server o'lchaganidan ko'pi bilan shuncha kam bo'la oladi:
 KECHIKISH_MS = 2000
-SOVRIN = (15, 10, 7)           # 1-3 o'rinlar
-SOVRIN_10 = 3                  # 4-10 o'rinlar
+# Egasi, 2026-11-01: kunlik bellashuv kubokni haddan tashqari hal qilardi (haftalik ballarning 34-42 %), ballar uch baravar kam.
+# Yangi qiymat 2-noyabr bellashuvidan; 1-noyabr bellashuvi va shu kungacha berilgan ballar o'zgarmaydi.
+SOVRIN_ESKI, SOVRIN_10_ESKI = (15, 10, 7), 3
+SOVRIN = (5, 3, 2)             # 1-3 o'rinlar
+SOVRIN_10 = 1                  # 4-10 o'rinlar
+SOVRIN_DAN = "2026-11-02"
 # Tarix bellashuvida xato jarimasi kattaroq (chat tahlili, 2026-10-23: «to'g'ri javob muhim emas, tez bosish muhim —
 # hammasini noto'g'ri bossa ham 24 soniya» - 3 s jarima tavakkal bosishni foydali qilib qo'ygan edi). Bugungi bellashuv
 # boshlangan qoidada tugashi uchun - shu kundan. Do'kondagi eslatgich jarimani shu nisbatda kamaytiradi.
@@ -313,11 +317,17 @@ def _jadval(conn, kun, dars, limit=None):
     return rows
 
 
-def sovrin(orin):
+def sovrin_jadval(kun):
+    """Shu kun bellashuvining ballari: (1-3 o'rinlar, 4-10 o'rinlar)."""
+    return (SOVRIN, SOVRIN_10) if kun >= SOVRIN_DAN else (SOVRIN_ESKI, SOVRIN_10_ESKI)
+
+
+def sovrin(orin, kun):
     """O'rin (1 dan) uchun qo'shimcha ball."""
-    if orin <= len(SOVRIN):
-        return SOVRIN[orin - 1]
-    return SOVRIN_10 if orin <= TOP_N else 0
+    top, ten = sovrin_jadval(kun)
+    if orin <= len(top):
+        return top[orin - 1]
+    return ten if orin <= TOP_N else 0
 
 
 def yakunla(bugun):
@@ -338,7 +348,7 @@ def yakunla(bugun):
             if cur.rowcount < 1:
                 continue
             for i, r in enumerate(_jadval(conn, k["kun"], k["dars"], TOP_N)):
-                berish.append((r["user_id"], "m:%s:%s" % (k["dars"], k["kun"]), sovrin(i + 1), k["kun"]))
+                berish.append((r["user_id"], "m:%s:%s" % (k["dars"], k["kun"]), sovrin(i + 1, k["kun"]), k["kun"]))
     except sqlite3.OperationalError as e:
         logging.error("Bellashuv yakunlanmadi: %s", e)
     finally:
@@ -372,12 +382,12 @@ def _bellashuv(conn, uid, kun, dars):
     return {
         "item": kun_mavzusi(dars, kun), "top": top, "n": len(rows), "place": orin,
         "ms": m["ms"] if m else None, "tries": int(m["urinish"]) if m else 0, "max": URINISH,
-        "prizes": {"top": list(SOVRIN), "ten": SOVRIN_10},
+        "prizes": {"top": list(sovrin_jadval(kun)[0]), "ten": sovrin_jadval(kun)[1]},
         "penalty": _jarima(conn, uid, dars, kun),
         "yesterday": {
             "top": [{"uid": r["user_id"], "name": _ism(r["name"]), "house": r["house"], "ms": r["ms"]}
                     for r in krows[:3]],
-            "n": len(krows), "place": korin, "pts": sovrin(korin) if korin else 0,
+            "n": len(krows), "place": korin, "pts": sovrin(korin, kecha) if korin else 0,
         },
     }
 

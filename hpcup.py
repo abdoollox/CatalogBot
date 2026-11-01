@@ -83,14 +83,20 @@ SOURCE_GROUP = {
     "chess_win": "chess", "chess_draw": "chess", "referral": "friends",
     "sandiq": "chest", "dars": "lesson",
 }
-SOURCE_KEYS = ("film", "daily", "lesson", "chess", "chest", "friends")
+# "dars" manbasi uchga bo'linadi (egasi, 2026-11-01): bell - kunlik bellashuv, rek - rekord, tur - turnirlar; lesson - eski yozuvlar.
+SOURCE_KEYS = ("film", "daily", "bell", "rek", "tur", "lesson", "chess", "chest", "friends")
+_DARS_TURI = ("CASE WHEN p.source_type <> 'dars' THEN '' WHEN p.source_ref LIKE 'm:%' THEN 'bell' WHEN p.source_ref LIKE 'r:%' THEN 'rek' "
+              "WHEN p.source_ref LIKE 'duel:%' OR p.source_ref LIKE 'shaxmat:%' OR p.source_ref LIKE 'tosh:%' OR p.source_ref LIKE 'mjang:%' "
+              "OR p.source_ref LIKE 'poyga:%' OR p.source_ref LIKE 'viktorina:%' THEN 'tur' ELSE 'lesson' END")
 # Mavsumda har manbadan olish mumkin bo'lgan eng ko'p ball (do'stlar - cheksiz)
 SOURCE_CAPS = {
     "film": PTS_FILM_OPEN * FILM_PARTS,
     "daily": PTS_DAILY * DAILY_PER_WEEK,
     "chess": PTS_CHESS_WIN * CHESS_MAX_PER_SEASON,
     "chest": 10 * 7,
-    "lesson": 15 * 3 * 7,          # bellashuv: 3 fan x 1-o'rin (+15) x 7 kun - nazariy eng ko'pi
+    "bell": 5 * 9 * 7,             # 9 fan x 1-o'rin (+5) x 7 kun - nazariy eng ko'pi
+    "rek": 5 * 9 * 7,              # 9 fan x 1-o'rin (+5) x 7 kun
+    "tur": 65 * 4 + 30 * 2,        # to'rli turnirda g'olib +65 (4 ta), poyga va viktorinada +30
 }
 
 HOUSES = ("gryffindor", "slytherin", "ravenclaw", "hufflepuff")
@@ -1501,11 +1507,11 @@ def _by_source(conn, season_id, key_sql, where_sql, args):
     """{kalit: {manba: ball}} - kalit fakultet yoki odam bo'yicha."""
     out = {}
     for r in conn.execute(
-            "SELECT " + key_sql + " AS k, p.source_type AS st, SUM(p.points) AS pts "
+            "SELECT " + key_sql + " AS k, p.source_type AS st, " + _DARS_TURI + " AS dt, SUM(p.points) AS pts "
             "FROM points p JOIN users u ON u.user_id = p.user_id "
-            "WHERE p.season_id = ? AND " + where_sql + " GROUP BY 1, 2",
+            "WHERE p.season_id = ? AND " + where_sql + " GROUP BY 1, 2, 3",
             [season_id] + list(args)):
-        group = SOURCE_GROUP.get(r["st"])
+        group = r["dt"] or SOURCE_GROUP.get(r["st"])
         if group:
             by = out.setdefault(r["k"], _empty_by())
             by[group] += r["pts"] or 0
