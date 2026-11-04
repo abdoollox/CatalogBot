@@ -332,11 +332,11 @@ async def amain():
     st, d = await ask(1)
     Y = d["lessons"]["afsun"]["contest"]["yesterday"]
     check("kechagi g'oliblar va o'z o'rni", [x["name"] for x in Y["top"]] == ["Nevill", "Garri", "Germiona"]
-          and Y["place"] == 2 and Y["pts"] == 10 and Y["n"] == 4 and d["lessons"]["afsun"]["contest"]["tries"] == 0)
+          and Y["place"] == 2 and Y["pts"] == hpdars.sovrin(2, hpdars._kecha(kun)) and Y["n"] == 4 and d["lessons"]["afsun"]["contest"]["tries"] == 0)
     season = await hpcup.current_season()
     stats = await hpcup.user_stats(1, season["id"])
     # 2-o'rin uchun +10 ikki marta: sinovda bitta natija ikki xil sanaga ko'chirilgan (ikki kun yakunlandi)
-    check("kubokda bellashuv bali 'bell' manbasida", stats["by"].get("bell") == 20)
+    check("kubokda bellashuv bali 'bell' manbasida", stats["by"].get("bell") == 10 + hpdars.sovrin(2, hpdars._kecha(kun)))      # 2-noyabrdan ballar kam
     # Holat keshi: ketma-ket so'rovlar bazani qayta hisoblamaydi
     hpdars._kesh.clear()
     sanoq = {"n": 0}

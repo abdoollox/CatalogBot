@@ -50,6 +50,8 @@ import hpviktorina
 import hppoyga
 import hpsorov
 import hpgazeta
+import hpanketa
+import hpgoya
 import hpdokon
 import hptosh
 import hpmjang
@@ -2891,6 +2893,11 @@ async def main():
         hpdokon.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpsorov.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS})
         hpgazeta.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
+        hpanketa.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS,
+                                 "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN)})
+        hpgoya.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS,
+                               "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN),
+                               "xat": lambda uid, matnlar: hppochta.odamga_xat(uid, matnlar, botga=False)})
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpmjang.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
                                "elon": hppochta.saralanganlarga_tarqat, "admin_ids": ADMIN_IDS})
