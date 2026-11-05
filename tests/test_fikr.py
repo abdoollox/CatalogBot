@@ -73,13 +73,19 @@ check("ikkinchi javob yozilmaydi, galleon yo'q", A._yoz(1, dict(ASOS, qayerdan="
 check("javob berilgan", A._bormi(1) and not A._bormi(2))
 g2 = gal(2)
 check("qisqa yozma javob: yoziladi, galleon yo'q", A._yoz(2, dict(ASOS, oxirgi=["chat", "film"], qayerdan_kim="x"), "ru") == (True, 0) and gal(2) == g2)
-A._yoz(42, dict(ASOS, qayerdan="youtube"), "uz")
+A._yoz(42, dict(ASOS, qayerdan="tg_qidiruv"), "uz")
 p = A.panel((42,))
-check("panel: admin sanalmaydi", p["n"] == 2 and p["son"]["qayerdan"]["youtube"] == 0)
+check("panel: admin sanalmaydi", p["n"] == 2 and p["son"]["qayerdan"]["tg_qidiruv"] == 0)
 check("panel: sanoq", p["son"]["qayerdan"]["dost"] == 2 and p["son"]["oldin"]["tv"] == 2 and p["son"]["oxirgi"]["film"] == 2)
 check("panel: saralangan va sovg'a olgan soni", p["saralangan"] == 1 and p["sovga_olgan"] == 1)
 check("panel: yozma javob, odam idsiz", {"k": "aytdi_matn", "t": "Hamma film o'zbekchada bor", "til": "uz", "vaqt": p["matn"][-1]["vaqt"],
                                          "qayerdan": "dost", "yosh": None, "sar": 1} in p["matn"] and all("uid" not in m for m in p["matn"]))
+
+check("instagram endi yo'q variant", A.tekshir(dict(ASOS, qayerdan="instagram")) is None)
+g1 = gal(1)
+check("admin sinovi: javob o'chadi, sovg'a qaytariladi", A.qaytadan(1) and not A._bormi(1) and gal(1) == g1 - A.SOVGA)
+check("admin sinovi: javobsiz - hech narsa", A.qaytadan(1) is False)
+check("qaytadan javob berish mumkin", A._yoz(1, ASOS, "uz") == (True, A.SOVGA))
 
 # --- g'oyalar
 check("qisqa nom rad", G.yangi(2, "ab", "", "filmlar", "uz") == (False, "nom"))

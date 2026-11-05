@@ -4,7 +4,7 @@ Hamma foydalanuvchiga (saralanmaganga ham), bir marta. Savollar matni ilovada uc
 kalitlar - ilova yuborgan javob shu ro'yxat bilan tekshiriladi. Yangi so'rovnoma: ANKETA ni almashtiring (yangi id).
 YOQIQ = False bo'lsa faqat adminlarga ko'rinadi (ko'rik).
 Sovg'a: javob bergan odamga bir marta SOVGA galleon; yozma javobi bema'ni (MATN_KAM dan kam harf) bo'lsa sovg'a yo'q.
-So'rovlar - POST /api/anketa: {} holat, {javob: {kalit: qiymat | [qiymatlar] | matn}} javob.
+So'rovlar - POST /api/anketa: {} holat, {javob: {kalit: qiymat | [qiymatlar] | matn}} javob, {reset: 1} - faqat admin: o'z javobini o'chirish (sinov).
 Panel - GET /api/anketa/panel (X-Dash-Token): har variantga nechta javob va yozma javoblar (odam id siz).
 """
 
@@ -23,7 +23,7 @@ ANKETA = {
     "id": "qayerdan-2",
     "savollar": [
         {"k": "qayerdan", "tur": "bir", "shart": True,
-         "v": ("dost", "tg_kanal", "tg_guruh", "tg_qidiruv", "instagram", "tiktok", "youtube", "eslay_olmayman", "boshqa")},
+         "v": ("dost", "tg_kanal", "tg_guruh", "tg_qidiruv", "eslay_olmayman", "boshqa")},   # Instagram/TikTok/YouTube yo'q: u yerda kontent qo'yilmagan (egasi, 2026-11-05)
         {"k": "qayerdan_kim", "tur": "matn", "shart": False},
         {"k": "oldin", "tur": "bir", "shart": True,
          "v": ("tv", "tg_boshqa", "sayt", "youtube", "kinoteatr", "korilmagan", "boshqa")},
@@ -115,6 +115,22 @@ def _yoz(uid, toza, til):
         conn.close()
 
 
+def qaytadan(uid):
+    """Faqat admin sinovi uchun: o'z javobini o'chiradi va olgan sovg'a galleonini qaytarib oladi (0 dan pastga tushmaydi)."""
+    conn = hpcup._connect()
+    try:
+        r = conn.execute("SELECT galleon FROM anketa_javob WHERE anketa=? AND user_id=?", (ANKETA["id"], int(uid))).fetchone()
+        if not r:
+            return False
+        conn.execute("DELETE FROM anketa_javob WHERE anketa=? AND user_id=?", (ANKETA["id"], int(uid)))
+        if r["galleon"]:
+            conn.execute("UPDATE users SET galleons = MAX(0, COALESCE(galleons, 0) - ?) WHERE user_id=?", (int(r["galleon"]), int(uid)))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
 def panel(admin_ids=()):
     """Har savol bo'yicha sanoq (bitta javob - bitta odam) va yozma javoblar. Adminlar sanalmaydi."""
     conn = hpcup._connect()
@@ -158,6 +174,10 @@ async def api_anketa(request):
     admin = uid in _cfg.get("admin_ids", ())
     if not YOQIQ and not admin:
         return cors(web.json_response({"ok": True, "on": False}))
+    if body.get("reset") and admin:
+        await asyncio.to_thread(qaytadan, uid)
+        return cors(web.json_response({"ok": True, "on": True, "id": ANKETA["id"], "done": False, "preview": not YOQIQ,
+                                       "admin": True, "sovga": SOVGA, "kam": MATN_KAM}))
     if "javob" in body:
         toza = tekshir(body.get("javob"))
         if toza is None:
@@ -172,7 +192,7 @@ async def api_anketa(request):
         return cors(web.json_response({"ok": True, "on": True, "id": ANKETA["id"], "done": True, "yangi": yangi, "galleon": gal}))
     done = await asyncio.to_thread(_bormi, uid)
     return cors(web.json_response({"ok": True, "on": True, "id": ANKETA["id"], "done": done, "preview": not YOQIQ,
-                                   "sovga": SOVGA, "kam": MATN_KAM}))
+                                   "admin": admin, "sovga": SOVGA, "kam": MATN_KAM}))
 
 
 async def api_panel(request):
