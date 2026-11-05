@@ -33,8 +33,6 @@ ANKETA = {
          "v": ("film", "darslar", "bellashuv", "turnir", "chat", "qurbaqa", "soundtrack", "kitob", "maxluqlar", "eslay_olmayman")},
         {"k": "aytdimi", "tur": "bir", "shart": True, "v": ("ha", "yoq")},
         {"k": "aytdi_matn", "tur": "matn", "shart": False},
-        {"k": "kecha", "tur": "kop", "shart": False,
-         "v": ("instagram", "tiktok", "youtube", "facebook", "hech_biri")},
         {"k": "yosh", "tur": "bir", "shart": False, "v": ("12", "13_17", "18_24", "25_34", "35")},
     ],
 }

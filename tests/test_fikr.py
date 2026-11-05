@@ -54,10 +54,9 @@ def gal(u):
         c.close()
 
 ASOS = {"qayerdan": "dost", "oldin": "tv", "maqsad": "film_korish", "oxirgi": ["film"], "aytdimi": "yoq"}
-toza = A.tekshir(dict(ASOS, oxirgi=["chat", "yolgon", "film"], aytdimi="ha", aytdi_matn="  Hamma film o'zbekchada bor  ", yosh="99",
-                      kecha=["tiktok", "instagram"]))
+toza = A.tekshir(dict(ASOS, oxirgi=["chat", "yolgon", "film"], aytdimi="ha", aytdi_matn="  Hamma film o'zbekchada bor  ", yosh="99"))
 check("noto'g'ri variant tashlanadi, tartib ro'yxatdagidek",
-      toza == dict(ASOS, oxirgi=["film", "chat"], aytdimi="ha", aytdi_matn="Hamma film o'zbekchada bor", kecha=["instagram", "tiktok"]))
+      toza == dict(ASOS, oxirgi=["film", "chat"], aytdimi="ha", aytdi_matn="Hamma film o'zbekchada bor"))
 check("majburiy savolsiz rad", A.tekshir({"qayerdan": "dost", "oldin": "tv"}) is None)
 check("noto'g'ri bitta tanlov rad", A.tekshir(dict(ASOS, qayerdan="x")) is None)
 check("lug'at emas - rad", A.tekshir("salom") is None)
