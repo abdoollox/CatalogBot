@@ -71,7 +71,7 @@ MATN = {
         "house": ("Saralovchi qalpoq hali qaror qilmadi", "Savollarni oxirigacha javob bering - fakultetingiz e'lon qilinadi."),
         "kick": "🦉 <b>Boyo'g'li pochtasi</b>",
         "again": "Xogvarts sizni unutgani yo'q.",
-        "open": "🦉 Xatni o'qish",
+        "open": "🦉 Xatni o'qish", "anketa": "🪄 Savollarga javob berish",
         "off": "🔕 Telegramda kerak emas",
         "offed": "Yaxshi, endi xatlar faqat ilova ichidagi 🦉 pochtada bo'ladi. U yerdan qayta yoqishingiz mumkin.",
         "dm": "<b>%s</b> sizga shaxsiy xabar yozdi:", "dmN": "<b>%s</b> sizga %d ta shaxsiy xabar yozdi. Oxirgisi:",
@@ -100,7 +100,7 @@ MATN = {
         "house": ("Шляпа ещё не приняла решение", "Ответьте на вопросы до конца - и факультет будет объявлен."),
         "kick": "🦉 <b>Совиная почта</b>",
         "again": "Хогвартс вас не забыл.",
-        "open": "🦉 Прочитать письмо",
+        "open": "🦉 Прочитать письмо", "anketa": "🪄 Ответить на вопросы",
         "off": "🔕 Не нужно в Telegram",
         "offed": "Хорошо, теперь письма будут только в 🦉 почте внутри приложения. Там же можно включить снова.",
         "dm": "<b>%s</b> написал(а) вам личное сообщение:", "dmN": "<b>%s</b> написал(а) вам %d личных сообщений. Последнее:",
@@ -129,7 +129,7 @@ MATN = {
         "house": ("The Sorting Hat hasn't decided yet", "Answer the questions to the end and your house will be announced."),
         "kick": "🦉 <b>Owl Post</b>",
         "again": "Hogwarts hasn't forgotten you.",
-        "open": "🦉 Read the letter",
+        "open": "🦉 Read the letter", "anketa": "🪄 Answer the questions",
         "off": "🔕 Not in Telegram",
         "offed": "Fine - letters will now arrive only in the 🦉 post inside the app. You can turn this back on there.",
         "dm": "<b>%s</b> sent you a private message:", "dmN": "<b>%s</b> sent you %d private messages. The latest:",
@@ -387,9 +387,11 @@ async def _botga(bot, uid, pid, matn_ol, tugma=None, ovozsiz=False):
     kalit, qosh = tugma or ("open", "")
     # Bot xabarida "Telegramda kerak emas" tugmasi YO'Q (egasi, 2026-10-03): o'chirish faqat
     # ilovadagi pochta sozlamasidan. Eski xabarlardagi tugma ishlayveradi (owl_off).
+    # «anketa» tugmasi pochtani emas, to'g'ridan-to'g'ri so'rovnomani ochadi (js/09-anketa.js ankSp)
+    yol = "&anketa=1" if kalit == "anketa" else "&owl=1"
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t[kalit], web_app=WebAppInfo(
-            url="%s?lang=%s&owl=1%s" % (_cfg.get("webapp_url", ""), lang, qosh)))]])
+            url="%s?lang=%s%s%s" % (_cfg.get("webapp_url", ""), lang, yol, qosh)))]])
     holat = "xato"
     for urinish in range(2):
         try:
@@ -908,11 +910,11 @@ def xabar_matni(sarlavha, matn, lang):
             ("\n" + _esc(matn) if matn else ""))
 
 
-async def _tarqat(bot, tid, pidlar, sarlavha, matn, botga):
+async def _tarqat(bot, tid, pidlar, sarlavha, matn, botga, tugma=None):
     try:
         if botga:
             for i, (pid, uid) in enumerate(pidlar):
-                await _botga(bot, uid, pid, lambda lang: xabar_matni(sarlavha, matn, lang))
+                await _botga(bot, uid, pid, lambda lang: xabar_matni(sarlavha, matn, lang), tugma)
                 if i % 25 == 24:
                     await asyncio.to_thread(_tarqatma_sana, tid)
                 await asyncio.sleep(0.05)     # Telegram chegarasi: soniyasiga ~20 ta
@@ -1038,10 +1040,11 @@ async def api_tarqatma(request):
         if _tarqatma_band["id"]:
             return cors(web.json_response({"ok": False, "error": "band", "band": _tarqatma_band["id"]}, status=409))
         botga = bool(body.get("bot", True))
+        tugma = ("anketa", "") if body.get("tugma") == "anketa" else None      # panel: tugma so'rovnomani ochsin
         tid, pidlar = await asyncio.to_thread(_tarqatma_yarat, sarlavha, matn, kimga, botga,
                                               kimga.get("tur") == "men", uidlar)
         _tarqatma_band["id"] = tid
-        asyncio.create_task(_tarqat(_cfg["bot"], tid, pidlar, sarlavha, matn, botga))
+        asyncio.create_task(_tarqat(_cfg["bot"], tid, pidlar, sarlavha, matn, botga, tugma))
         return cors(web.json_response({"ok": True, "id": tid, "soni": len(uidlar)}))
     except Exception as e:
         logging.error("Tarqatma amalida xato (%s): %s", amal, e)

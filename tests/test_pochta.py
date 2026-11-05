@@ -247,6 +247,18 @@ async def test_tarqatma():
     r = await hppochta.api_pochta(Req({"initData": "203", "action": "list"}))
     check("lekin ilovada bor", json.loads(r.body)["unread"] == 1)
 
+    # So'rovnoma tugmasi: pochtani emas, so'rovnomani ochadi
+    oldin = len(bot.sent)
+    _, d = await so({"action": "yubor", "sarlavha": "Dambldor savol bermoqchi", "tugma": "anketa", "kimga": {"tur": "odam", "uid": 201}})
+    for _ in range(50):
+        if not hppochta._tarqatma_band["id"]:
+            break
+        await asyncio.sleep(0.05)
+    kb = [k for u, _, k in bot.sent[oldin:] if u == 201][0]
+    url = kb.inline_keyboard[0][0].web_app.url
+    check("so'rovnoma tugmasi: anketa=1, pochta emas", "anketa=1" in url and "owl=1" not in url
+          and kb.inline_keyboard[0][0].text == hppochta.MATN["uz"]["anketa"])
+
 
 async def test_shaxsiy():
     """Shaxsiy xabar: o'qilmasa xat + bot, takrorida son oshadi, o'qisa yopiladi."""
