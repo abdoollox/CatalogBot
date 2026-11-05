@@ -114,5 +114,13 @@ check("xat uch tilda, javob bilan", set(x) == {"uz", "ru", "en"} and "qabul qili
 rows = G.panel_royxat((42,))
 check("panel ro'yxati: ism va fakultet", len(rows) == G.KUNIGA + 1 and rows[-1]["ism"] == "U2" and rows[0]["uid"] == 1)
 
+d = G.devor()
+check("stol: qabul qilingan g'oya, ism bilan, batafsilsiz", len(d["stol"]) == 1 and d["stol"][0]["ism"] == "U2" and "batafsil" not in d["stol"][0] and not d["devor"])
+G.ozgartir(gid, holat="bajarildi")
+d = G.devor()
+check("bajarilsa devorga o'tadi", len(d["devor"]) == 1 and not d["stol"] and d["devor"][0]["nom"] == "Serial uchun alohida bo'lim")
+G.ozgartir(gid, holat="rad")
+check("rad etilgani hech qayerda yo'q", G.devor() == {"stol": [], "devor": []})
+
 print("So'rovnoma va g'oyalar: %d ta tekshiruv o'tdi, %d ta xato" % (ok, fail))
 sys.exit(1 if fail else 0)

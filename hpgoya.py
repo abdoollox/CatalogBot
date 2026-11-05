@@ -88,6 +88,24 @@ def panel_royxat(admin_ids=()):
     return out
 
 
+def devor(cheklov=40):
+    """Hammaga ko'rinadigan ro'yxatlar (Direktor xonasi): «stol» - qabul qilinganlar (ustida ishlanmoqda), «devor» - bajarilganlar.
+    Muallif ismi bilan (egasi, 2026-11-05: ko'rinsin); batafsil matn va javob ko'rsatilmaydi - faqat nomi."""
+    conn = hpcup._connect()
+    try:
+        rows = conn.execute("SELECT g.id, g.nom, g.bolim, g.holat, g.yangilandi, g.vaqt, u.first_name, u.house FROM goya g"
+                            " LEFT JOIN users u ON u.user_id = g.user_id WHERE g.holat IN ('qabul', 'bajarildi')"
+                            " ORDER BY COALESCE(g.yangilandi, g.vaqt) DESC LIMIT ?", (int(cheklov) * 2,)).fetchall()
+    finally:
+        conn.close()
+    stol, dev = [], []
+    for r in rows:
+        q = {"id": r["id"], "nom": r["nom"], "bolim": r["bolim"], "ism": hpcup.ism(r["first_name"] or "") or "Sehrgar",
+             "house": r["house"] if r["house"] in hpcup.UYLAR else None, "vaqt": r["yangilandi"] or r["vaqt"]}
+        (dev if r["holat"] == "bajarildi" else stol).append(q)
+    return {"stol": stol[:cheklov], "devor": dev[:cheklov]}
+
+
 def ozgartir(gid, holat=None, javob=None):
     """Holat va/yoki javob. Natija: o'zgargan qator (muallifga xat uchun) yoki None."""
     if holat is not None and holat not in HOLATLAR:
@@ -147,7 +165,8 @@ async def api_goya(request):
             except Exception:
                 pass
     royxat = await asyncio.to_thread(meniki, uid)
-    return cors(web.json_response({"ok": True, "on": True, "preview": not YOQIQ, "list": royxat, "bolimlar": BOLIMLAR, "kuniga": KUNIGA}))
+    umumiy = await asyncio.to_thread(devor)
+    return cors(web.json_response(dict(umumiy, ok=True, on=True, preview=not YOQIQ, list=royxat, bolimlar=BOLIMLAR, kuniga=KUNIGA)))
 
 
 async def api_panel(request):
