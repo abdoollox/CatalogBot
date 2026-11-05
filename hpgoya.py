@@ -14,6 +14,7 @@ from aiohttp import web
 
 import hpcup
 
+YOQIQ = False                  # False - faqat adminlarga (ko'rik); hammaga ochish: True
 BOLIMLAR = ("filmlar", "kutubxona", "xogvarts", "boshqa")
 HOLATLAR = ("yangi", "korildi", "qabul", "rad", "bajarildi")
 KUNIGA = 5                     # bir odam kuniga nechta g'oya yubora oladi
@@ -132,6 +133,9 @@ async def api_goya(request):
     if not user:
         return cors(web.json_response({"ok": False, "error": "bad_auth"}, status=403))
     uid = int(user["id"])
+    admin = uid in _cfg.get("admin_ids", ())
+    if not YOQIQ and not admin:
+        return cors(web.json_response({"ok": True, "on": False}))
     if isinstance(body.get("yangi"), dict):
         y = body["yangi"]
         ok, xato = await asyncio.to_thread(yangi, uid, y.get("nom"), y.get("batafsil"), y.get("bolim"), body.get("lang"))
@@ -143,7 +147,7 @@ async def api_goya(request):
             except Exception:
                 pass
     royxat = await asyncio.to_thread(meniki, uid)
-    return cors(web.json_response({"ok": True, "list": royxat, "bolimlar": BOLIMLAR}))
+    return cors(web.json_response({"ok": True, "on": True, "preview": not YOQIQ, "list": royxat, "bolimlar": BOLIMLAR, "kuniga": KUNIGA}))
 
 
 async def api_panel(request):

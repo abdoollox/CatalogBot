@@ -33,6 +33,9 @@ ANKETA = {
          "v": ("film", "darslar", "bellashuv", "turnir", "chat", "qurbaqa", "soundtrack", "kitob", "maxluqlar", "eslay_olmayman")},
         {"k": "aytdimi", "tur": "bir", "shart": True, "v": ("ha", "yoq")},
         {"k": "aytdi_matn", "tur": "matn", "shart": False},
+        # «Yo'q» desa - nega aytmagan (o'tgan holat haqida, «nima qilsak» emas - Mom Test; egasi, 2026-11-05)
+        {"k": "aytmadi_sabab", "tur": "bir", "shart": False, "v": ("eslamadim", "qiziqmaydi", "yangiman", "ishonch_yoq", "boshqa")},
+        {"k": "aytmadi_matn", "tur": "matn", "shart": False},
         {"k": "yosh", "tur": "bir", "shart": False, "v": ("12", "13_17", "18_24", "25_34", "35")},
     ],
 }

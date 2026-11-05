@@ -81,6 +81,9 @@ check("panel: saralangan va sovg'a olgan soni", p["saralangan"] == 1 and p["sovg
 check("panel: yozma javob, odam idsiz", {"k": "aytdi_matn", "t": "Hamma film o'zbekchada bor", "til": "uz", "vaqt": p["matn"][-1]["vaqt"],
                                          "qayerdan": "dost", "yosh": None, "sar": 1} in p["matn"] and all("uid" not in m for m in p["matn"]))
 
+check("aytmagan sababi va izohi", A.tekshir(dict(ASOS, aytmadi_sabab="ishonch_yoq", aytmadi_matn="Seriya yo'q"))["aytmadi_sabab"] == "ishonch_yoq")
+check("noto'g'ri sabab tashlanadi", "aytmadi_sabab" not in A.tekshir(dict(ASOS, aytmadi_sabab="yolgon")))
+check("sabab izohi qisqa - sovg'a yo'q", not A.sovga_mi(dict(ASOS, aytmadi_sabab="boshqa", aytmadi_matn="..")))
 check("instagram endi yo'q variant", A.tekshir(dict(ASOS, qayerdan="instagram")) is None)
 g1 = gal(1)
 check("admin sinovi: javob o'chadi, sovg'a qaytariladi", A.qaytadan(1) and not A._bormi(1) and gal(1) == g1 - A.SOVGA)
