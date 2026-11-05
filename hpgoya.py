@@ -90,10 +90,11 @@ def panel_royxat(admin_ids=()):
 
 def devor(cheklov=40):
     """Hammaga ko'rinadigan ro'yxatlar (Direktor xonasi): «stol» - qabul qilinganlar (ustida ishlanmoqda), «devor» - bajarilganlar.
-    Muallif ismi bilan (egasi, 2026-11-05: ko'rinsin); batafsil matn va javob ko'rsatilmaydi - faqat nomi."""
+    Muallif ismi bilan (egasi, 2026-11-05: ko'rinsin). Batafsil matn va javob ham (egasi, 2026-11-05: bosilsa batafsil
+    ko'rinsin; formada «qabul qilingan g'oyalar boshqalarga ham ko'rinadi» deb ogohlantiriladi). Rad etilgan/yangi - faqat muallifga."""
     conn = hpcup._connect()
     try:
-        rows = conn.execute("SELECT g.id, g.nom, g.bolim, g.holat, g.yangilandi, g.vaqt, u.first_name, u.house FROM goya g"
+        rows = conn.execute("SELECT g.id, g.nom, g.batafsil, g.javob, g.bolim, g.holat, g.yangilandi, g.vaqt, u.first_name, u.house FROM goya g"
                             " LEFT JOIN users u ON u.user_id = g.user_id WHERE g.holat IN ('qabul', 'bajarildi')"
                             " ORDER BY COALESCE(g.yangilandi, g.vaqt) DESC LIMIT ?", (int(cheklov) * 2,)).fetchall()
     finally:
@@ -101,7 +102,8 @@ def devor(cheklov=40):
     stol, dev = [], []
     for r in rows:
         q = {"id": r["id"], "nom": r["nom"], "bolim": r["bolim"], "ism": hpcup.ism(r["first_name"] or "") or "Sehrgar",
-             "house": r["house"] if r["house"] in hpcup.UYLAR else None, "vaqt": r["yangilandi"] or r["vaqt"]}
+             "house": r["house"] if r["house"] in hpcup.UYLAR else None, "vaqt": r["vaqt"],
+             "batafsil": r["batafsil"] or "", "javob": r["javob"] or ""}
         (dev if r["holat"] == "bajarildi" else stol).append(q)
     return {"stol": stol[:cheklov], "devor": dev[:cheklov]}
 
