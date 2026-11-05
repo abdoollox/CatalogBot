@@ -87,7 +87,7 @@ MATN = {
         "cupGal": "Mukofot: +%s galleon hamyoningizga tushdi.",
         "galB": "%s ball → %s galleon", "galW": "fakultet yutdi, ikki baravar → %s", "galT": "eng yaxshi uchlik +%s",
         "galJ": "Jami +%s galleon hamyoningizga tushdi.",
-        "houses": {"gryffindor": "Grifindor", "slytherin": "Sliterin", "ravenclaw": "Reyvenklo", "hufflepuff": "Xaffelpaff"},
+        "houses": {"gryffindor": "Grifindor", "slytherin": "Slizerin", "ravenclaw": "Reyvenklo", "hufflepuff": "Xaffelpaff"},
         "badges": {"all_films": "Sakkiz qism", "flawless_exam": "Benuqson imtihon", "perfect_week": "Mukammal hafta", "streak_7": "Yetti kun ketma-ket"},
     },
     "ru": {

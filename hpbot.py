@@ -37,7 +37,7 @@ _cfg = {
 
 HOUSE_NAME = {
     "gryffindor": "Grifindor",
-    "slytherin": "Sliterin",
+    "slytherin": "Slizerin",
     "ravenclaw": "Reyvenklo",
     "hufflepuff": "Xaffelpaff",
 }

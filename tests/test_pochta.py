@@ -238,7 +238,7 @@ async def test_tarqatma():
     check("ilovada xat matni bilan", x["tur"] == "xabar" and x["title"] == "Grifindor, oldindasiz!" and x["text"])
 
     # Bot xabarini o'chirgan odamga faqat ilovada
-    _, d = await so({"action": "yubor", "sarlavha": "Sliterinlar", "kimga": {"tur": "odam", "uid": 203}})
+    _, d = await so({"action": "yubor", "sarlavha": "Slizerinlar", "kimga": {"tur": "odam", "uid": 203}})
     for _ in range(50):
         if not hppochta._tarqatma_band["id"]:
             break
@@ -341,7 +341,7 @@ async def test_kubok():
     t401 = [t for u, t, _ in bot.sent if u == 401][0]
     check("g'olib fakultet a'zosiga tabrik", "kubokni oldi" in t401 and "300" in t401)
     t403 = [t for u, t, _ in bot.sent if u == 403][0]
-    check("yutqazganga o'rni va nishoni", "Sliterin" in t403 and "2-o'rinda" in t403 and "Yetti kun" in t403)
+    check("yutqazganga o'rni va nishoni", "Slizerin" in t403 and "2-o'rinda" in t403 and "Yetti kun" in t403)
     kb = [k for u, _, k in bot.sent if u == 403][0]
     check("tugma kubokka olib boradi", "cup=1" in kb.inline_keyboard[0][0].web_app.url)
     check("yangi hafta hali yopilmagan - xat yo'q", hppochta._kubok_yangi() == [])

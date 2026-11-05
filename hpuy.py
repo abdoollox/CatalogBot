@@ -29,7 +29,7 @@ HOUSES = {
     "gryffindor": {"rang": (217, 82, 74), "uz": "Grifindor", "ru": "Гриффиндор", "en": "Gryffindor",
                    "note_uz": "Jasorat, matonat va yurak amri", "note_ru": "Храбрость, стойкость и зов сердца",
                    "note_en": "Courage, nerve and heart"},
-    "slytherin": {"rang": (47, 163, 107), "uz": "Sliterin", "ru": "Слизерин", "en": "Slytherin",
+    "slytherin": {"rang": (47, 163, 107), "uz": "Slizerin", "ru": "Слизерин", "en": "Slytherin",
                   "note_uz": "Maqsad, zukkolik va o'z yo'li", "note_ru": "Амбиции, хитрость и свой путь",
                   "note_en": "Ambition, cunning and a path of one's own"},
     "ravenclaw": {"rang": (91, 143, 217), "uz": "Reyvenklo", "ru": "Когтевран", "en": "Ravenclaw",

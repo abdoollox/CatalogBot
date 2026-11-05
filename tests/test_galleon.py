@@ -55,7 +55,7 @@ async def amain():
     check("imtihon o'chirilgan, eng ko'p ball 230 (sandiq bilan)", hpcup.EXAM_ON is False and hpcup.MAX_POINTS == 230
           and "exam" not in hpcup.SOURCE_KEYS)
 
-    # Odamlar: 1,3 - Grifindor; 2 - Sliterin; 5 - saralanmagan; -9 - sinov o'quvchisi
+    # Odamlar: 1,3 - Grifindor; 2 - Slizerin; 5 - saralanmagan; -9 - sinov o'quvchisi
     for uid, uy in ((1, "gryffindor"), (2, "slytherin"), (3, "gryffindor"), (5, None), (-9, "gryffindor")):
         await hpcup.touch_user(uid, "Sehrgar %d" % uid)
         if uy:
