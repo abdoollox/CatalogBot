@@ -14,7 +14,7 @@ from aiohttp import web
 
 import hpcup
 
-YOQIQ = False                  # False - faqat adminlarga (ko'rik); hammaga ochish: True
+YOQIQ = True                   # False - faqat adminlarga (ko'rik); hammaga ochish: True (egasi, 2026-11-05)
 BOLIMLAR = ("filmlar", "kutubxona", "xogvarts", "boshqa")
 HOLATLAR = ("yangi", "korildi", "qabul", "rad", "bajarildi")
 KUNIGA = 5                     # bir odam kuniga nechta g'oya yubora oladi
