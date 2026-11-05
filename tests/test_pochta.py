@@ -354,5 +354,9 @@ if __name__ == "__main__":
     asyncio.run(test_tarqatma())
     asyncio.run(test_shaxsiy())
     asyncio.run(test_kubok())
+    # Foks xati (Direktor xonasi): pochtada alohida tur, ma'lumoti bilan
+    asyncio.run(hppochta.foks_xat(301, {"id": 7, "nom": "Serial bo'limi", "holat": "qabul", "javob": "Rahmat"}))
+    fx = [x for x in hppochta._royxat(301)["items"] if x["tur"] == "foks"]
+    check("foks xati ro'yxatda, ma'lumoti bilan", len(fx) == 1 and fx[0]["foks"]["nom"] == "Serial bo'limi" and not fx[0]["read"])
     print("O'tdi: %d, xato: %d" % (ok, fail))
     sys.exit(1 if fail else 0)

@@ -2897,7 +2897,7 @@ async def main():
                                  "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN)})
         hpgoya.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS,
                                "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN),
-                               "xat": lambda uid, matnlar: hppochta.odamga_xat(uid, matnlar, botga=False)})
+                               "xat": lambda uid, d: hppochta.foks_xat(uid, d)})
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpmjang.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
                                "elon": hppochta.saralanganlarga_tarqat, "admin_ids": ADMIN_IDS})

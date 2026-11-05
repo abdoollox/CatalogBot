@@ -1,8 +1,8 @@
 """G'oyalar qutisi (egasi, 2026-11-04): Notion'dagi g'oya so'rovnomasi endi ilova ichida, nazorati - kuzatuv panelida.
 
 Har foydalanuvchi (saralanmagan ham) g'oya yozadi: qisqa nomi (majburiy), batafsil, bo'lim. Holati: yangi -> korildi ->
-qabul / rad -> bajarildi. Egasi paneldan holat va javob qo'yadi; holat o'zgarsa yoki javob yozilsa muallifga boyo'g'li xati
-boradi (faqat ilovada, botga emas). O'quvchi «Mening g'oyalarim»da holatni ko'radi.
+qabul / rad -> bajarildi. Egasi paneldan holat va javob qo'yadi; holat o'zgarsa yoki javob yozilsa muallifga FOKS xati
+boradi (boyo'g'li pochtasida, alohida ko'rinishda; botga emas). O'quvchi «Mening g'oyalarim»da holatni ko'radi.
 So'rovlar - POST /api/goya: {} o'z g'oyalari, {yangi: {nom, batafsil, bolim}} yangi g'oya.
 Panel - POST /api/goya/panel (X-Dash-Token): {} ro'yxat, {id, holat?, javob?} yangilash.
 """
@@ -119,7 +119,7 @@ def ozgartir(gid, holat=None, javob=None):
         j = r["javob"] if javob is None else (str(javob).strip()[:JAVOB_MAX] or None)
         conn.execute("UPDATE goya SET holat=?, javob=?, yangilandi=? WHERE id=?", (h, j, hpcup._utc_iso(hpcup.now_tk()), int(gid)))
         conn.commit()
-        return {"uid": r["user_id"], "nom": r["nom"], "holat": h, "javob": j,
+        return {"id": r["id"], "uid": r["user_id"], "nom": r["nom"], "holat": h, "javob": j,
                 "xat": (h != r["holat"] and h != "yangi") or (javob is not None and (j or "") != (r["javob"] or ""))}
     finally:
         conn.close()
@@ -185,7 +185,7 @@ async def api_panel(request):
             return cors(web.json_response({"ok": False, "error": "topilmadi"}, status=400))
         if r["xat"] and _cfg.get("xat"):
             try:
-                await _cfg["xat"](r["uid"], xat_matni(r["nom"], r["holat"], r["javob"]))
+                await _cfg["xat"](r["uid"], {"id": r["id"], "nom": r["nom"], "holat": r["holat"], "javob": r["javob"] or ""})
             except Exception as e:
                 logging.warning("G'oya xati ketmadi (%s): %s", r["uid"], e)
     rows = await asyncio.to_thread(panel_royxat, tuple(_cfg.get("admin_ids", ())))
@@ -193,7 +193,7 @@ async def api_panel(request):
 
 
 def register(app, cfg):
-    """cfg: verify_init_data, cors, log, admin_ids, dash_ok, xat (uid, {til: (sarlavha, matn)})."""
+    """cfg: verify_init_data, cors, log, admin_ids, dash_ok, xat (uid, {id, nom, holat, javob}) - Foks xati (hppochta.foks_xat)."""
     _cfg.update(cfg)
     _init()
     app.router.add_route("*", "/api/goya", api_goya)

@@ -475,6 +475,11 @@ def _royxat(uid):
                 x["cup"] = json.loads(r["dm_matn"] or "{}")
             except ValueError:
                 x["cup"] = {}
+        elif r["tur"] == "foks":
+            try:
+                x["foks"] = json.loads(r["dm_matn"] or "{}")
+            except ValueError:
+                x["foks"] = {}
         elif r["tur"] == "dm":
             x["from"], x["name"], x["text"] = r["kimdan"], r["ism"] or "", r["dm_matn"] or ""
         items.append(x)
@@ -929,6 +934,24 @@ async def odamga_xat(uid, matnlar, botga=True):
         for pid, u in pidlar:
             await _botga(_cfg["bot"], u, pid, lambda l: xabar_matni(sarlavha, matn, l))
     await asyncio.to_thread(_tarqatma_sana, tid, True)
+
+
+def _foks_yoz(uid, d):
+    conn = _ulan()
+    try:
+        cur = conn.execute("INSERT INTO pochta (user_id, tur, n, yaratildi, matn) VALUES (?,?,?,?,?)",
+                           (int(uid), "foks", 1, _hozir(), json.dumps(d, ensure_ascii=False)))
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+async def foks_xat(uid, d):
+    """Direktor xonasi: g'oya holati o'zgardi yoki javob yozildi - xatni Foks olib keladi (egasi, 2026-11-05).
+    Boyo'g'li pochtasida turadi, lekin alohida ko'rinishda (gazeta kartasi kabi); botga yuborilmaydi.
+    d = {id, nom, holat, javob} - matnni ilova o'z tilida yozadi."""
+    return await asyncio.to_thread(_foks_yoz, uid, d)
 
 
 async def tilda_tarqat(matnlar, botga=True):
