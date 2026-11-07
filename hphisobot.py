@@ -218,7 +218,7 @@ async def ai_izoh(h):
     dalil = {
         "kecha": "%s, %s" % (k.isoformat(), HAFTA[k.weekday()]),
         "kechagi_turnir_22_00": TURNIR.get(k.weekday()),
-        "korsatkichlar": [{"nom": m["n"], "y": m["y"], "mu": round(m["mu"], 1), "min": m["min"], "max": m["max"],
+        "korsatkichlar": [{"nom": m["n"], "y": m["y"], "mu": round(m["mu"]), "min": m["min"], "max": m["max"],
                            "sezilarli": m["belgi"]} for m in h["natija"]],
         "yolda_eng_kop_yoqotish": ({"dan": h["eng"]["dan"][0], "ga": h["eng"]["ga"][0], "foiz": round(h["eng"]["yoq"] * 100)}
                                    if h.get("eng") else None),
