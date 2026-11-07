@@ -52,6 +52,7 @@ import hpsorov
 import hpgazeta
 import hpanketa
 import hpgoya
+import hphisobot
 import hpdokon
 import hptosh
 import hpmjang
@@ -2928,6 +2929,12 @@ async def main():
                                          "log": _pleyer_log})
     except Exception as pleyer_error:
         logging.error("Pleyer moduli ishga tushmadi: %s", pleyer_error)
+
+    # --- Kunlik kuzatuv hisoboti (adminlarga ertalab) va bepul AI kaliti (/ai) ---
+    try:
+        hphisobot.register(dp, bot, {"admin_ids": ADMIN_IDS})
+    except Exception as hisobot_error:
+        logging.error("Kunlik hisobot moduli ishga tushmadi: %s", hisobot_error)
 
     # --- Chiqib ketish so'rovi ---
     # Alohida try: bu ishlamay qolsa ham bot kino tarqatishda davom etsin.
