@@ -16,7 +16,7 @@ from aiohttp import web
 
 import hpcup
 
-YOQIQ = False
+YOQIQ = True                   # hammaga ochildi (egasi, 2026-11-07)
 # 2-nusxa (egasi, 2026-11-04): «The Mom Test» qoidalari bo'yicha - fikr va kelajak emas, o'tgan aniq voqealar
 # (qayerda bildi, oldin nima ishlatardi, birinchi kuni nima qilmoqchi edi, oxirgi marta nima qildi, kimga nima deb aytdi).
 ANKETA = {
