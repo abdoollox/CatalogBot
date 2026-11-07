@@ -53,6 +53,7 @@ import hpgazeta
 import hpanketa
 import hpgoya
 import hphisobot
+import hpgoyaai
 import hpdokon
 import hptosh
 import hpmjang
@@ -2899,6 +2900,8 @@ async def main():
         hpgoya.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS,
                                "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN),
                                "xat": lambda uid, d: hppochta.foks_xat(uid, d)})
+        hpgoyaai.register(app, {"cors": _cors,
+                                "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN)})
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})
         hpmjang.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "xat": hppochta.odamga_xat,
                                "elon": hppochta.saralanganlarga_tarqat, "admin_ids": ADMIN_IDS})
