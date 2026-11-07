@@ -41,6 +41,16 @@ _FILM = re.compile(r"^(?:web_|bot_)?[a-z]{2}\d+_(uz|ru|en)")
 OYLAR = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"]
 
 _cfg = {}
+HAFTA = ["dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba", "yakshanba"]
+TURNIR = {0: "Supurgi poygasi", 1: "Toshchalar", 2: "Shaxmat", 4: "Viktorina", 5: "Maxluqlar jangi", 6: "Duel"}   # 22:00
+AI_MODELLAR = ("gemini-3.5-flash", "gemini-flash-lite-latest")
+AI_PROMPT = """Sen Garri Potter kolleksiyasi (Telegram bot + ilova) egasining tahlilchisisan. Quyida kechagi kun bo'yicha
+ko'rsatkichlar (y - kecha, mu - oldingi 7 kun o'rtachasi, min/max - o'sha 7 kun), kechagi turnir va kecha yuborilgan ommaviy
+xabarlar berilgan. O'zbek (lotin) tilida 2-4 ta qisqa band yoz, har biri «• » bilan boshlansin:
+- eng muhim o'zgarishlar va ular bir-biriga qanday bog'liq bo'lishi mumkinligi;
+- sabab haqida faqat ehtimol shaklida («... sabab bo'lishi mumkin»), faqat berilgan ma'lumotga tayan, voqea to'qima;
+- oxirgi band: bugun nimani tekshirish kerak (aniq, bitta-ikkita ish).
+Raqamlarni keltir. Jami 600 belgidan oshmasin. Salomlashma, xulosa sarlavhasi yozma."""
 
 
 # ---------------------------------------------------------------- hisob
@@ -117,6 +127,14 @@ def hisob(bugun=None):
             goya = [r["vaqt"] for r in conn.execute("SELECT vaqt FROM goya WHERE holat='yangi'")]
         except Exception:
             pass
+        xabarlar = {}
+        try:
+            for r in conn.execute("SELECT sarlavha, jami, yaratildi FROM tarqatma WHERE sinov=0 AND yaratildi >= ?",
+                                  ((datetime.combine(kecha, datetime.min.time()) - timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%S"),)):
+                if _tk_kun(r["yaratildi"]) == kecha:
+                    x = xabarlar.setdefault(r["sarlavha"], [0, 0]); x[0] += 1; x[1] += r["jami"] or 0
+        except Exception:
+            pass
     finally:
         conn.close()
 
@@ -150,14 +168,19 @@ def hisob(bugun=None):
             eski = min(datetime.fromisoformat(str(v).replace("Z", "+00:00")) for v in goya)
         except ValueError:
             eski = None
-    return {"kecha": kecha, "natija": natija, "eng": eng, "goya": len(goya), "goya_eski": eski}
+    xab = sorted(({"sarlavha": k, "necha_marta": v[0], "kishi": v[1]} for k, v in xabarlar.items()), key=lambda x: -x["kishi"])[:6]
+    return {"kecha": kecha, "natija": natija, "eng": eng, "goya": len(goya), "goya_eski": eski, "xabarlar": xab}
 
 
 def _son(n):
     return "{:,}".format(int(round(n))).replace(",", " ")
 
 
-def matn(h):
+def _esc(t):
+    return str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def matn(h, izoh=None):
     k = h["kecha"]
     q = ["📊 <b>Kuzatuv: kecha, %d-%s</b>" % (k.day, OYLAR[k.month - 1]),
          "<i>oldingi 7 kunning o'rtachasi bilan solishtirildi</i>", ""]
@@ -180,15 +203,57 @@ def matn(h):
     oddiy = [m for m in h["natija"] if not m["belgi"] and (m["y"] or m["mu"])]
     if oddiy:
         q += ["", "<i>Odatdagidek: " + " · ".join("%s %s" % (m["n"].replace("Yo'l: ", ""), _son(m["y"])) for m in oddiy) + "</i>"]
+    if izoh:
+        q += ["", "🔮 <b>AI izohi</b> <i>(taxmin, raqamlarni tekshiring)</i>", _esc(izoh.strip())[:900]]
     return "\n".join(q)
+
+
+async def ai_izoh(h):
+    """Kechagi raqamlarga AI izohi (bepul Gemini). Kalit yo'q yoki xato bo'lsa - None, hisobot izohsiz ketadi."""
+    kalit = ai_kalit()
+    if not kalit:
+        return None
+    import aiohttp
+    k = h["kecha"]
+    dalil = {
+        "kecha": "%s, %s" % (k.isoformat(), HAFTA[k.weekday()]),
+        "kechagi_turnir_22_00": TURNIR.get(k.weekday()),
+        "korsatkichlar": [{"nom": m["n"], "y": m["y"], "mu": round(m["mu"], 1), "min": m["min"], "max": m["max"],
+                           "sezilarli": m["belgi"]} for m in h["natija"]],
+        "yolda_eng_kop_yoqotish": ({"dan": h["eng"]["dan"][0], "ga": h["eng"]["ga"][0], "foiz": round(h["eng"]["yoq"] * 100)}
+                                   if h.get("eng") else None),
+        "javob_kutayotgan_goyalar": h["goya"],
+        "kecha_yuborilgan_ommaviy_xabarlar": h.get("xabarlar") or [],
+    }
+    body = {"contents": [{"role": "user", "parts": [{"text": AI_PROMPT + "\n\nMa'lumot (JSON):\n" + json.dumps(dalil, ensure_ascii=False)}]}],
+            "generationConfig": {"temperature": 0.4, "thinkingConfig": {"thinkingLevel": "low"}}}
+    try:
+        async with aiohttp.ClientSession() as s:
+            for m in AI_MODELLAR:
+                try:
+                    async with s.post("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent" % m,
+                                      json=body, headers={"x-goog-api-key": kalit},
+                                      timeout=aiohttp.ClientTimeout(total=90)) as r:
+                        if r.status != 200:
+                            continue
+                        j = await r.json()
+                        t = "".join(p.get("text", "") for p in j["candidates"][0]["content"]["parts"]).strip()
+                        if t:
+                            return t
+                except Exception:
+                    continue
+    except Exception as e:
+        logging.error("AI izohi: %s", e)
+    return None
 
 
 async def yubor(bot, kimga):
     h = await asyncio.to_thread(hisob)
+    izoh = await ai_izoh(h)
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Panelni ochish", url=PANEL_URL)]])
     for uid in kimga:
         try:
-            await bot.send_message(uid, matn(h), parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+            await bot.send_message(uid, matn(h, izoh), parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
         except Exception as e:
             logging.error("Kunlik hisobot yuborilmadi (%s): %s", uid, e)
 

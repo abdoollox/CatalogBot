@@ -86,6 +86,12 @@ conn.commit(); conn.close()
 t = H.matn(H.hisob(BUGUN))
 check("g'oya qatori va eskiligi", "Javob kutayotgan g'oyalar: <b>1</b> (eng eskisi 3 kunlik)" in t)
 
+# AI izohi: matn oxirida, HTML belgilar xavfsiz; kalit yo'q bo'lsa izoh so'ralmaydi
+t3 = H.matn(H.hisob(BUGUN), "• Kanaldan chiqish <ko'paydi> & tekshiring")
+check("AI izohi qo'shildi va xavfsiz", "AI izohi" in t3 and "&lt;ko'paydi&gt; &amp; tekshiring" in t3)
+check("kalitsiz AI izohi yo'q", asyncio.run(H.ai_izoh(H.hisob(BUGUN))) is None)
+check("kechagi ommaviy xabarlar maydoni bor", isinstance(H.hisob(BUGUN)["xabarlar"], list))
+
 # Bo'sh kun: hammasi odatdagidek
 t2 = H.matn(H.hisob(date(2026, 12, 20)))
 check("o'zgarish yo'q bo'lsa xabar", "hammasi odatdagidek" in t2)
