@@ -274,17 +274,24 @@ async def on_ai(message: types.Message):
             await message.delete()                      # kalit chatda qolmasin
         except Exception:
             pass
-        if len(bolak) != 3 or not re.match(r"^AIza[0-9A-Za-z_\-]{30,}$", bolak[2]):
-            await message.answer("Yozilishi: /ai kalit <kalit>\nKalit «AIza» bilan boshlanadi (Google AI Studio → Get API key).")
+        # Kalit ko'rinishi Google'da o'zgarib turadi («AIza…», yangilari boshqacha) - shaklini emas,
+        # Google qabul qilishini tekshiramiz; <>, qo'shtirnoq va bo'sh joylar olib tashlanadi.
+        kalit = "".join(bolak[2:]).strip("<>\"'«»`")
+        if not re.match(r"^[0-9A-Za-z_.\-]{20,300}$", kalit):
+            await message.answer("Kalit topilmadi. Yozilishi: /ai kalit KALIT\n(Google AI Studio → Get API key → nusxa oling, "
+                                 "<> belgisiz qo'ying)")
             return
-        await asyncio.to_thread(_ai_saqla, bolak[2])
-        st = await _ai_tekshir(bolak[2])
-        await message.answer("Kalit saqlandi ✅ va ishlayapti." if st == 200 else
-                             "Kalit saqlandi, lekin Google uni qabul qilmadi (javob: %s). Kalitni tekshiring." % st)
+        st = await _ai_tekshir(kalit)
+        if st != 200:
+            await message.answer("Google bu kalitni qabul qilmadi (javob: %s), kalit saqlanmadi. "
+                                 "Kalitni AI Studio'dan qaytadan nusxa olib, yana yuboring." % st)
+            return
+        await asyncio.to_thread(_ai_saqla, kalit)
+        await message.answer("Kalit saqlandi ✅ va ishlayapti.")
         return
     k = ai_kalit()
     await message.answer(("AI kaliti: bor (…%s)" % k[-4:] if k else "AI kaliti: yo'q") +
-                         "\n\nBuyruqlar: /ai kalit <kalit>  |  /hisobot — kunlik hisobotni hozir olish")
+                         "\n\nBuyruqlar: /ai kalit KALIT  |  /hisobot — kunlik hisobotni hozir olish")
 
 
 async def on_hisobot(message: types.Message):
