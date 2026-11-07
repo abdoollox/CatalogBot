@@ -55,7 +55,8 @@ for i in range(2, 9):
     for j in range(2):
         uid += 1; yoz(uid, "subscribed", kun); yoz(uid, "left", kun, 13)
     for j in range(20):
-        yoz(5, "web_hp1_uz@hd", kun)
+        yoz(5, "hp1_uz" if j % 2 else "web_hp1_uz@hd", kun)
+    yoz(5, "pleyer_hp1_uz@hd", kun)           # pleyer sanalmaydi
 # Kecha: 15 kishi chiqdi (+ takroriy «left» yozuvlari sanalmasin), filmlar 4 ta
 kecha = BUGUN - timedelta(days=1)
 for j in range(15):

@@ -36,7 +36,8 @@ KORSATKICH = [
     ("sabab", "Norozi bo'lib chiqqanlar", -1), ("blok", "Botni bloklaganlar", -1),
     ("film", "Olingan filmlar", 1), ("dars", "Dars o'tganlar", 1), ("bell", "Bellashuvda qatnashganlar", 1),
 ] + [("y_" + k, "Yo'l: " + n, 1) for k, n in YOL]
-_FILM = re.compile(r"^(web|bot)_[a-z]{2}\d+_(uz|ru|en)")
+# Bazada film «hp1_uz» (ba'zan «web_/bot_» bilan) bo'lib yoziladi; «pleyer_» - ilovada tomosha, sanalmaydi (panel ham)
+_FILM = re.compile(r"^(?:web_|bot_)?[a-z]{2}\d+_(uz|ru|en)")
 OYLAR = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"]
 
 _cfg = {}
