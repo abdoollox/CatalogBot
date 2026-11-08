@@ -81,7 +81,7 @@ async def amain():
     await hpcup.touch_user(2, "Ron")
     d = await ask(1)
     check("yangi odamda nishon yo'q; serial ochilmaguncha uning nishoni ro'yxatda yo'q", d["ok"] and d["count"] == 0
-          and d["total"] == 34 and len(d["list"]) == 34 and d["new"] == [] and "serial_1" not in [x["code"] for x in d["list"]])
+          and d["total"] == 35 and len(d["list"]) == 35 and d["new"] == [] and "serial_1" not in [x["code"] for x in d["list"]])
 
     # «Bexato hafta» (2026-10-24): bir haftada 5 kun tarix bellashuvi xatosiz
     sql("CREATE TABLE IF NOT EXISTS dars_bellashuv (kun TEXT, dars TEXT, user_id INTEGER, ms INTEGER, xato INTEGER DEFAULT 0,"
@@ -96,7 +96,7 @@ async def amain():
     check("bexato hafta: 5 kun - olindi", "perfect_week" in got(await ask(7)))
     import hpserial
     hpserial._data["ochiq"] = True
-    check("serial ochilgach nishoni ko'rinadi", (await ask(1))["total"] == 35)
+    check("serial ochilgach nishoni ko'rinadi", (await ask(1))["total"] == 36)
     hpserial._data["ochiq"] = False
 
     # Filmlar: botdan, ilovadan (web_ va sifat bilan), 3 tilda
@@ -216,7 +216,7 @@ async def amain():
     d = json.loads(r.body)
     check("profil: boshqa odam", d["ok"] and d["name"] == "Garri" and d["house"] == "gryffindor" and d["me"] is False
           and d["wand"] == {"wood": "holly", "core": "phoenix", "flex": "rigid"} and d["patronus"] == "stag"
-          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] - 9 and d["creatures"] == [] and len(d["plants"]) == 2 and len(d["cards_list"]) == d["cards"] and isinstance(d["skills"], list) and d["points"]["all"] >= 20)
+          and d["films"] == 11 and len(d["badges"]) == d["badges_total"] - 10 and d["creatures"] == [] and len(d["plants"]) == 2 and len(d["cards_list"]) == d["cards"] and isinstance(d["skills"], list) and d["points"]["all"] >= 20)
     d = json.loads((await hpprofil.api_profil(Req({}, init="3"))).body)
     check("profil: o'zi, fakultetsiz", d["me"] is True and d["house"] is None and d["wand"]["wood"] == "cherry" and d["chess"] is None)
     check("profil: yo'q odam 404, imzosiz 403", (await hpprofil.api_profil(Req({"uid": 999}, init="2"))).status == 404

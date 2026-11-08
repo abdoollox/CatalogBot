@@ -58,16 +58,16 @@ check("id bilan topish", D.top("8")[0] == 8)
 check("yo'q odam", D.top("@nobody_here") is None and D.top("<script>") is None)
 
 kodlar = lambda uid: [x["code"] for x in hpnishon._royxat(uid)["list"]]
-check("homiy nishoni olinmaguncha ko'rinmaydi", "homiy" not in kodlar(7))
+check("homiy nishoni olinmagan bo'lib ko'rinadi", any(b["code"] == "homiy" and not b["got"] for b in hpnishon._royxat(7)["list"]))
 tot0 = hpnishon._royxat(7)["total"]
 check("yangi homiy", D.ber(7, "taps 50 000") is True)
 check("takror berilmaydi", D.ber(7) is False)
 r = hpnishon._royxat(7)
 check("homiy nishoni olindi", any(x["code"] == "homiy" and x["got"] for x in r["list"]) and "homiy" in r["new"])
-check("jami o'zgarmadi + 1", r["total"] == tot0 + 1)
+check("jami o'zgarmadi", r["total"] == tot0)
 rw = D.royxat()
 check("ro'yxatda", len(rw) == 1 and rw[0]["username"] == "Malika_HP" and rw[0]["izoh"] == "taps 50 000")
-check("olib tashlash", D.olib_tashla(7) and D.royxat() == [] and "homiy" not in kodlar(7))
+check("olib tashlash", D.olib_tashla(7) and D.royxat() == [] and not any(b["code"] == "homiy" and b["got"] for b in hpnishon._royxat(7)["list"]))
 
 # panel: token, berish va rahmat xati
 xatlar = []

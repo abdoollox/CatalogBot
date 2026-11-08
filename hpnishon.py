@@ -43,7 +43,7 @@ NISHONLAR = (
     ("duel_golib", "maydon"), ("rekord_top", "maydon"),
     # Yuqori kurslar (2026-10-31): hpdars.kurs
     ("kurs_5", "kurs"), ("kurs_6", "kurs"), ("kurs_7", "kurs"),
-    # Donat (hpdonat, 2026-11-08): egasi paneldan beradi; olinmaguncha ro'yxatda ko'rinmaydi (bosim bo'lmasin)
+    # Donat (hpdonat, 2026-11-08): egasi paneldan beradi; olinmaganlarda qulflangan nishon bo'lib ko'rinadi (egasi)
     ("homiy", "homiy"),
 )
 KODLAR = tuple(k for k, _ in NISHONLAR)
@@ -77,10 +77,10 @@ def YASHIRIN():
     try:
         import hpserial
         if hpserial._data.get("ochiq"):
-            return {"homiy"}
+            return set()
     except Exception:
         pass
-    return {"serial_1", "homiy"}
+    return {"serial_1"}
 
 
 def _kurs_n(uid):
