@@ -51,7 +51,7 @@ def lang(uid, l):
 F = datetime(2026, 11, 8, 13, 0)          # birinchi film (UTC)
 for u in (1, 2, 3, 4, 5, 6):
     lang(u, "uz"); yoz(u, "start", F - timedelta(minutes=5)); yoz(u, "hp1_uz", F)
-lang(3, "ru")                              # rus tilida - olmaydi
+lang(3, "ru")                              # rus tilida ham oladi (egasi)
 yoz(4, "hp2_uz", datetime(2026, 11, 1))    # eski odam (BOSH dan oldin film)
 yoz(5, "blocked", F + timedelta(hours=2))  # bloklagan
 c = hpcup._connect(); c.execute("INSERT INTO onb_qadam (user_id, qadam, vaqt) VALUES (6,'letter','x')"); c.commit(); c.close()
@@ -59,10 +59,10 @@ c = hpcup._connect(); c.execute("INSERT INTO onb_qadam (user_id, qadam, vaqt) VA
 N = lambda t: {u: v[0] for u, v in Q.nomzodlar(t)}
 check("1 kun o'tmagan - hech kim", N(F + timedelta(hours=20)) == {})
 n = N(F + timedelta(hours=25))
-check("1 kundan keyin: 1, 2 va 6", set(n) == {1, 2, 6})
+check("1 kundan keyin: 1, 2, 3 va 6", set(n) == {1, 2, 3, 6})
 check("xat videosi birinchi", n.get(1) == "x")
 check("xatni ochgan - xat videosi o'tkazib yuboriladi", n.get(6) == "tw")
-check("rus tilidagi olmaydi", 3 not in n)
+check("rus tilidagi ham oladi", n.get(3) == "x")
 check("eski odam olmaydi", 4 not in n)
 check("bloklagan olmaydi", 5 not in n)
 

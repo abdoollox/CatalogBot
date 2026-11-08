@@ -4,8 +4,8 @@
 Birinchi filmini olgan odamga 1 kundan keyin kanaldagi qo'llanma videolar bot orqali birin-ketin
 yuboriladi - kuniga bittadan, faqat 10:00-21:00 (Toshkent). Maqsad: kutubxonadan Xogvartsga
 (ilovaning qolgan qismiga) olib o'tish. Odam o'sha ishni allaqachon qilgan bo'lsa (xatni ochgan,
-fakultetga tushgan ...) video o'tkazib yuboriladi. Videolar faqat o'zbekcha - shuning uchun faqat
-o'zbek tilidagi odamlarga. Botni bloklagan yoki bot xabarlarini o'chirgan odamga hech narsa ketmaydi.
+fakultetga tushgan ...) video o'tkazib yuboriladi. Videolar o'zbekcha, lekin hamma tildagilarga
+boradi (egasi, 2026-11-08). Botni bloklagan yoki bot xabarlarini o'chirgan odamga hech narsa ketmaydi.
 
 Video kanaldagi postdan nusxa qilinadi (copy_message: video + izoh), ostiga kanaldagi tugma.
 
@@ -29,12 +29,12 @@ from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 
 import hpcup
 
-YOQIQ = "admin"
-BOSH = os.getenv("HP_QOLLANMA_BOSH", "2026-11-08 12:00:00")   # UTC; shundan keyin birinchi film olganlar
+YOQIQ = "hamma"   # egasi, 2026-11-08: «ma'qul»
+BOSH = os.getenv("HP_QOLLANMA_BOSH", "2026-11-08 05:44:00")   # UTC; shundan keyin birinchi film olganlar
 KUT = timedelta(days=1)          # birinchi filmdan keyin
 ORALIQ = timedelta(days=1)       # videolar orasida
 SOAT = (10, 21)                  # Toshkent
-TILLAR = ("uz", None, "")        # videolar o'zbekcha
+TILLAR = None                    # egasi: o'zbekcha videolar hamma tildagilarga ham boradi
 BOT_URL = "https://t.me/garripotterkinobot?startapp="
 
 # (kalit, kanal xabari, tugma, startapp, bajarilganmi - SQL: ? = user_id)
@@ -113,7 +113,7 @@ def nomzodlar(hozir_utc=None):
             if eski:
                 continue
             u = conn.execute("SELECT lang FROM users WHERE user_id=?", (uid,)).fetchone()
-            if u is not None and u["lang"] not in TILLAR:
+            if TILLAR is not None and u is not None and u["lang"] not in TILLAR:
                 continue
             try:
                 s = conn.execute("SELECT bot FROM pochta_sozlama WHERE user_id=?", (uid,)).fetchone()
