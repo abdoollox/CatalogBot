@@ -53,6 +53,7 @@ import hpgazeta
 import hpanketa
 import hpgoya
 import hphisobot
+import hpqollanma
 import hpgoyaai
 import hpdokon
 import hptosh
@@ -2938,6 +2939,12 @@ async def main():
         hphisobot.register(dp, bot, {"admin_ids": ADMIN_IDS})
     except Exception as hisobot_error:
         logging.error("Kunlik hisobot moduli ishga tushmadi: %s", hisobot_error)
+
+    # --- Qo'llanma videolar ketma-ketligi (birinchi filmdan 1 kun keyin, kuniga bittadan) ---
+    try:
+        hpqollanma.register(dp, bot, {"admin_ids": ADMIN_IDS, "kanal": CHANNEL_ID})
+    except Exception as qollanma_error:
+        logging.error("Qo'llanma videolar moduli ishga tushmadi: %s", qollanma_error)
 
     # --- Chiqib ketish so'rovi ---
     # Alohida try: bu ishlamay qolsa ham bot kino tarqatishda davom etsin.
