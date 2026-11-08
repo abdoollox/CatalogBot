@@ -159,7 +159,7 @@ async def amain():
     check("o'quvchi, tayoqcha, ball, hafta, do'stlar, shaxmat, albom",
           set(got(d)) == set(hpnishon.KODLAR) - {"kubok_golib", "top_3", "sandiq_1", "sandiq_7", "maxluq_1", "maxluq_katta", "maxluq_12",
                                                 "issiq_1", "issiq_yetilgan", "issiq_hosil", "issiq_12", "kitob_1", "kitob_7",
-                                                "duel_golib", "rekord_top", "sardor", "shogird", "kurs_5", "kurs_6", "kurs_7"})
+                                                "duel_golib", "rekord_top", "sardor", "shogird", "kurs_5", "kurs_6", "kurs_7", "homiy"})
 
     # Kunlik sandiq: 7 kun ketma-ket
     sql("CREATE TABLE IF NOT EXISTS sandiq (user_id INTEGER, kun TEXT, done TEXT, bosqich INTEGER, ochildi TEXT)")

@@ -168,7 +168,12 @@ async def api_goya(request):
                 pass
     royxat = await asyncio.to_thread(meniki, uid)
     umumiy = await asyncio.to_thread(devor)
-    return cors(web.json_response(dict(umumiy, ok=True, on=True, preview=not YOQIQ, list=royxat, bolimlar=BOLIMLAR, kuniga=KUNIGA)))
+    try:
+        import hpdonat
+        donat = hpdonat.havola()
+    except Exception:
+        donat = None
+    return cors(web.json_response(dict(umumiy, ok=True, on=True, preview=not YOQIQ, list=royxat, bolimlar=BOLIMLAR, kuniga=KUNIGA, donat=donat)))
 
 
 async def api_panel(request):

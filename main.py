@@ -54,6 +54,7 @@ import hpanketa
 import hpgoya
 import hphisobot
 import hpqollanma
+import hpdonat
 import hpgoyaai
 import hpdokon
 import hptosh
@@ -2901,6 +2902,8 @@ async def main():
         hpgoya.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log, "admin_ids": ADMIN_IDS,
                                "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN),
                                "xat": lambda uid, d: hppochta.foks_xat(uid, d)})
+        hpdonat.register(dp, app, {"cors": _cors, "admin_ids": ADMIN_IDS, "xat": hppochta.odamga_xat,
+                                   "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN)})
         hpgoyaai.register(app, {"cors": _cors,
                                 "dash_ok": lambda req: bool(DASH_TOKEN) and hmac.compare_digest(req.headers.get("X-Dash-Token", ""), DASH_TOKEN)})
         hpqoriq.register(app, {"verify_init_data": verify_init_data, "cors": _cors, "log": _dars_log})

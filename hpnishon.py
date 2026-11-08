@@ -43,6 +43,8 @@ NISHONLAR = (
     ("duel_golib", "maydon"), ("rekord_top", "maydon"),
     # Yuqori kurslar (2026-10-31): hpdars.kurs
     ("kurs_5", "kurs"), ("kurs_6", "kurs"), ("kurs_7", "kurs"),
+    # Donat (hpdonat, 2026-11-08): egasi paneldan beradi; olinmaguncha ro'yxatda ko'rinmaydi (bosim bo'lmasin)
+    ("homiy", "homiy"),
 )
 KODLAR = tuple(k for k, _ in NISHONLAR)
 
@@ -75,10 +77,10 @@ def YASHIRIN():
     try:
         import hpserial
         if hpserial._data.get("ochiq"):
-            return set()
+            return {"homiy"}
     except Exception:
         pass
-    return {"serial_1"}
+    return {"serial_1", "homiy"}
 
 
 def _kurs_n(uid):
@@ -227,6 +229,7 @@ def hisob(conn, uid):
         "sardor": (1 if _one(conn, "SELECT 1 FROM sardor WHERE user_id=? LIMIT 1", (uid,)) else 0, 1),
         # Professor shogirdi (2026-10-31): biror hafta fan bellashuvida eng ko'p ball olgan (hpcup.shogird jadvali)
         "shogird": (1 if _one(conn, "SELECT 1 FROM shogird WHERE user_id=? LIMIT 1", (uid,)) else 0, 1),
+        "homiy": (1 if _one(conn, "SELECT 1 FROM homiy WHERE user_id=?", (uid,)) else 0, 1),
         "kurs_5": (1 if _kurs_n(uid) >= 5 else 0, 1),
         "kurs_6": (1 if _kurs_n(uid) >= 6 else 0, 1),
         "kurs_7": (1 if _kurs_n(uid) >= 7 else 0, 1),
