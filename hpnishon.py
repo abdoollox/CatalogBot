@@ -76,11 +76,17 @@ def YASHIRIN():
     «Birinchi qism» nishonini tushunmagan - serial 25-dekabrda chiqadi)."""
     try:
         import hpserial
-        if hpserial._data.get("ochiq"):
-            return set()
+        yash = set() if hpserial._data.get("ochiq") else {"serial_1"}
     except Exception:
-        pass
-    return {"serial_1"}
+        yash = {"serial_1"}
+    # Homiy nishoni: donat hammaga ochiq bo'lmasa (hpdonat.HAMMAGA) qulflangan holda ham ko'rsatilmaydi (egasi, 2026-11-09)
+    try:
+        import hpdonat
+        if not hpdonat.HAMMAGA:
+            yash.add("homiy")
+    except Exception:
+        yash.add("homiy")
+    return yash
 
 
 def _kurs_n(uid):
