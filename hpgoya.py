@@ -170,7 +170,7 @@ async def api_goya(request):
     umumiy = await asyncio.to_thread(devor)
     try:
         import hpdonat
-        donat = hpdonat.havola()
+        donat = hpdonat.havola_kimga(admin)
     except Exception:
         donat = None
     return cors(web.json_response(dict(umumiy, ok=True, on=True, preview=not YOQIQ, list=royxat, bolimlar=BOLIMLAR, kuniga=KUNIGA, donat=donat)))

@@ -50,6 +50,10 @@ check("to'g'ri havola", D._togri("https://taps.uz/garripotter"))
 D._saqla("https://taps.uz/garripotter")
 check("havola saqlandi", D.havola() == "https://taps.uz/garripotter")
 check("havola fayli", json.load(open(os.environ["HP_DONAT_PATH"]))["havola"] == "https://taps.uz/garripotter")
+check("hozircha faqat adminga", D.havola_kimga(False) is None and D.havola_kimga(True) == "https://taps.uz/garripotter")
+D.HAMMAGA = True
+check("hammaga ochilsa - hammaga", D.havola_kimga(False) == "https://taps.uz/garripotter")
+D.HAMMAGA = False
 D._saqla(None)
 check("havola o'chirildi", D.havola() is None)
 

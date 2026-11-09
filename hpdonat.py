@@ -44,6 +44,14 @@ _cfg = {}
 
 # ---------------------------------------------------------------- havola
 
+HAMMAGA = False   # egasi, 2026-11-09: donat qismi hozircha FAQAT ADMINGA ko'rinsin (True - hammaga)
+
+
+def havola_kimga(admin):
+    """Ilovaga beriladigan havola: hammaga ochiq bo'lmasa faqat adminga."""
+    return havola() if (HAMMAGA or admin) else None
+
+
 def havola():
     try:
         with open(PATH, encoding="utf-8") as f:
